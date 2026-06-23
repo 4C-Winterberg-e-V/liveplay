@@ -1,4 +1,27 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+
+// ---------------------------------------------------------------------
+// Build-target weiche (web vs. Electron)
+// ---------------------------------------------------------------------
+// Both `generate` (Electron) and `generate:web` run with NODE_ENV=production,
+// so NODE_ENV alone can't tell them apart. The web build sets BUILD_TARGET=web.
+//
+// Why read the env HERE rather than relying on Nuxt's native NUXT_APP_BASE_URL:
+// an explicit `app.baseURL` in this config takes precedence over the env var,
+// so setting NUXT_APP_BASE_URL externally would be silently ignored. Reading it
+// in-config makes the resolution deterministic.
+//
+//   * Electron  → file:// loading needs fully relative paths ('./').
+//   * Web       → served from an absolute base ('/' or a configurable subpath
+//                 via NUXT_APP_BASE_URL, e.g. '/liveplay/'); assets resolve
+//                 relative to that base, so cdnURL stays empty.
+const isWeb   = process.env.BUILD_TARGET === 'web';
+const isProd  = process.env.NODE_ENV === 'production';
+const webBase = process.env.NUXT_APP_BASE_URL || '/';
+
+const appBaseURL = isWeb ? webBase : (isProd ? './' : '/');
+const appCdnURL  = isWeb ? ''      : (isProd ? './' : '');
+
 export default defineNuxtConfig({
   devtools: {
     enabled: true,
@@ -23,10 +46,10 @@ export default defineNuxtConfig({
         { name: 'viewport', content: 'width=device-width, initial-scale=1' }
       ]
     },
-    // Use relative paths for Electron
-    baseURL: process.env.NODE_ENV === 'production' ? './' : '/',
+    // Electron: relative paths for file://. Web: absolute base (see weiche above).
+    baseURL: appBaseURL,
     buildAssetsDir: '_nuxt/',
-    cdnURL: process.env.NODE_ENV === 'production' ? './' : ''
+    cdnURL: appCdnURL
   },
 
   css: [

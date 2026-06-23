@@ -13,6 +13,7 @@
     "build:electron": "cross-env NODE_ENV=production nuxt generate && electron-builder",
     "electron:build": "electron-builder",
     "generate": "cross-env NODE_ENV=production nuxt generate",
+    "generate:web": "cross-env NODE_ENV=production BUILD_TARGET=web nuxt generate",
     "preview": "nuxt preview"
   },
   "keywords": [
