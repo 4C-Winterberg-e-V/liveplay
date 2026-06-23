@@ -163,6 +163,13 @@ Composable-Pattern) übernehmen.
      Drag-and-drop-Upload (`/api/upload`); nativer Dialog nur bei `electronAPI`.
    - Cart-Popout-Fenster → Button nur bei `electronAPI`.
    - App-Version/Auto-Update → im Browser ausblenden.
+   - **Blockierend (siehe Anhang A):**
+     - **Lokalisierung:** Im Browser lädt `useLocalization` keine Locales → UI zeigt
+       rohe Keys. Web-Locale-Pfad bauen (Bündeln oder `fetch()` der `client/locales/`-JSONs).
+       Eigene Teilaufgabe; ohne sie ist die Web-UI unbrauchbar.
+     - **YouTube-Import-Button** (`PlaylistView.vue:7`) im Browser ausblenden – Calls
+       sind ungeguardet und der Button nur an `currentProject` gekoppelt.
+     - **ConnectionLostModal:** im Browser nur „Reconnect" zeigen, Restart/Exit ausblenden.
 2. Health-Check beim Start (NEU präzisiert): **zuerst serverseitig verifizieren,
    welcher Endpoint existiert** (`/api/health` vs. vorhandenes `/api/whoami`). Bei
    Nichterreichbarkeit klare Fehlermeldung. Optional `name: "liveplay-server"` prüfen,
@@ -235,3 +242,52 @@ README-Warnung entsprechend formulieren.
 ## Prerequisites für E2E-Test
 Laufender LivePlay **v2 C++-Server** (Default `0.0.0.0:4480`), Firewall erlaubt
 eingehende Verbindungen, Test-Client und Server im selben Netz.
+
+---
+
+## Anhang A – Phase-0-Audit: `electronAPI`-Call-Sites & Browser-Verhalten
+
+Vollständige Auflistung aller `window.electronAPI`-Zugriffe im Renderer
+(`client/app/`, ohne `electron/`-Hauptprozess). Klassifizierung:
+- ✅ **Sauber** – geguardet, im Browser stiller No-Op, keine UI nötig oder bereits versteckt.
+- ⚠️ **Inert/Politur** – wirft nicht, aber sichtbares Element ohne Wirkung bzw. degradierter Inhalt → in Phase 3 ausblenden/ersetzen.
+- ❌ **Defekt/blockierend** – im Browser kaputt oder wirft (auch wenn gefangen); muss vor Web-Release behandelt werden.
+
+### ❌ Blockierende Funde (vor Web-Release zwingend behandeln)
+
+| Stelle | Verhalten im Browser | Maßnahme |
+|---|---|---|
+| **`useLocalization.ts:11`** (`loadLocales`) | `if (!electronAPI) return` → **keine Locale-Daten geladen**. `t(key)` gibt ab Z. 48-49 den **rohen Schlüssel** zurück. Die **gesamte Web-UI zeigt Keys** (`serverSettings.title` …) statt Text. | Web-Locale-Pfad: Locale-JSONs (`client/locales/`) ins SPA bündeln oder per `fetch()` laden. **Eigene Teilaufgabe, im Auftrag bisher gar nicht erfasst.** |
+| **`YouTubeImportModal.vue:149,191,283,286`** (`searchYouTube`/`downloadYouTubeAudio`/`generateWaveform`/`readFile`) | Calls sind **ungeguardet**. Der Button (`PlaylistView.vue:7`) ist nur per `:disabled="!currentProject"` gesperrt, **nicht** auf `electronAPI` → mit offenem Projekt im Browser **klickbar**. Suche wirft `TypeError` (im try/catch gefangen → irreführende Fehlermeldung), Download tot. | Non-Goal sagt „nicht portieren" → **Button im Browser ausblenden** (`v-if="hasElectron"`). |
+
+### ⚠️ Inert / Politur (Phase 3: ausblenden oder ersetzen)
+
+| Stelle | Verhalten im Browser | Maßnahme |
+|---|---|---|
+| `ConnectionLostModal.vue:55,65` (`app.relaunch`/`app.exit`) | Modal **wird** im Browser bei Verbindungsverlust gezeigt; „Neustart"/„Beenden"-Buttons sind per `?.`-Chaining **tote Klicks**. | Im Browser nur „Reconnect" zeigen, Restart/Exit ausblenden. |
+| `AboutModal.vue:90,104` & `WelcomeScreen.vue:267` (`getAppVersion`/`openExternal`) | Version bleibt auf Default (`1.1.3`/`1.1.3`), externe Links tot. | Version im Browser ausblenden; Links via `<a target=_blank>` statt `openExternal`. |
+| `WelcomeScreen.vue` `liveplayDiscovery` (mehrfach) | mDNS-Scan wirkungslos (Optional-Chaining). | „Server suchen" im Browser ausblenden. |
+| `LocalServerStatus.vue:52,64,76,84,94` (`liveplayServer.*`) | `if (!api) return` → Komponente komplett inert. | Im Browser ausblenden (Local-Modus existiert dort nicht). |
+| `AudioImportModal.vue:126,182,203` (`selectAudioFiles`) | `hasElectron`-Computed; `pickLocal` No-Op; `pickAndUpload` hat **Browser-Fallback** (`importAudio.desktopOnly` + Upload-Pfad). | Bereits gut degradiert; nur „lokal wählen" im Browser ausblenden. ✅-nah |
+| `CartSlot.vue:667` (`readFile` Waveform) | `if (electronAPI && waveformPath)` → File-Waveform übersprungen; Server-Waveforms greifen anderweitig. | Verifizieren, dass Server-Waveform-Pfad im Browser zieht. |
+
+### ✅ Sauber (geguardet, stiller No-Op – keine Aktion nötig)
+
+| Stelle | Hinweis |
+|---|---|
+| `plugins/liveplay-server.client.ts:22` | `electronAPI?.liveplayServer`; Web fällt auf localStorage-URL zurück – **der zentrale Web-Pfad**. |
+| `useMidiController.ts:372,406` | MIDI-Config-Load/Save geguardet → MIDI ist Electron-only (Web-MIDI nicht genutzt). |
+| `app.vue:276,409,475,511,513,348` | Menü-Listener + .lpa-Import komplett unter `if (window.electronAPI)`; Menüevents feuern im Browser nie. |
+| `MainWorkspace.vue:145,309,333,367,378` | Großer Menü-/HTTP-API-Listener-Block + Export-Flow geguardet; Cart-Sync-Watch geguardet. |
+| `useProject.ts:508,968` | `electronAPI?.liveplayProjects?.recentAdd` / `syncProjectData` Optional-Chaining → No-Op. |
+| `useStateViewer.ts:17,80` | Dev-State-Viewer im Browser deaktiviert. |
+| `UpdateModal.vue:146,152,174,186,194` | Alles geguardet; Modal nur auf Electron-Update-Events. |
+| `useLiveplayServer.ts:885` (`getFilePath`) | Optional-Chaining mit Upload-Fallback (`resolveDroppedFileToMedia`). |
+| `PropertiesPanel.vue:837` (`selectAudioFiles`) | `if (!window.electronAPI) return`. |
+| `CartPlayer.vue:50,55` (Popout) | `if (!window.electronAPI) return`. |
+
+### Status Serveradress-Feld (Phase-0-Frage 1)
+- **Feld + Apply existieren** in `ServerSettingsModal.vue`; Web-Fallback (`!electronAPI`)
+  erzwingt Remote-Modus und ruft `setServerUrl()`. ✅
+- **Offen:** Erreichbarkeit des Modal-Öffnen-Triggers im Browser ist noch zu
+  verifizieren (siehe Phase 2.1).
