@@ -56,8 +56,10 @@
 
         <!-- Auto-discovered servers on this LAN. Populated by the UDP beacon
              and active solicitation. Header always shown so the user can
-             rescan even when nothing has been found yet. -->
-        <div class="discovered-servers">
+             rescan even when nothing has been found yet. mDNS discovery is
+             Electron-only (no UDP sockets in the browser), so hide the whole
+             section in a pure web context. -->
+        <div v-if="hasElectron" class="discovered-servers">
           <div class="discovered-header">
             <span class="material-symbols-rounded" :class="{ spin: scanning }">radar</span>
             <span>{{ t('welcome.serversOnThisNetwork') }}</span>
@@ -208,6 +210,11 @@ import ServerFilePickerModal from './ServerFilePickerModal.vue';
 const { createNewProject, openProject, tryRejoinExistingProject } = useProject();
 const { t } = useLocalization();
 const server = useLiveplayServer();
+
+// Electron exposes native IPC (local server spawn, mDNS discovery, recent-server
+// persistence). In a pure browser none of that exists, so several UI affordances
+// are hidden and the flow skips straight to remote connection.
+const hasElectron = import.meta.client && !!(window as any).electronAPI;
 
 // Three-stage flow: mode picker → (optional remote address) → project picker.
 type Stage = 'mode' | 'remote' | 'project';

@@ -4,7 +4,7 @@
       <h2>{{ t('playlist.title') }}</h2>
       <div class="playlist-actions">
         <Btn icon="audio_file" :text="t('playlist.importAudio')" :disabled="!currentProject" @click="handleImport" />
-        <Btn icon="youtube_activity" :text="t('youtube.importFromYouTube')" bg-style="youtube" :disabled="!currentProject" @click="showYouTubeModal = true" />
+        <Btn v-if="hasElectron" icon="youtube_activity" :text="t('youtube.importFromYouTube')" bg-style="youtube" :disabled="!currentProject" @click="showYouTubeModal = true" />
         <Btn icon="folder" :text="t('playlist.addGroup')" :disabled="!currentProject" @click="handleAddGroup" />
       </div>
     </div>
@@ -68,6 +68,11 @@ function maybeAutoProcess(item: AudioItem) {
 
 const showYouTubeModal = ref(false);
 const showImportModal  = ref(false);
+
+// YouTube import depends on Electron-only IPC (yt-dlp, native search) and is an
+// explicit web non-goal — hide the entry point in a pure browser context so it
+// isn't a dead button that throws on click.
+const hasElectron = import.meta.client && !!(window as any).electronAPI;
 
 // ---------------------------------------------------------------------------
 // Progressive mount.

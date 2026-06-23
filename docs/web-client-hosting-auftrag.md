@@ -181,6 +181,19 @@ Composable-Pattern) übernehmen.
 - **Akzeptanz:** Im reinen Browser laufen: Projekt öffnen, Cue-Liste, Play/Stop,
   Cart-Trigger, Stop-All, Reconnect nach Server-Neustart. **Keine Konsolen-Errors
   und kein Request-Log-Spam.**
+- **Umsetzungsstand (Code):**
+  - ✅ Lokalisierung: Web-Locale-Bundle via Vite-Glob (`useLocalization.ts`) – im
+    Browser werden alle 21 Locales gebündelt, kein IPC/Server nötig.
+  - ✅ Log-Gate: `[liveplay]`-Request/Send-Logs hinter `LP_DEBUG`
+    (`localStorage 'liveplay.debug'='1'` oder Dev).
+  - ✅ YouTube-Button (`PlaylistView`), Cart-Detach (`CartPlayer`),
+    ConnectionLostModal-Restart/Exit, AboutModal-Version, WelcomeScreen-mDNS:
+    im Browser per `hasElectron` ausgeblendet.
+  - ✅ „Audio hinzufügen" (`AudioImportModal`) hatte bereits Server-Browser +
+    Upload-Fallback; nativer Dialog nur bei `electronAPI`.
+  - ✅ Health-Check: existiert via `probeServerReachable('/api/health')` im
+    WelcomeScreen-Connect-Flow.
+  - ⏳ Laufzeit-Verifikation (echte Browser-Session gegen v2-Server) → Phase 5.
 
 ### Phase 4 – Hosting-Artefakte (zwei Modi)
 **Modus A – Same-Origin-Proxy (empfohlen):** Reverse Proxy liefert SPA unter `/`

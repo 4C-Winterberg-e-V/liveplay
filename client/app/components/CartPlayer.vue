@@ -4,7 +4,7 @@
       <h2>{{ t('cart.title') }}</h2>
       <div class="cart-header-actions">
         <Btn
-          v-if="!isDetachedWindow"
+          v-if="!isDetachedWindow && hasElectron"
           icon="open_in_new"
           :text="t('cart.detach')"
           :disabled="!currentProject"
@@ -45,6 +45,10 @@ const { getCartItem } = useCartItems();
 const { keyMappings, mount: mountHotkeys, unmount: unmountHotkeys } = useCartHotkeys();
 const { mount: mountMidi, unmount: unmountMidi } = useMidiController();
 const { t } = useLocalization();
+
+// Popping the cart into a separate OS window needs Electron's multi-window IPC;
+// hide the button in a pure browser context (no dead click).
+const hasElectron = import.meta.client && !!(window as any).electronAPI;
 
 const handleDetach = () => {
   if (!currentProject.value || !import.meta.client || !window.electronAPI) return;

@@ -36,6 +36,25 @@ import type {
 } from '~/types/server';
 
 // ---------------------------------------------------------------------
+// Debug logging gate. The per-request / per-send tracing below is invaluable
+// when debugging the wire protocol but is pure noise in a hosted browser
+// client. Gate it behind a flag: on in dev, or opt-in via
+// localStorage.setItem('liveplay.debug', '1').
+// ---------------------------------------------------------------------
+const LP_DEBUG = (() => {
+  try {
+    if (typeof window !== 'undefined' &&
+        window.localStorage?.getItem('liveplay.debug') === '1') return true;
+  } catch { /* localStorage may throw in some sandboxes */ }
+  return !!(import.meta as any)?.dev;
+})();
+/* eslint-disable no-console */
+function dlog(...args: any[])  { if (LP_DEBUG) console.log(...args); }
+function dwarn(...args: any[]) { if (LP_DEBUG) console.warn(...args); }
+function derr(...args: any[])  { if (LP_DEBUG) console.error(...args); }
+/* eslint-enable no-console */
+
+// ---------------------------------------------------------------------
 // Singleton — created lazily on first useLiveplayServer() call.
 // ---------------------------------------------------------------------
 let _instance: ReturnType<typeof createClient> | null = null;
@@ -200,12 +219,12 @@ function createClient() {
     }
     try {
       // eslint-disable-next-line no-console
-      console.log('[liveplay] connecting to', wsUrl.value);
+      dlog('[liveplay] connecting to', wsUrl.value);
       ws = new WebSocket(wsUrl.value);
     } catch (e) {
       lastError.value = String(e);
       // eslint-disable-next-line no-console
-      console.error('[liveplay] WebSocket constructor threw:', e);
+      derr('[liveplay] WebSocket constructor threw:', e);
       scheduleReconnect();
       return;
     }
@@ -355,13 +374,13 @@ function createClient() {
     const body = JSON.stringify(payload);
     if (ws && ws.readyState === WebSocket.OPEN) {
       // eslint-disable-next-line no-console
-      console.log('[liveplay] WS send:', body);
+      dlog('[liveplay] WS send:', body);
       ws.send(body);
     } else {
       // Loudly flag — silent drops are the most painful class of WS bug.
       const state = ws ? ws.readyState : 'no-ws';
       // eslint-disable-next-line no-console
-      console.warn('[liveplay] WS send DROPPED (readyState=' + state + '):', body);
+      dwarn('[liveplay] WS send DROPPED (readyState=' + state + '):', body);
     }
   }
 
@@ -380,7 +399,7 @@ function createClient() {
   async function rest<T = any>(path: string, init?: RequestInit): Promise<T> {
     const url = httpBase.value + path;
     // eslint-disable-next-line no-console
-    console.log('[liveplay] rest start:', init?.method || 'GET', url);
+    dlog('[liveplay] rest start:', init?.method || 'GET', url);
     let res: Response;
     try {
       res = await fetch(url, {
@@ -389,11 +408,11 @@ function createClient() {
       });
     } catch (e) {
       // eslint-disable-next-line no-console
-      console.error('[liveplay] rest fetch threw:', e);
+      derr('[liveplay] rest fetch threw:', e);
       throw e;
     }
     // eslint-disable-next-line no-console
-    console.log('[liveplay] rest headers:', res.status, res.statusText, 'for', url);
+    dlog('[liveplay] rest headers:', res.status, res.statusText, 'for', url);
     if (!res.ok) {
       const text = await res.text().catch(() => res.statusText);
       throw new Error(`${res.status} ${res.statusText} — ${text}`);
@@ -403,11 +422,11 @@ function createClient() {
       parsed = await (res.json() as Promise<T>);
     } catch (e) {
       // eslint-disable-next-line no-console
-      console.error('[liveplay] rest json() failed for', url, ':', e);
+      derr('[liveplay] rest json() failed for', url, ':', e);
       throw e;
     }
     // eslint-disable-next-line no-console
-    console.log('[liveplay] rest done:', url);
+    dlog('[liveplay] rest done:', url);
     return parsed;
   }
 
@@ -916,7 +935,7 @@ function createClient() {
       : null;
     if (osPath) {
       try { return await copyToMedia(osPath); }
-      catch (e) { console.warn('[import] copyToMedia failed, uploading bytes instead:', e); }
+      catch (e) { dwarn('[import] copyToMedia failed, uploading bytes instead:', e); }
     }
     try {
       const res = await uploadFile(file, file.name);
