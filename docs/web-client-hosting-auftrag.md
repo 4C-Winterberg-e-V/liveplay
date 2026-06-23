@@ -26,8 +26,17 @@ Die Desktop-/Electron-Variante muss dabei **unverändert lauffähig** bleiben.
 - Server-CORS ist offen: `Access-Control-Allow-Origin: *` inkl. OPTIONS-Preflight
   (`server/src/net/control_server.cpp`). Cross-Origin ist vorgesehen.
 - Electron-Aufrufe im Renderer sind mit `if (!window.electronAPI) return` o. ä.
-  abgesichert (z. B. `PropertiesPanel.vue`, `CartPlayer.vue`, `WelcomeScreen.vue`,
-  `resolveDroppedFileToMedia` mit Upload-Fallback).
+  abgesichert (z. B. `PropertiesPanel.vue` `handleReplaceMedia`/`selectAudioFiles`,
+  `CartPlayer.vue` `handleDetach`/`handleAttach`, `WelcomeScreen.vue`
+  `getAppVersion`/`liveplayServer`, `resolveDroppedFileToMedia` mit Upload-Fallback).
+  Verifiziert: durchgehend `if (!window.electronAPI) return` bzw. `electronAPI?.…`
+  Optional-Chaining → keine geworfenen Fehler im Browser.
+- **mDNS-Discovery ist Electron-only (NEU, für Phase 0/3):** `WelcomeScreen.vue` nutzt
+  `electronAPI.liveplayDiscovery` (Scan/`solicit`/`recentAdd`/`recentRemove`). Im
+  Browser per Optional-Chaining stillgelegt – wirft nicht, aber der „Server
+  suchen"-Button bleibt **wirkungslos**. Browser-Nutzer haben keine Auto-Discovery
+  und brauchen manuelle Eingabe bzw. den Smart-Default (Phase 2). In Phase 3
+  ausblenden statt wirkungslos zeigen.
 - Production-`baseURL`/`cdnURL` in `nuxt.config.ts` stehen auf `'./'` (für Electrons `file://`).
   Für Web-Hosting ungeeignet.
 - **Versionshinweis (korrigiert):** Dieser Client (v2.1.2) spricht ausschließlich
