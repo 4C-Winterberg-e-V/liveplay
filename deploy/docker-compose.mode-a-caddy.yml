@@ -1,0 +1,27 @@
+# =====================================================================
+# Mode A — Same-Origin proxy, portable Caddy variant.
+#
+#   docker compose -f deploy/docker-compose.mode-a-caddy.yml up --build
+#
+# Homelab default serves plain HTTP on :80. For automatic HTTPS, set
+# LIVEPLAY_SITE_ADDR to a real hostname that resolves to this host.
+# =====================================================================
+services:
+  liveplay-web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.caddy
+    image: liveplay-web:modea-caddy
+    environment:
+      # Upstream C++ control server (host:port), reachable from the container.
+      # 'host.docker.internal' = the Docker host; use the LAN IP otherwise.
+      LIVEPLAY_SERVER_ADDR: "host.docker.internal:4480"
+      # ':80' = plain HTTP. A real hostname enables Caddy auto-HTTPS.
+      LIVEPLAY_SITE_ADDR: ":80"
+    # Needed on Linux for host.docker.internal to resolve to the Docker host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
