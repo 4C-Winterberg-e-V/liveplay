@@ -30,8 +30,15 @@ Die Desktop-/Electron-Variante muss dabei **unverändert lauffähig** bleiben.
   `resolveDroppedFileToMedia` mit Upload-Fallback).
 - Production-`baseURL`/`cdnURL` in `nuxt.config.ts` stehen auf `'./'` (für Electrons `file://`).
   Für Web-Hosting ungeeignet.
-- **Versionshinweis:** Dieser Client (v2.1.2, `main`) spricht ausschließlich die
-  v2-API (Port 4480, WS `/ws`). Das ladbare Release v1.2.9 (Electron) ist inkompatibel.
+- **Versionshinweis (korrigiert):** Dieser Client (v2.1.2) spricht ausschließlich
+  die v2-API (Port 4480, WS `/ws`). Das **neueste ladbare Release des Upstream-
+  Projekts (`tdoukinitsas/liveplay`) ist v2.1.2** und entspricht genau dieser
+  v2-/C++-Server-Architektur (verifiziert: Releases v2.0.5 … v2.1.2, Juni 2026).
+  Der 4C-Winterberg-Fork selbst hat keine eigenen Releases/Tags.
+  Inkompatibel sind nur die **alten v1.x-Electron-Builds (≤ v1.3.0)**: Sie sprechen
+  eine andere API und lassen sich nicht mit einem v2-Server koppeln. Die frühere
+  Behauptung „ladbares Release v1.2.9 (Electron) ist inkompatibel" war falsch —
+  eine v1.2.9 existiert nicht, und das ladbare Release ist v2.
 
 ### Audit-Ergebnisse, die den Auftrag korrigieren (NEU)
 Diese Punkte ändern den Umfang einzelner Phasen – vor Beginn beachten:
