@@ -286,8 +286,14 @@ Vollständige Auflistung aller `window.electronAPI`-Zugriffe im Renderer
 | `PropertiesPanel.vue:837` (`selectAudioFiles`) | `if (!window.electronAPI) return`. |
 | `CartPlayer.vue:50,55` (Popout) | `if (!window.electronAPI) return`. |
 
-### Status Serveradress-Feld (Phase-0-Frage 1)
-- **Feld + Apply existieren** in `ServerSettingsModal.vue`; Web-Fallback (`!electronAPI`)
-  erzwingt Remote-Modus und ruft `setServerUrl()`. ✅
-- **Offen:** Erreichbarkeit des Modal-Öffnen-Triggers im Browser ist noch zu
-  verifizieren (siehe Phase 2.1).
+### Status Serveradress-Feld (Phase-0-Frage 1 – AKTUALISIERT)
+- **Korrektur:** `ServerSettingsModal.vue` ist **verwaist** – nirgends eingebunden;
+  `LocalServerStatus.vue` ist in `app.vue:114` bewusst auskommentiert. Das Feld dort
+  ist also für keinen Nutzer (Electron oder Web) erreichbar.
+- **Der echte, im Browser erreichbare Eingabepfad ist `WelcomeScreen.vue`**
+  (gemountet in `app.vue:26` via `v-if="!currentProject"`): Stage „remote" hat ein
+  Adressfeld + „Connect", das `setServerUrl()` ruft und vorab `/api/health` probt
+  (`probeServerReachable`). Die `electronAPI.liveplayServer.setConfig`-Aufrufe darin
+  sind per Optional-Chaining geguardet → im Browser unschädlich. ✅
+- **Phase-3-Hinweis:** Der „/api/health"-Probe-Endpoint existiert also bereits und
+  wird genutzt – die Phase-3-Unsicherheit dazu ist geklärt.

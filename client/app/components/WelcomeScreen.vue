@@ -321,10 +321,41 @@ onMounted(async () => {
         if (welcomeIntent === 'new') handleNewProject();
         else                          handleOpenProject();
       });
+    } else if (!(window as any).electronAPI) {
+      // Pure-web context: there is no "local" mode (the browser can't spawn the
+      // C++ server), so skip the Local/Remote picker entirely. When the SPA is
+      // served same-origin (a hosted Mode-A deployment) connect to
+      // window.location.origin verbatim — crucially NOT via normaliseRemoteUrl,
+      // which would force http:// and :4480 and break an https reverse proxy.
+      // Otherwise fall back to the address field, prefilled from the default.
+      mode.value = 'remote';
+      const origin = window.location.origin;
+      const sameOrigin = (server.serverUrl ?? '').replace(/\/+$/, '') === origin;
+      if (sameOrigin) {
+        stage.value = 'remote';
+        connecting.value = true;
+        connectionError.value = '';
+        try {
+          await probeServerReachable(origin);
+          server.setServerUrl(origin);
+          if (await tryRejoinExistingProject()) return;
+          stage.value = 'project';
+        } catch (e: any) {
+          // Proxy not reachable — let the operator edit the address by hand.
+          remoteAddress.value = stripScheme(origin);
+          connectionError.value =
+            t('welcome.connectionFailed') + ' (' + (e?.message ?? e) + ')';
+        } finally {
+          connecting.value = false;
+        }
+      } else {
+        remoteAddress.value = stripScheme(server.serverUrl ?? '');
+        stage.value = 'remote';
+      }
     } else {
-      // Always go through the mode-picker so the user is in control of the
-      // current session's server target. We could skip if connected, but the
-      // first-impression UI value of a deliberate choice outweighs the click.
+      // Electron: always go through the mode-picker so the user is in control
+      // of the current session's server target. We could skip if connected, but
+      // the first-impression UI value of a deliberate choice outweighs the click.
       stage.value = 'mode';
     }
   }

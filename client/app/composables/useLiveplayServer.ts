@@ -45,12 +45,35 @@ export function useLiveplayServer() {
   return _instance;
 }
 
+// ---------------------------------------------------------------------
+// Default server URL resolution (synchronous — runs at module init, before
+// the Nuxt plugin calls connect()).
+//   1. A value the user previously saved in localStorage.
+//   2. Hosting convenience: when the SPA is served over http(s) from a
+//      non-localhost host (a real web deployment — not Electron's file:// and
+//      not a localhost dev/preview server), default to same-origin. That
+//      activates the Mode-A reverse-proxy setup (/api/* and /ws proxied to the
+//      C++ server) with zero manual entry.
+//   3. Loopback fallback for Electron (file://) and localhost.
+// ---------------------------------------------------------------------
+function computeDefaultServerUrl(): string {
+  const FALLBACK = 'http://127.0.0.1:4480';
+  if (typeof window === 'undefined') return FALLBACK;
+  const stored = window.localStorage?.getItem('liveplay.serverUrl');
+  if (stored) return stored;
+  const loc   = window.location;
+  const proto = loc?.protocol ?? '';
+  const host  = (loc?.hostname ?? '').toLowerCase();
+  const isHttp     = proto === 'http:' || proto === 'https:';
+  const isLoopback = host === 'localhost' || host === '127.0.0.1' ||
+                     host === '::1' || host === '[::1]';
+  if (isHttp && host && !isLoopback) return loc.origin;
+  return FALLBACK;
+}
+
 function createClient() {
   // ---- Server URL config (persisted via localStorage) ---------------
-  const defaultUrl = (typeof window !== 'undefined' &&
-                      window.localStorage?.getItem('liveplay.serverUrl')) ||
-                     'http://127.0.0.1:4480';
-  const serverUrl = ref<string>(defaultUrl);
+  const serverUrl = ref<string>(computeDefaultServerUrl());
 
   const httpBase = computed(() => serverUrl.value.replace(/\/+$/, ''));
   const wsUrl    = computed(() =>
@@ -61,9 +84,15 @@ function createClient() {
     if (typeof window !== 'undefined') {
       window.localStorage?.setItem('liveplay.serverUrl', url);
     }
-    // URL change → treat as a brand-new session. Force re-fetch on next
-    // onopen by clearing the first-connect guard.
+    // URL change → treat as a brand-new session. Clear the first-connect guard
+    // so catalogues re-fetch on the next onopen, and reset the disconnect
+    // backoff/flags (forceReconnect semantics) so a stale "connection lost"
+    // modal from the previous target doesn't linger against the new one.
     hasEverConnected = false;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    reconnectDelay = 1500;
+    failedReconnectAttempts.value = 0;
+    connectionLost.value = false;
     disconnect();
     connect();
   }
