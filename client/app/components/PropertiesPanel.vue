@@ -1173,6 +1173,35 @@ const formatTime = (seconds: number): string => {
     transform: rotate(360deg);
   }
 }
+
+/* ---- Phones: full-screen properties ----------------------------------- */
+/* On a phone the bottom-docked panel is too small to edit in. It's dismissed
+   with the X anyway, so make it a full-screen overlay. dvh tracks the dynamic
+   mobile viewport (browser chrome show/hide); env() keeps the header/footer
+   clear of the notch and home indicator. */
+@media (max-width: 768px) {
+  .properties-panel {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    z-index: 1500;
+    border-top: none;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Bigger touch target for the close button. */
+  .close-btn {
+    width: 40px;
+    height: 40px;
+  }
+  .close-btn .material-symbols-rounded {
+    font-size: 24px;
+  }
+}
 </style>
 
 
