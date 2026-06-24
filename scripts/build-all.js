@@ -37,7 +37,7 @@ if (process.platform === 'darwin') {
 }
 
 // 3. Client (Nuxt generate + electron-builder) -----------------------------
-run('npm', ['run', 'build:electron', '--workspace=client'], { cwd: REPO_ROOT });
+run('pnpm', ['--filter', 'client', 'build:electron'], { cwd: REPO_ROOT });
 
 // 4. Collect installers into /build/ at the repo root ----------------------
 fs.mkdirSync(ROOT_BUILD, { recursive: true });

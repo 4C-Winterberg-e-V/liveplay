@@ -13,10 +13,10 @@ Schritt-für-Schritt für das In-App-Web-Sharing (LAN + Cloudflare-Tunnel) aus
 
 Hier wird **kein DMG** erzeugt. Du startest den Client im Dev-Modus; das
 In-App-Hosting liefert die UI dann direkt vom laufenden Nuxt-Dev-Server aus
-(ein Dev-Fallback im Host-Server, kein `npm run generate` nötig).
+(ein Dev-Fallback im Host-Server, kein `pnpm generate` nötig).
 
 > **Einmalige Voraussetzung:** Der C++-Audioserver ist eine kompilierte Binary.
-> Beim ersten `npm run dev` wird er automatisch gebaut — dafür braucht es
+> Beim ersten `pnpm dev` wird er automatisch gebaut — dafür braucht es
 > einmalig die Server-Toolchain (siehe Teil 2, Voraussetzungen: Xcode CLT,
 > `brew install cmake ninja pkg-config`, vcpkg + `VCPKG_ROOT`). Node 20 LTS ist
 > ohnehin nötig.
@@ -25,8 +25,8 @@ In-App-Hosting liefert die UI dann direkt vom laufenden Nuxt-Dev-Server aus
 git clone <fork-url> liveplay        # oder vorhandenen Checkout nutzen
 cd liveplay
 git checkout claude/tender-galileo-l78ztg
-npm install                          # Root + client (npm workspaces)
-npm run dev                          # baut den Server bei Bedarf, startet Nuxt + Electron
+pnpm install                          # Root + client (pnpm workspace)
+pnpm dev                          # baut den Server bei Bedarf, startet Nuxt + Electron
 ```
 
 Dann in der App:
@@ -80,15 +80,15 @@ export VCPKG_ROOT="$HOME/dev/vcpkg"          # in ~/.zshrc dauerhaft machen
 
 ```sh
 cd liveplay
-npm install
-npm run build            # C++-Server + Client; sammelt Installer nach build/
+pnpm install
+pnpm build            # C++-Server + Client; sammelt Installer nach build/
 ```
 
 Ergebnis in `build/`:
 - Apple Silicon: `LivePlay-<version>-arm64.dmg` (+ `-arm64-mac.zip`)
 - Intel: `LivePlay-<version>.dmg` (+ `-mac.zip`)
 
-`npm install` lädt dabei per Postinstall die `cloudflared`-Binary; sie wird von
+`pnpm install` lädt dabei per Postinstall die `cloudflared`-Binary; sie wird von
 electron-builder ins App-Bundle gelegt (`asarUnpack`).
 
 **Erststart (unsigniert):** Gatekeeper meldet ggf. „beschädigt". Einmalig
@@ -99,7 +99,7 @@ entquarantänisieren (entfernt das Flag auch von der eingebetteten
 sudo xattr -rd com.apple.quarantine "/Applications/LivePlay.app"
 ```
 
-> **Cross-Arch-Caveat (cloudflared):** `npm install` zieht die `cloudflared`-
+> **Cross-Arch-Caveat (cloudflared):** `pnpm install` zieht die `cloudflared`-
 > Binary für die **Architektur des Build-Rechners**. Auf einem Apple-Silicon-Mac
 > erhält der **Intel-Slice** dadurch eine arm64-`cloudflared`, d. h. der
 > Tunnel-Button funktioniert auf echten Intel-Macs nicht. Für reine
@@ -133,7 +133,7 @@ manuellen Trigger (`workflow_dispatch`).
 **A2 — Regulärer Release über `main` (Versions-Bump):**
 ```sh
 # auf einem Branch:
-npm run bump -- patch        # 2.1.2 → 2.1.3 (propagiert in client/package.json)
+pnpm run bump patch        # 2.1.2 → 2.1.3 (propagiert in client/package.json)
 git commit -am "chore: release v2.1.3"
 # Branch nach main mergen (PR). Push von package.json auf main triggert den Build.
 ```
@@ -154,8 +154,8 @@ Release automatisch.
 
 | Ziel | Befehl / Schritt |
 |---|---|
-| Nur Feature testen | `npm install && npm run dev` → Teilen → LAN/Tunnel |
-| DMG lokal bauen | `npm run build` (vcpkg + cmake nötig) → `build/*.dmg` |
+| Nur Feature testen | `pnpm install && pnpm dev` → Teilen → LAN/Tunnel |
+| DMG lokal bauen | `pnpm build` (vcpkg + cmake nötig) → `build/*.dmg` |
 | Release über CI | Actions → „Build and Release" → Run workflow (Branch wählen) |
-| Release über main | `npm run bump -- patch` → nach `main` mergen |
+| Release über main | `pnpm run bump patch` → nach `main` mergen |
 | Gatekeeper-Block | `sudo xattr -rd com.apple.quarantine "/Applications/LivePlay.app"` |

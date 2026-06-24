@@ -6,7 +6,7 @@
   "main": "electron/main.js",
   "type": "commonjs",
   "scripts": {
-    "dev": "concurrently \"npm run dev:nuxt\" \"npm run dev:electron\"",
+    "dev": "concurrently \"pnpm dev:nuxt\" \"pnpm dev:electron\"",
     "dev:nuxt": "nuxt dev",
     "dev:electron": "wait-on http://localhost:3000 && electron .",
     "build": "cross-env NODE_ENV=production nuxt generate",

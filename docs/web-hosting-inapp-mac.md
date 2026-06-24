@@ -65,20 +65,20 @@ Der C++-Server hat **keine eigene Authentifizierung** und die API erlaubt
 
 Es sind **keine** neuen Build-Schritte gegenüber dem normalen Electron-Build
 nötig – die Mobile-UI ist dieselbe SPA, die ohnehin in `.output/public`
-gebündelt wird (`npm run build:electron`). Zusätzlich werden zur Laufzeit drei
+gebündelt wird (`pnpm build:electron`). Zusätzlich werden zur Laufzeit drei
 npm-Abhängigkeiten genutzt, die electron-builder automatisch ins App-Bundle legt:
 
 - `http-proxy` – Reverse-Proxy für `/api` + `/ws`.
 - `qrcode` – QR-Codes (im Main-Prozess erzeugt).
-- `cloudflared` – lädt beim `npm install` die passende `cloudflared`-Binary für
+- `cloudflared` – lädt beim `pnpm install` die passende `cloudflared`-Binary für
   die **Build-Plattform** und liefert ihren Pfad (`require('cloudflared').bin`).
   In `client/package.json` ist sie unter `asarUnpack` eingetragen, damit die
   Binary außerhalb des asar liegt und ausführbar ist.
 
 ```sh
 cd client
-npm install          # zieht u. a. cloudflared für die aktuelle Arch
-npm run build:electron
+pnpm install          # zieht u. a. cloudflared für die aktuelle Arch
+pnpm build:electron
 ```
 
 ### Caveats für den Mac-Build

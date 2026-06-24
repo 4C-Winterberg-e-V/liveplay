@@ -1,0 +1,6 @@
+# pnpm workspace — replaces the former package.json "workspaces" field.
+# The C++ server (server/) is not an npm package. The Electron client and the
+# public docs site are both pnpm packages and built by their own workflows.
+packages:
+  - client
+  - docs-site
