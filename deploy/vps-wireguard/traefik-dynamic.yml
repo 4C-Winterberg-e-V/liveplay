@@ -23,9 +23,12 @@ http:
       priority: 100
       tls:
         certResolver: le
-      # Optional auth at the proxy (or use Cloudflare Access instead — see docs).
-      # middlewares:
-      #   - liveplay-auth
+      # Password gate at the proxy — protects the API/WS regardless of how the
+      # origin is reached (via Cloudflare OR directly by IP). The SPA router
+      # (in docker-compose.yml) references the same middleware as
+      # `liveplay-auth@file`, so the whole site is gated.
+      middlewares:
+        - liveplay-auth
 
   services:
     liveplay-mac:
@@ -35,10 +38,14 @@ http:
         servers:
           - url: "http://10.10.0.2:4480"
 
-  # Uncomment to require a login at the proxy. Generate the hash with:
-  #   htpasswd -nbB operator 'your-password'
-  # middlewares:
-  #   liveplay-auth:
-  #     basicAuth:
-  #       users:
-  #         - "operator:$2y$05$REPLACE_WITH_BCRYPT_HASH"
+  middlewares:
+    liveplay-auth:
+      basicAuth:
+        # Default login — user "liveplay", password "changeme". CHANGE THIS!
+        # Generate a new hash (bcrypt) with either:
+        #   htpasswd -nbB <user> '<password>'
+        #   python3 -c "import crypt;print(crypt.crypt('PW',crypt.mksalt(crypt.METHOD_BLOWFISH)))"
+        # In this FILE provider the hash is used verbatim (no $-escaping needed).
+        users:
+          - "liveplay:$2b$12$sD/KrOOp8iay7DpcMpGz9.WpwHG1gYp5oBj0gIL//hsnBhE2aTxwy"
+

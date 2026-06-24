@@ -36,6 +36,9 @@ services:
       # Lower priority than the API/WS router (in traefik-dynamic.yml) so /api
       # and /ws are matched first.
       - "traefik.http.routers.liveplay.priority=1"
+      # Same password gate as the API/WS router (defined in traefik-dynamic.yml,
+      # file provider → referenced with the @file suffix). Gates the whole site.
+      - "traefik.http.routers.liveplay.middlewares=liveplay-auth@file"
       - "traefik.http.services.liveplay.loadbalancer.server.port=80"
 
 networks:

@@ -93,13 +93,34 @@ docker compose -f deploy/vps-wireguard/docker-compose.yml up --build -d
   - **DNS-01-Resolver** in Traefik (Cloudflare-Provider, automatische
     Let's-Encrypt-Certs) — dann passt der `certresolver`-Name in den Labels.
 
-## 6 – Authentifizierung (dringend empfohlen)
+## 6 – Authentifizierung (BasicAuth am Proxy – aktiv)
 Der LivePlay-Server hat **keine eigene Auth** und erlaubt u. a. Dateizugriff.
-Sobald er über das Internet erreichbar ist, **muss** ein Gate davor:
-- **Cloudflare Access (Zero Trust):** Access-Application für `music.4cwt.de`
-  (E-Mail-OTP/SSO). Kein Server-/Traefik-Umbau. **Bevorzugt.**
-- **oder Traefik BasicAuth:** die `liveplay-auth`-Middleware in
-  `traefik-dynamic.yml` (und am SPA-Router) aktivieren.
+Sobald er über das Internet erreichbar ist, **muss** ein Gate davor.
+
+Dieses Kit nutzt **Traefik-BasicAuth** statt Cloudflare Access — bewusst:
+Cloudflare Access schützt nur den Weg *durch* Cloudflare. Wer die VPS-IP direkt
+trifft (Port 443 offen), käme daran vorbei (außer man sperrt den Origin auf
+CF-IP-Ranges). **BasicAuth sitzt am Traefik selbst und greift immer** — egal ob
+über Cloudflare oder direkt per IP. Da alles über HTTPS läuft, wird das Passwort
+verschlüsselt übertragen.
+
+Die Middleware `liveplay-auth` ist bereits in `traefik-dynamic.yml` definiert und
+an **beiden** Routern aktiv (API/WS im File, SPA via `liveplay-auth@file` in den
+Compose-Labels) → die **ganze Seite** verlangt Login.
+
+**Standard-Login:** Benutzer `liveplay`, Passwort `changeme` → **unbedingt ändern!**
+Neuen bcrypt-Hash erzeugen und in `traefik-dynamic.yml` unter
+`middlewares.liveplay-auth.basicAuth.users` eintragen:
+```bash
+htpasswd -nbB liveplay 'DEIN-PASSWORT'
+# oder ohne htpasswd:
+python3 -c "import crypt;print('liveplay:'+crypt.crypt('DEIN-PASSWORT',crypt.mksalt(crypt.METHOD_BLOWFISH)))"
+```
+Im File-Provider wird der Hash **unverändert** eingetragen (kein `$$`-Escaping —
+das gilt nur für Hashes direkt in Compose-Labels).
+
+> Das Login-Popup im Browser erscheint einmal; die PWA/Safari merkt sich die
+> Zugangsdaten und sendet sie auch beim WebSocket-Handshake (gleiche Origin) mit.
 
 ## 7 – Benutzung
 iPhone → `https://music.4cwt.de`. Der Client nutzt automatisch die eigene Origin
@@ -115,8 +136,9 @@ iPhone → `https://music.4cwt.de`. Der Client nutzt automatisch die eigene Orig
 | Tunnel bricht ab | `PersistentKeepalive = 25` am Mac gesetzt? VPS-UDP-51820 offen? |
 
 ## Sicherheit
-- Auth-Gate (Cloudflare Access) ist **Pflicht** bei Internet-Exposition.
-- VPS-Firewall: nur `443` (idealerweise auf Cloudflare-IP-Ranges beschränkt) und
-  `51820/udp` öffnen.
+- **BasicAuth (Schritt 6) ist Pflicht** bei Internet-Exposition — Standardpasswort ändern!
+  Greift auch bei direktem IP-Zugriff (kein Bypass wie bei Cloudflare Access).
+- VPS-Firewall: nur `443` und `51820/udp` öffnen. Optional `443` zusätzlich auf
+  Cloudflare-IP-Ranges beschränken (BasicAuth schützt aber auch ohne diese Sperre).
 - WireGuard ist Punkt-zu-Punkt verschlüsselt; nur die `10.10.0.0/24` läuft durch
   den Tunnel, der restliche Mac-Traffic bleibt unangetastet.
