@@ -52,6 +52,7 @@ class WebShare extends EventEmitter {
     super();
     this.staticRoot = null;     // absolute path to .output/public (set by main)
     this.serverPort = 4480;     // C++ control server port to proxy to
+    this.devServerUrl = null;   // when set (dev mode), proxy the UI to nuxt dev
 
     this.httpServer = null;     // node http.Server hosting the SPA + proxy
     this.proxy = null;          // http-proxy instance
@@ -66,9 +67,10 @@ class WebShare extends EventEmitter {
   }
 
   /** Wire up paths/ports before first use. Safe to call repeatedly. */
-  configure({ staticRoot, serverPort }) {
+  configure({ staticRoot, serverPort, devServerUrl }) {
     if (staticRoot) this.staticRoot = staticRoot;
     if (Number.isInteger(serverPort)) this.serverPort = serverPort;
+    if (devServerUrl !== undefined) this.devServerUrl = devServerUrl;
   }
 
   // ── status ────────────────────────────────────────────────────────────
@@ -98,8 +100,11 @@ class WebShare extends EventEmitter {
   // ── LAN hosting ─────────────────────────────────────────────────────────
   async startLan(webPort = DEFAULT_WEB_PORT) {
     if (this.httpServer) return this.status();
-    if (!this.staticRoot || !fs.existsSync(path.join(this.staticRoot, 'index.html'))) {
-      throw new Error(`web UI not found at ${this.staticRoot} — build with "npm run generate" first`);
+    // In dev we serve the UI from the running nuxt dev server; otherwise from
+    // the bundled static build. One of the two must be available.
+    const hasStatic = this.staticRoot && fs.existsSync(path.join(this.staticRoot, 'index.html'));
+    if (!this.devServerUrl && !hasStatic) {
+      throw new Error(`web UI not found at ${this.staticRoot} — run "npm run generate" first, or start in dev mode`);
     }
 
     this.proxy = httpProxy.createProxyServer({
@@ -134,27 +139,37 @@ class WebShare extends EventEmitter {
       }
       next();
     });
-    // Static SPA + history fallback (single index.html, ssr:false).
-    app.use(express.static(this.staticRoot, { index: 'index.html', fallthrough: true }));
-    app.use((req, res) => {
-      res.sendFile(path.join(this.staticRoot, 'index.html'));
-    });
+    if (this.devServerUrl) {
+      // Dev: hand every non-API request to the nuxt dev server (HMR included).
+      app.use((req, res) => this.proxy.web(req, res, { target: this.devServerUrl }));
+    } else {
+      // Production: static SPA + history fallback (single index.html, ssr:false).
+      app.use(express.static(this.staticRoot, { index: 'index.html', fallthrough: true }));
+      app.use((req, res) => {
+        res.sendFile(path.join(this.staticRoot, 'index.html'));
+      });
+    }
 
     const server = http.createServer(app);
 
     // WebSocket upgrade (/ws) → C++ server. Auth is checked here too, so the
     // meter/transport socket is gated identically to the HTTP API.
     server.on('upgrade', (req, socket, head) => {
-      if (!req.url || !req.url.startsWith('/ws')) {
-        socket.destroy();
-        return;
-      }
+      if (!req.url) { socket.destroy(); return; }
       if (!this._authOkUpgrade(req)) {
         socket.write('HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="LivePlay"\r\n\r\n');
         socket.destroy();
         return;
       }
-      this.proxy.ws(req, socket, head);
+      if (req.url.startsWith('/ws')) {
+        // Control/meter socket → C++ server (default proxy target).
+        this.proxy.ws(req, socket, head);
+      } else if (this.devServerUrl) {
+        // Vite/nuxt HMR socket → dev server.
+        this.proxy.ws(req, socket, head, { target: this.devServerUrl });
+      } else {
+        socket.destroy();
+      }
     });
 
     await new Promise((resolve, reject) => {

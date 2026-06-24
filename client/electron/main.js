@@ -622,8 +622,11 @@ function getWebShare() {
     webShare.on('log', (msg) => console.log(msg));
   }
   // The renderer (.output/public/index.html) sits one level up from electron/.
+  // In dev there is no static build — serve the UI from the nuxt dev server so
+  // sharing can be tested without packaging (npm run dev, no build needed).
   const staticRoot = path.join(__dirname, '../.output/public');
-  webShare.configure({ staticRoot, serverPort: readLiveplayConfig().localPort });
+  const devServerUrl = (isDevMode && !app.isPackaged) ? 'http://localhost:3000' : null;
+  webShare.configure({ staticRoot, devServerUrl, serverPort: readLiveplayConfig().localPort });
   return webShare;
 }
 
