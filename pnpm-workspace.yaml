@@ -4,3 +4,13 @@
 packages:
   - client
   - docs-site
+
+# Dependencies allowed to run install/build (lifecycle) scripts. pnpm 10 gates
+# these by default and reads the list from here (pnpm <10 read package.json's
+# pnpm.onlyBuiltDependencies). These download their binaries on install.
+onlyBuiltDependencies:
+  - electron
+  - esbuild
+  - cloudflared
+  - '@ffmpeg-installer/ffmpeg'
+  - '@ffprobe-installer/ffprobe'

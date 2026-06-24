@@ -30,15 +30,6 @@
     "version": "node scripts/version.js",
     "bump": "node scripts/version.js"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron",
-      "esbuild",
-      "cloudflared",
-      "@ffmpeg-installer/ffmpeg",
-      "@ffprobe-installer/ffprobe"
-    ]
-  },
   "devDependencies": {
     "concurrently": "^8.2.2"
   },
