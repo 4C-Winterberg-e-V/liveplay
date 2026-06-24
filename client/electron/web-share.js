@@ -214,7 +214,7 @@ class WebShare extends EventEmitter {
     // Internet exposure ⇒ arm the auth gate before the tunnel goes live.
     this.auth = {
       user: 'liveplay',
-      pass: crypto.randomBytes(9).toString('base64url'),
+      pass: makePassword(8),
     };
     this.tunnelStarting = true;
     this.emitStatus();
@@ -334,6 +334,17 @@ function resolveCloudflared() {
     if (cf && cf.bin && fs.existsSync(cf.bin)) return cf.bin;
   } catch { /* package not installed */ }
   return null;
+}
+
+// Short, mobile-friendly password from an unambiguous alphabet — no 0/O/o,
+// 1/l/I, all lowercase so it's quick to type on a phone keyboard. crypto.randomInt
+// is uniform (no modulo bias). 8 chars over 32 symbols ≈ 40 bits — fine for an
+// ephemeral per-session tunnel login.
+function makePassword(len = 8) {
+  const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789';
+  let out = '';
+  for (let i = 0; i < len; i++) out += alphabet[crypto.randomInt(alphabet.length)];
+  return out;
 }
 
 function safeEqual(a, b) {
