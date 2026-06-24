@@ -12,6 +12,17 @@ const https = require('https');
 const execPromise = promisify(exec);
 const { WebShare, DEFAULT_WEB_PORT } = require('./web-share');
 
+// Headless / VM / VNC Linux boxes frequently have no usable GPU, where
+// Electron's GPU process segfaults (WebGL blocklisted, CreateCommandBuffer
+// failures). Opt-in software rendering via LIVEPLAY_DISABLE_GPU=1 — no effect
+// unless the env var is set, so desktop/Mac/Windows builds are unaffected.
+// Must run before the app is ready.
+if (process.env.LIVEPLAY_DISABLE_GPU === '1') {
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('disable-gpu-compositing');
+}
+
 let ffmpegPath = null;
 let ffmpegAvailable = false;
 
