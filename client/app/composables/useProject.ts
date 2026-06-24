@@ -49,10 +49,6 @@ import { applyAutoProcessing } from '~/utils/audio';
 let _syncWatchersInstalled = false;
 let _refreshItemsBaselineAfterHydrate: () => void = () => {};
 let _captureBaselinesFn: () => void = () => {};
-// Flush any pending item edits to the server now (used when ending a drag
-// batch) so the change is PATCHed + broadcast to other clients instead of
-// being swallowed into the diff baseline.
-let _flushItemsSyncFn: () => void = () => {};
 let _installItemsWatcherFn:   null | (() => void) = null;
 let _uninstallItemsWatcherFn: null | (() => void) = null;
 
@@ -1620,9 +1616,6 @@ export const useProject = () => {
         console.warn('[useProject] items diff failed:', e)
       ), 300);
     };
-    // Expose the scheduler so endItemBatch can flush the final edit to the
-    // server (and broadcast it) rather than capturing it into the baseline.
-    _flushItemsSyncFn = scheduleItemsDiff;
 
     let stopItemsWatcher:    null | (() => void) = null;
     let stopCartOnlyWatcher: null | (() => void) = null;
@@ -1795,12 +1788,7 @@ export const useProject = () => {
   // Drag-batch helpers — defined at composable scope so they're always
   // accessible from the return object regardless of the init-block latch.
   const beginItemBatch = () => { _suppressItemSyncCount.value++; };
-  // End a drag batch: re-enable sync and FLUSH the pending edit so it is
-  // PATCHed to the server and broadcast to other clients. (Previously this
-  // captured the baseline instead, which made the debounced diff see "no
-  // change" and silently dropped the edit from the multi-client mirror —
-  // edits then only reached peers after a reload.)
-  const endItemBatch   = () => { _suppressItemSyncCount.value = 0; _flushItemsSyncFn(); };
+  const endItemBatch   = () => { _suppressItemSyncCount.value = 0; _captureBaselinesFn(); };
 
   return {
     currentProject,
