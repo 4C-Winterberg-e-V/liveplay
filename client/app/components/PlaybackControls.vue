@@ -1,22 +1,9 @@
 <template>
   <div class="playback-controls">
-    <div class="controls-left">
-      <button
-        class="control-btn play-next-btn"
-        :class="{ 'has-next': !!effectiveNextUuid }"
-        @click="handlePlayNext"
-        :disabled="!effectiveNextUuid"
-        :title="playNextTooltip"
-      >
-        <span class="material-symbols-rounded">fast_forward</span>
-        <span>{{ t('controls.playNext') }}</span>
-      </button>
-      <button class="control-btn panic-btn" @click="handlePanic" :disabled="activeCues.size === 0" :title="stopAllTooltip">
-        <span class="icon">⚠</span>
-        <span>{{ t('playback.panic') }}</span>
-      </button>
-    </div>
-    
+    <!-- Desktop: transport lives here. On phones it moves into the title bar
+         (ProjectHeader) so the active-cue list gets the full width. -->
+    <TransportButtons class="controls-left" />
+
     <div class="active-cues">
       <div v-if="activeCues.size === 0 && !previewingItem" class="no-cues">
         {{ t('playback.noActiveCues') }}
@@ -103,6 +90,7 @@ import type { AudioItem } from '~/types/project';
 import { useLiveplayServer } from '~/composables/useLiveplayServer';
 import { useCueMeters } from '~/composables/useLiveMeters';
 import VolumeSlider from './VolumeSlider.vue';
+import TransportButtons from './TransportButtons.vue';
 
 const { activeCues, panicStop, nextItemOverrideUuid, autoNextItemUuid, setNextItem, playCue, triggerGroup } = useAudioEngine();
 const { findItemByUuid, previewItemUuid, previewCueId, stopPreview, currentProject } = useProject();
@@ -477,28 +465,16 @@ const handlePlayNext = () => {
   pointer-events: none;
 }
 
-/* Mobile: stack Play-Next over Stop-All so the bar fits without scrolling. */
+/* Mobile: the transport moves into the title bar (ProjectHeader), so hide it
+   here and let the active-cue list use the full width. */
 @media (max-width: 768px) {
   .playback-controls {
     gap: var(--spacing-md);
     padding: 0 var(--spacing-md);
-    /* No whole-bar horizontal scroll — the active-cue list scrolls on its own. */
     overflow-x: hidden;
   }
-  /* Two buttons stacked vertically, total height aligned to the meter on the
-     right (same calc as .output-meters), with a clear gap so taps don't slip. */
   .controls-left {
-    flex-direction: column;
-    gap: 10px;
-    height: calc(var(--playback-controls-height) - 16px);
-    flex-shrink: 0;
-  }
-  .controls-left .control-btn {
-    flex: 1;            /* each button takes half the meter height */
-    width: 100%;
-    justify-content: center;
-    padding: 0 var(--spacing-md);
-    flex-shrink: 0;
+    display: none;
   }
   .active-cues {
     min-width: 0;

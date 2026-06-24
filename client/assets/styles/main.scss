@@ -138,7 +138,9 @@ body {
   font-size: 14px;
   line-height: 1.5;
   color: var(--color-text-primary);
-  background-color: var(--color-background);
+  // data-theme lives on #app, so on <body> --color-background is undefined and
+  // would render white (e.g. iOS overscroll). Fall back to the dark base tone.
+  background-color: var(--color-background, #161616);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   // The app is a desktop-style workspace where dragging reorders cues — it

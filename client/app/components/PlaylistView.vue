@@ -603,7 +603,13 @@ const handleDrop = async (e: DragEvent) => {
 
 /* Phones: enable the collapse affordance and fold the content away. */
 @media (max-width: 768px) {
-  .playlist-collapse-toggle { display: inline-flex; }
+  /* Slimmer header to reclaim vertical space. */
+  .playlist-header {
+    min-height: 44px;
+    padding: var(--spacing-xs) var(--spacing-md);
+  }
+  .playlist-header h2 { font-size: 16px; }
+  .playlist-collapse-toggle { display: inline-flex; width: 32px; height: 32px; }
   .playlist-header h2 { cursor: pointer; flex: 1; }
   /* Collapsed: drop to the header's natural height (don't stretch to 100%) so
      the section above can shrink and hand the height to the cart player. */

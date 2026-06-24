@@ -461,6 +461,10 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Themed dark background so any area not covered by a panel (e.g. when the
+     playlist/cart are collapsed on mobile) stays in the app's dark tone
+     instead of showing the page's default white. */
+  background-color: var(--color-background);
 }
 
 .workspace-content {
@@ -468,6 +472,7 @@ onUnmounted(() => {
   display: flex;
   overflow: hidden;
   position: relative;
+  background-color: var(--color-background);
 }
 
 .playlist-section {

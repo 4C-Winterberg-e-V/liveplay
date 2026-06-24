@@ -25,6 +25,10 @@
     </div>
 
     <div ref="rightRef" class="header-right">
+      <!-- Phones only: transport moves up here from the controls bar so the
+           active-cue list below gets the full width (icon-only to stay slim). -->
+      <TransportButtons class="header-transport" />
+
       <Btn class="header-action" icon="tune" :text="t('settings.title')" @click="showProjectSettings = true" />
       <Btn class="header-action" icon="keyboard" :text="t('controls.shortcutBtn')" @click="showControlConfig = true" />
       <Btn v-if="hasElectron" class="header-action" icon="share" :text="t('webShare.button')" @click="showWebShare = true" />
@@ -107,6 +111,7 @@
 <script setup lang="ts">
 import ProjectSettingsModal from './ProjectSettingsModal.vue';
 import WebShareModal from './WebShareModal.vue';
+import TransportButtons from './TransportButtons.vue';
 import Btn from './Btn.vue';
 import type { AudioItem } from '~/types/project';
 
@@ -610,6 +615,9 @@ onMounted(() => {
   }
 }
 
+/* Transport (Play-Next / Stop-All) in the title bar — phones only. */
+.header-transport { display: none; }
+
 @media (max-width: 768px) {
   // C): fold Settings/Shortcuts into the ⋯ menu and drop the clock pair so the
   // narrow header has room to breathe.
@@ -647,5 +655,18 @@ onMounted(() => {
       flex-shrink: 0;
     }
   }
+
+  // Transport moves into the title bar, icon-only to stay slim.
+  .header-transport { display: flex; }
+  .header-transport :deep(.control-btn__label) { display: none; }
+  .header-transport :deep(.control-btn) {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  // Autosave toggle isn't needed in the phone title bar — drop it for space.
+  .autosave-toggle { display: none; }
 }
 </style>

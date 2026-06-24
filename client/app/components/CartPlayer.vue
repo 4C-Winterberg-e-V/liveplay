@@ -199,8 +199,13 @@ onMounted(() => {
 /* Phones: enable collapse, fold the grid away, and drop the Attach button
    (pointless in a browser/touch context). */
 @media (max-width: 768px) {
-  .cart-collapse-toggle { display: inline-flex; }
-  .cart-header h2 { cursor: pointer; flex: 1; }
+  /* Slimmer header to reclaim vertical space. */
+  .cart-header {
+    min-height: 44px;
+    padding: var(--spacing-xs) var(--spacing-md);
+  }
+  .cart-header h2 { font-size: 16px; cursor: pointer; flex: 1; }
+  .cart-collapse-toggle { display: inline-flex; width: 32px; height: 32px; }
   .cart-header-actions { display: none; }
   .cart-player.collapsed { height: auto; }
   .cart-player.collapsed .cart-grid { display: none; }
