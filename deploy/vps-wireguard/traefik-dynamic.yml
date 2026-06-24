@@ -1,0 +1,44 @@
+# =====================================================================
+# Traefik DYNAMIC configuration (file provider) for the VPS deployment.
+#
+# Routes the control API and WebSocket to the Mac's LivePlay server, reached
+# over the WireGuard tunnel (the Mac's tunnel IP, NOT a container). Point your
+# Traefik file provider at this file, e.g. in traefik.yml (static config):
+#
+#   providers:
+#     file:
+#       filename: /etc/traefik/dynamic/liveplay-dynamic.yml
+#       watch: true
+#
+# Adjust the Host(...) rule, the certResolver, and the WireGuard upstream IP.
+# =====================================================================
+http:
+  routers:
+    liveplay-api:
+      # Match API + WebSocket before the SPA catch-all.
+      rule: "Host(`music.4cwt.de`) && (PathPrefix(`/api`) || Path(`/ws`))"
+      entryPoints:
+        - websecure
+      service: liveplay-mac
+      priority: 100
+      tls:
+        certResolver: le
+      # Optional auth at the proxy (or use Cloudflare Access instead — see docs).
+      # middlewares:
+      #   - liveplay-auth
+
+  services:
+    liveplay-mac:
+      loadBalancer:
+        # The Mac's LivePlay server over WireGuard. Traefik forwards the
+        # WebSocket upgrade on /ws automatically.
+        servers:
+          - url: "http://10.10.0.2:4480"
+
+  # Uncomment to require a login at the proxy. Generate the hash with:
+  #   htpasswd -nbB operator 'your-password'
+  # middlewares:
+  #   liveplay-auth:
+  #     basicAuth:
+  #       users:
+  #         - "operator:$2y$05$REPLACE_WITH_BCRYPT_HASH"

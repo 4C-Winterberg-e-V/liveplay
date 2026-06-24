@@ -1,0 +1,43 @@
+# =====================================================================
+# LivePlay Web-Client on a VPS, served by an EXISTING Traefik instance,
+# reaching the Mac's LivePlay server over a WireGuard tunnel.
+#
+#   Browser ─https→ Cloudflare ─https→ Traefik (VPS)
+#                                        ├─ this container: SPA (/)
+#                                        └─ /api + /ws ─WireGuard→ Mac:4480
+#                                           (routed via traefik-dynamic.yml)
+#
+# Same origin → no mixed content, no CORS, no manual address entry.
+#
+# This service only serves the static SPA. The control API + WebSocket live on
+# the EXTERNAL Mac (not a container), so they are routed by the file-provider
+# config in `traefik-dynamic.yml` — see that file.
+#
+# Adjust:
+#   * the Host(...) rule to your hostname
+#   * the certresolver name ('le') to whatever your Traefik defines
+#     (behind Cloudflare this is typically a DNS-01 resolver — see the docs)
+#   * the network name ('traefik') to your Traefik network
+# =====================================================================
+services:
+  liveplay-web:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+    image: liveplay-web:vps
+    networks: [traefik]
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      # --- SPA router (catch-all for the host) ---
+      - "traefik.http.routers.liveplay.rule=Host(`music.4cwt.de`)"
+      - "traefik.http.routers.liveplay.entrypoints=websecure"
+      - "traefik.http.routers.liveplay.tls.certresolver=le"
+      # Lower priority than the API/WS router (in traefik-dynamic.yml) so /api
+      # and /ws are matched first.
+      - "traefik.http.routers.liveplay.priority=1"
+      - "traefik.http.services.liveplay.loadbalancer.server.port=80"
+
+networks:
+  traefik:
+    external: true

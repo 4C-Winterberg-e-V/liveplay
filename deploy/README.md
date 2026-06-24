@@ -31,6 +31,16 @@ docker compose -f deploy/docker-compose.mode-b.yml up --build
 - `Dockerfile` – Build der SPA + Nginx (statisch).
 - `nginx.conf` – SPA-Fallback, kein Proxy.
 
+## Modus C – VPS + WireGuard (internet-facing, Cloudflare)
+Web-Client auf einem VPS hinter Traefik/Cloudflare; `/api`+`/ws` laufen über einen
+WireGuard-Tunnel zum Mac. Internet-erreichbar per HTTPS, **ohne Dev-Software auf
+dem Mac** und ohne Server-Änderung. Same-Origin → kein Mixed-Content/CORS.
+Schritt-für-Schritt: [`../docs/web-hosting-vps-wireguard.md`](../docs/web-hosting-vps-wireguard.md).
+- `vps-wireguard/docker-compose.yml` – SPA-Service mit Traefik-Labels.
+- `vps-wireguard/traefik-dynamic.yml` – File-Provider-Route `/api`+`/ws` → Mac über WireGuard.
+- `vps-wireguard/wg0.vps.conf`, `vps-wireguard/liveplay.mac.conf` – WireGuard-Configs (Vorlagen).
+
+
 ## Sub-Pfad-Hosting
 Beide Dockerfiles akzeptieren `--build-arg NUXT_APP_BASE_URL=/liveplay/` für
 Auslieferung unter einem Unterpfad.
