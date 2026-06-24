@@ -477,20 +477,31 @@ const handlePlayNext = () => {
   pointer-events: none;
 }
 
-/* Mobile: compact controls, horizontal scroll for overflow */
+/* Mobile: stack Play-Next over Stop-All so the bar fits without scrolling. */
 @media (max-width: 768px) {
   .playback-controls {
     gap: var(--spacing-md);
     padding: 0 var(--spacing-md);
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    /* No whole-bar horizontal scroll — the active-cue list scrolls on its own. */
+    overflow-x: hidden;
   }
+  /* Two buttons stacked vertically, total height aligned to the meter on the
+     right (same calc as .output-meters), with a clear gap so taps don't slip. */
   .controls-left {
+    flex-direction: column;
+    gap: 10px;
+    height: calc(var(--playback-controls-height) - 16px);
     flex-shrink: 0;
   }
-  .control-btn {
-    padding: var(--spacing-sm) var(--spacing-md);
+  .controls-left .control-btn {
+    flex: 1;            /* each button takes half the meter height */
+    width: 100%;
+    justify-content: center;
+    padding: 0 var(--spacing-md);
     flex-shrink: 0;
+  }
+  .active-cues {
+    min-width: 0;
   }
 }
 </style>
