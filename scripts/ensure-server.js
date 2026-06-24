@@ -38,13 +38,17 @@ function run(cmd, args, opts = {}) {
 function configure() {
   // Pick a preset that matches the host. Falls through to 'default' (Ninja)
   // on Unix; vs2022 on Windows so users don't need Ninja on PATH.
+  // Run from SERVER_DIR: `cmake --preset` reads CMakePresets.json from the
+  // current working directory.
   const preset = process.platform === 'win32' ? 'vs2022' : 'default';
-  run('cmake', ['--preset', preset, '-S', SERVER_DIR]);
+  run('cmake', ['--preset', preset], { cwd: SERVER_DIR });
 }
 
 function build() {
+  // `cmake --build --preset` also resolves the preset file relative to the
+  // working directory, so build from SERVER_DIR (not the repo root).
   const preset = process.platform === 'win32' ? 'vs2022' : 'default';
-  run('cmake', ['--build', BUILD_DIR, '--preset', preset]);
+  run('cmake', ['--build', BUILD_DIR, '--preset', preset], { cwd: SERVER_DIR });
 }
 
 const existing = findBinary();
