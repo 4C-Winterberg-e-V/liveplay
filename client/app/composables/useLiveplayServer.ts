@@ -400,11 +400,25 @@ function createClient() {
     const url = httpBase.value + path;
     // eslint-disable-next-line no-console
     dlog('[liveplay] rest start:', init?.method || 'GET', url);
+    // Keep every request "CORS-simple" so cross-origin hosting (browser on one
+    // host, C++ server on another) works WITHOUT a preflight. A JSON
+    // Content-Type makes the request non-simple → the browser sends an OPTIONS
+    // preflight, and this server's preflight route doesn't cover multi-segment
+    // /api/* paths, so the preflight 204 arrives without Access-Control-Allow-
+    // Origin and the browser blocks the call. We therefore:
+    //   * send NO Content-Type on bodyless GET/DELETE requests, and
+    //   * use the safelisted text/plain for JSON bodies.
+    // The server parses req.body with json::parse() regardless of Content-Type,
+    // so this stays wire-compatible. (Same-origin / Mode-A proxy is unaffected.)
+    const headers: Record<string, string> = { ...(init?.headers as Record<string, string> | undefined) };
+    if (init?.body != null && headers['Content-Type'] == null) {
+      headers['Content-Type'] = 'text/plain;charset=UTF-8';
+    }
     let res: Response;
     try {
       res = await fetch(url, {
-        headers: { 'Content-Type': 'application/json' },
         ...init,
+        headers,
       });
     } catch (e) {
       // eslint-disable-next-line no-console
