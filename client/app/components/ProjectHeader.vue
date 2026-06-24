@@ -615,8 +615,10 @@ onMounted(() => {
   }
 }
 
-/* Transport (Play-Next / Stop-All) in the title bar — phones only. */
-.header-transport { display: none; }
+/* Transport (Play-Next / Stop-All) in the title bar — phones only.
+   Higher specificity than the component's own `.transport-buttons{display:flex}`
+   so it stays hidden on desktop regardless of stylesheet order. */
+.header-right .header-transport { display: none; }
 
 @media (max-width: 768px) {
   // C): fold Settings/Shortcuts into the ⋯ menu and drop the clock pair so the
@@ -657,16 +659,22 @@ onMounted(() => {
   }
 
   // Transport moves into the title bar, icon-only to stay slim.
-  .header-transport { display: flex; }
+  .header-right .header-transport { display: flex; }
   .header-transport :deep(.control-btn__label) { display: none; }
   .header-transport :deep(.control-btn) {
-    width: 40px;
-    height: 40px;
+    width: 46px;
+    height: 46px;
     padding: 0;
     justify-content: center;
   }
+  .header-transport :deep(.control-btn .material-symbols-rounded) { font-size: 26px; }
+  .header-transport :deep(.control-btn .icon) { font-size: 24px; }
 
   // Autosave toggle isn't needed in the phone title bar — drop it for space.
   .autosave-toggle { display: none; }
+
+  // The silence-warning banner would sit on top of the title-bar transport
+  // buttons on a narrow screen — hide it on phones.
+  .silence-warning { display: none; }
 }
 </style>

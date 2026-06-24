@@ -473,11 +473,23 @@ const handlePlayNext = () => {
     padding: 0 var(--spacing-md);
     overflow-x: hidden;
   }
-  .controls-left {
+  /* Higher specificity than the component's own .transport-buttons{display:flex}
+     so the desktop-location transport stays hidden on phones. */
+  .playback-controls .controls-left {
     display: none;
   }
   .active-cues {
     min-width: 0;
+  }
+  /* Let a running cue fit the available width instead of the fixed 400px. */
+  .cue-list {
+    min-width: 0;
+    width: 100%;
+  }
+  .preview-cue-card {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
   }
 }
 </style>
