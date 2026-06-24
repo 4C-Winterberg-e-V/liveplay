@@ -62,6 +62,8 @@ class WebShare extends EventEmitter {
     this.tunnelProc = null;     // cloudflared ChildProcess
     this.tunnelUrl = null;      // https://...trycloudflare.com once ready
     this.tunnelStarting = false;
+    this.tunnelError = null;        // last tunnel failure message (shown in UI)
+    this.lastTunnelStderr = '';     // last stderr line from cloudflared
 
     this.auth = null;           // { user, pass } when the auth gate is armed
     this.sessionToken = null;   // cookie token issued after a successful login
@@ -92,6 +94,7 @@ class WebShare extends EventEmitter {
       tunnel: this.tunnelStarting ? 'starting' : (this.tunnelUrl ? 'up' : 'down'),
       tunnelUrl: this.tunnelUrl,
       tunnelQr,
+      tunnelError: this.tunnelError,
       auth: this.auth ? { user: this.auth.user, pass: this.auth.pass } : null,
     };
   }
@@ -220,19 +223,13 @@ class WebShare extends EventEmitter {
       throw new Error('cloudflared binary not found (bundle it under resources/bin or add the "cloudflared" npm dep)');
     }
 
-    // Internet exposure ⇒ arm the auth gate before the tunnel goes live.
-    // Reuse the PIN for the whole app session so a tunnel restart keeps the
-    // same login; only a fresh app launch mints a new PIN.
-    if (!this.pin) this.pin = makePin(4);
-    this.auth = {
-      user: 'liveplay',
-      pass: this.pin,
-    };
-    // Session cookie issued after a successful BasicAuth login — browsers send
-    // cookies on the WebSocket handshake (unlike BasicAuth headers), so this is
-    // what authenticates the /ws and HMR sockets.
-    this.sessionToken = crypto.randomBytes(18).toString('base64url');
+    // NOTE: the auth gate is armed only once the tunnel is actually UP (URL
+    // received) — see onData below. Arming it earlier would lock the LAN while
+    // the tunnel is still "starting" (or after it fails) WITHOUT showing the
+    // PIN, since the PIN is only displayed for an up tunnel.
     this.tunnelStarting = true;
+    this.tunnelError = null;
+    this.lastTunnelStderr = '';
     this.emitStatus();
 
     const args = [
@@ -244,10 +241,19 @@ class WebShare extends EventEmitter {
 
     const onData = (buf) => {
       const text = buf.toString();
+      // Keep the last meaningful line so a failure can be reported in the UI.
+      const line = text.split('\n').map(s => s.trim()).filter(Boolean).pop();
+      if (line) this.lastTunnelStderr = line;
       const m = text.match(TUNNEL_URL_RE);
       if (m && !this.tunnelUrl) {
         this.tunnelUrl = m[0];
         this.tunnelStarting = false;
+        // Tunnel is live and internet-facing → arm the auth gate now. Reuse the
+        // per-session PIN (stable across tunnel restarts; new only per app
+        // launch). The session cookie authenticates the WebSocket handshake.
+        if (!this.pin) this.pin = makePin(4);
+        this.auth = { user: 'liveplay', pass: this.pin };
+        this.sessionToken = crypto.randomBytes(18).toString('base64url');
         this.emit('log', `[web-share] tunnel up: ${this.tunnelUrl}`);
         this.emitStatus();
       }
@@ -257,17 +263,24 @@ class WebShare extends EventEmitter {
 
     proc.on('exit', (code) => {
       this.emit('log', `[web-share] cloudflared exited (${code})`);
+      // A non-zero exit before a URL arrived ⇒ surface the last stderr line.
+      if (!this.tunnelUrl && code) {
+        this.tunnelError = this.lastTunnelStderr || `cloudflared exited (${code})`;
+      }
       this.tunnelProc = null;
       this.tunnelUrl = null;
       this.tunnelStarting = false;
       this.auth = null;
+      this.sessionToken = null;
       this.emitStatus();
     });
     proc.on('error', (err) => {
       this.emit('log', `[web-share] cloudflared spawn error: ${err.message}`);
+      this.tunnelError = `cloudflared konnte nicht gestartet werden: ${err.message}`;
       this.tunnelProc = null;
       this.tunnelStarting = false;
       this.auth = null;
+      this.sessionToken = null;
       this.emitStatus();
     });
 
@@ -374,7 +387,14 @@ function resolveCloudflared() {
   try {
     // eslint-disable-next-line global-require
     const cf = require('cloudflared');
-    if (cf && cf.bin && fs.existsSync(cf.bin)) return cf.bin;
+    if (cf && cf.bin) {
+      // In a packaged app `cf.bin` points INTO app.asar (a file), so spawning it
+      // fails with ENOTDIR. The binary is asarUnpack'd to app.asar.unpacked —
+      // rewrite the path so we spawn the real, executable file.
+      const unpacked = cf.bin.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
+      if (unpacked !== cf.bin && fs.existsSync(unpacked)) return unpacked;
+      if (fs.existsSync(cf.bin)) return cf.bin;
+    }
   } catch { /* package not installed */ }
   return null;
 }

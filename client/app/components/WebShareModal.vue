@@ -88,6 +88,11 @@
             <p class="ws-hint ws-hint--warn">{{ t('webShare.tunnelWarn') }}</p>
           </div>
         </div>
+
+        <!-- Failure reason (e.g. cloudflared couldn't start) for easy debugging. -->
+        <p v-if="status.tunnel === 'down' && status.tunnelError" class="ws-error">
+          {{ status.tunnelError }}
+        </p>
       </section>
 
       <p v-if="error" class="ws-error">{{ error }}</p>
@@ -107,12 +112,13 @@ interface WebShareStatus {
   tunnel: 'down' | 'starting' | 'up';
   tunnelUrl: string | null;
   tunnelQr: string | null;
+  tunnelError: string | null;
   auth: { user: string; pass: string } | null;
 }
 
 const defaultStatus: WebShareStatus = {
   hosting: false, webPort: null, lanUrls: [], lanQr: null,
-  tunnel: 'down', tunnelUrl: null, tunnelQr: null, auth: null,
+  tunnel: 'down', tunnelUrl: null, tunnelQr: null, tunnelError: null, auth: null,
 };
 
 const status = ref<WebShareStatus>({ ...defaultStatus });
