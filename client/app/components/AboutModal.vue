@@ -14,7 +14,7 @@
         <div class="about-text">
           <h1 class="about-title">
             LivePlay
-            <span class="version-badge">v{{ appVersion }}</span>
+            <span v-if="hasElectron" class="version-badge">v{{ appVersion }}</span>
           </h1>
           <p class="about-subtitle">{{ t('welcome.subtitle') }}</p>
         </div>
@@ -84,7 +84,9 @@ const contributors = computed(() =>
   Object.values(contributorsJson.contributors) as { name: string; link: string }[]
 );
 
-// Get app version
+// Get app version. The version comes from Electron's main process; in a browser
+// there's no app binary, so hide the badge rather than show a stale default.
+const hasElectron = import.meta.client && !!(window as any).electronAPI;
 const appVersion = ref('1.1.3');
 onMounted(async () => {
   if (import.meta.client && window.electronAPI?.getAppVersion) {

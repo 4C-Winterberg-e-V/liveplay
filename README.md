@@ -11,6 +11,7 @@ Made with some help from Claude Sonnet 4.5, Claude Sonnet 4.6 and Claude Opus 4.
 - 🔊 Brick-wall master limiter on every output
 - 📊 Three-stage real-time metering (per-cue, mixer-channel, master)
 - 🌐 REST + WebSocket control surface — run the server on a stage-side machine and operate it remotely from the show laptop
+- 📱 Share the UI to phones/tablets straight from the desktop app — LAN or a built-in Cloudflare tunnel, no extra software to install (see [Web client on mobile](#web-client-on-mobile-lan--cloudflare-tunnel))
 - 🌍 Localised in **20 languages** with full RTL support
 - 📦 Native installers for **Windows, macOS (Intel + Apple Silicon) and Linux**
 
@@ -129,6 +130,31 @@ On Windows the NSIS installer adds the necessary inbound firewall rules at insta
 
 For routing a stage-side server, open **Server Settings** and point the client at `http://<server-host>:4480`.
 
+### Web client on mobile (LAN + Cloudflare tunnel)
+
+You can operate LivePlay from a phone or tablet browser **without installing
+anything besides LivePlay** on the host machine. In the desktop app open the
+header **Share** button and choose:
+
+- **Local network** — serves the UI on the LAN (`http://<host-ip>:8088`). Scan
+  the shown QR code from a device on the same Wi-Fi.
+- **Cloudflare tunnel** — starts a bundled `cloudflared` quick-tunnel and gives
+  you a public `https://…trycloudflare.com` address (no Cloudflare account,
+  domain or DNS). Internet exposure automatically enables a per-session
+  BasicAuth login, shown in the dialog.
+
+The host app runs a same-origin reverse proxy in front of the bundled C++
+server, so there's no Mixed-Content or CORS setup and the phone auto-detects the
+server. Details and security notes:
+[`docs/web-hosting-inapp-mac.md`](docs/web-hosting-inapp-mac.md). For
+testing/building/releasing on macOS step by step, see
+[`docs/test-build-release-mac.md`](docs/test-build-release-mac.md). Reverse-proxy
+and VPS hosting variants live in [`docs/web-hosting.md`](docs/web-hosting.md).
+
+> Security: the C++ server has no built-in auth and the API exposes filesystem
+> access. Use LAN sharing only on a trusted network, keep the tunnel login
+> private, and stop the tunnel after the event.
+
 ---
 
 ## Repository layout
@@ -139,7 +165,7 @@ liveplay/
 ├── server/         C++20 audio engine + REST/WS control server — see server/README.md
 ├── docs-site/      Public-facing Nuxt 3 site (GitHub Pages) — see docs-site/README.md
 ├── scripts/        Cross-platform build orchestrator scripts — see scripts/README.md
-├── build/          Collected installer artefacts after `npm run build`
+├── build/          Collected installer artefacts after `pnpm build`
 ├── .github/workflows/
 │   ├── build-release.yml   Cuts releases on version bumps to package.json
 │   ├── build-server.yml    Standalone server matrix build (Win / macOS / Linux)
@@ -163,10 +189,19 @@ All platforms need:
 |------|---------|-------|
 | Git  | any     | |
 | Node.js | 20 LTS | for the client + orchestrator scripts |
+| pnpm | 9.x | package manager (monorepo workspaces). Enable via `corepack enable` — the pinned version comes from the root `package.json` `packageManager` field. |
 | CMake | 3.21   | for the server |
 | C++20 toolchain | — | MSVC 2022 / Clang 15+ / GCC 12+ |
 | [vcpkg](https://github.com/microsoft/vcpkg) | recent | `VCPKG_ROOT` env var must point at your checkout |
 | Ninja | latest | strongly recommended (`brew install ninja`, `choco install ninja`, `apt install ninja-build`) |
+
+> **Package manager:** LivePlay uses **pnpm**. The easiest way to get the right
+> version is Corepack (ships with Node ≥ 16):
+> ```sh
+> corepack enable          # makes the `pnpm` shim available
+> corepack prepare pnpm@9.15.0 --activate   # optional: pin explicitly
+> ```
+> Alternatively `npm i -g pnpm@9`. All commands below use `pnpm`.
 
 Set the `VCPKG_ROOT` environment variable:
 
@@ -186,43 +221,43 @@ Then from a clean checkout:
 ```sh
 git clone https://github.com/tdoukinitsas/liveplay.git
 cd liveplay
-npm install                # installs client deps via npm workspaces
-npm run build              # builds server + client and collects installers into /build
+pnpm install               # installs workspace deps (client) via pnpm
+pnpm build                 # builds server + client and collects installers into /build
 ```
 
-`npm run build` runs the unified pipeline in [scripts/build-all.js](scripts/build-all.js):
+`pnpm build` runs the unified pipeline in [scripts/build-all.js](scripts/build-all.js):
 
 1. Configures and builds the C++ server through CMake/vcpkg.
 2. On macOS, wraps the server binary into a `LivePlay Server.app` for DMG inclusion.
 3. Runs `nuxt generate` and `electron-builder` in `client/`.
 4. Copies the installer artefacts (`.exe`, `.dmg`, `.AppImage`, `.deb`, `.rpm`) into `build/`.
 
-Use `npm run build:clean` to wipe previous build outputs first (it preserves `vcpkg_installed/` so C++ deps don't get re-downloaded).
+Use `pnpm build:clean` to wipe previous build outputs first (it preserves `vcpkg_installed/` so C++ deps don't get re-downloaded).
 
 #### Platform-specific notes
 
 ##### Windows
 
 - Install **Visual Studio 2022** with the *Desktop development with C++* workload (includes MSVC + Windows SDK).
-- Install Node.js 20 LTS, CMake (≥ 3.21) and Ninja (e.g. `choco install nodejs cmake ninja`).
+- Install Node.js 20 LTS, CMake (≥ 3.21) and Ninja (e.g. `choco install nodejs cmake ninja`). Enable pnpm with `corepack enable`.
 - Clone and bootstrap vcpkg:
   ```pwsh
   git clone https://github.com/microsoft/vcpkg C:\dev\vcpkg
   C:\dev\vcpkg\bootstrap-vcpkg.bat
   ```
-- Set `VCPKG_ROOT` (see above), open a fresh PowerShell, `npm install`, then `npm run build`.
+- Set `VCPKG_ROOT` (see above), open a fresh PowerShell, `pnpm install`, then `pnpm build`.
 - Output: `dist-electron/LivePlay-Setup-<version>.exe` (NSIS installer, x64). The `artifactName` uses hyphens (no spaces) so the local file, the GitHub release asset and the `latest.yml` auto-update manifest all reference the same name.
 
 ##### macOS
 
 - Install Xcode Command Line Tools (`xcode-select --install`).
-- Install Homebrew deps: `brew install node cmake ninja pkg-config`.
+- Install Homebrew deps: `brew install node cmake ninja pkg-config`. Enable pnpm with `corepack enable`.
 - Bootstrap vcpkg:
   ```sh
   git clone https://github.com/microsoft/vcpkg "$HOME/dev/vcpkg"
   "$HOME/dev/vcpkg"/bootstrap-vcpkg.sh
   ```
-- Set `VCPKG_ROOT`, then `npm install && npm run build`.
+- Set `VCPKG_ROOT`, then `pnpm install && pnpm build`.
 - Output: `build/LivePlay-<version>.dmg` on Intel, or `build/LivePlay-<version>-arm64.dmg` on Apple Silicon (each with a matching `.zip`). CI builds both x64 and arm64 **on Apple Silicon runners** — the Intel slice is cross-compiled with `-DCMAKE_OSX_ARCHITECTURES=x86_64` (Apple clang cross-compiles, vcpkg builds the `x64-osx` triplet, and `electron-builder --x64` fetches the prebuilt x64 Electron). To cross-build the Intel slice locally on an Apple Silicon Mac, configure the server with `-DCMAKE_OSX_ARCHITECTURES=x86_64` and run `electron-builder --mac --x64`.
 - Code signing is skipped by default. Users will see a Gatekeeper warning on first launch — see [First launch on macOS](#first-launch-on-macos-liveplay-is-damaged-and-cant-be-opened).
 
@@ -235,8 +270,8 @@ Use `npm run build:clean` to wipe previous build outputs first (it preserves `vc
                       libasound2-dev libpulse-dev libjack-jackd2-dev libx11-dev
   ```
   (use the equivalent `dnf` / `pacman` packages on Fedora / Arch).
-- Install Node.js 20 LTS via your distro or [nvm](https://github.com/nvm-sh/nvm).
-- Bootstrap vcpkg as on macOS, set `VCPKG_ROOT`, then `npm install && npm run build`.
+- Install Node.js 20 LTS via your distro or [nvm](https://github.com/nvm-sh/nvm), then enable pnpm with `corepack enable`.
+- Bootstrap vcpkg as on macOS, set `VCPKG_ROOT`, then `pnpm install && pnpm build`.
 - Output: `build/LivePlay-<version>.AppImage`, `liveplay_<version>_amd64.deb`, `liveplay-<version>.x86_64.rpm`.
 
 ---
@@ -247,30 +282,30 @@ From the monorepo root:
 
 ```sh
 # One-time
-npm install                      # installs client deps via npm workspaces
-npm run server:configure         # CMake configure for the server (idempotent)
+pnpm install                     # installs workspace deps via pnpm
+pnpm server:configure            # CMake configure for the server (idempotent)
 
 # Iterating on the server only
-npm run server:build             # rebuild the C++ server
-npm run server:run               # launch the compiled binary (forwards CLI args)
+pnpm server:build                # rebuild the C++ server
+pnpm server:run                  # launch the compiled binary (forwards CLI args)
 
 # Iterating on the client only — ensures the server is built first, then runs
 # Nuxt + Electron in dev mode against it
-npm run dev
+pnpm dev
 
 # Running both in side-by-side terminals (the server in one pane, client dev in the other)
-npm run dev:all
+pnpm dev:all
 ```
 
-The default `npm run dev` calls [scripts/ensure-server.js](scripts/ensure-server.js), which is a no-op if the server binary already exists and otherwise configures + builds it. After that it launches `nuxt dev` + Electron in the `client/` workspace.
+The default `pnpm dev` calls [scripts/ensure-server.js](scripts/ensure-server.js), which is a no-op if the server binary already exists and otherwise configures + builds it. After that it launches `nuxt dev` + Electron in the `client/` workspace.
 
 Bumping versions across the monorepo:
 
 ```sh
-npm run bump -- patch        # 2.0.0 → 2.0.1
-npm run bump -- minor        # 2.0.0 → 2.1.0
-npm run bump -- major        # 2.0.0 → 3.0.0
-npm run version -- 2.1.4     # set an explicit version
+pnpm run bump patch        # 2.0.0 → 2.0.1
+pnpm run bump minor        # 2.0.0 → 2.1.0
+pnpm run bump major        # 2.0.0 → 3.0.0
+pnpm run version 2.1.4     # set an explicit version (use `run`: `pnpm version` is a built-in)
 ```
 
 For deeper development notes:
@@ -288,7 +323,7 @@ Releases are fully automated. The release pipeline lives in [`.github/workflows/
 
 ### Triggering a release
 
-1. Bump the version in the root `package.json` (use `npm run bump -- patch|minor|major`, which propagates to `client/package.json`).
+1. Bump the version in the root `package.json` (use `pnpm run bump patch|minor|major`, which propagates to `client/package.json`).
 2. Commit and push to `main`.
 3. The `build-release` workflow detects the version change and runs the platform matrix:
    - **Windows x64** (MSVC, WASAPI)
@@ -312,7 +347,7 @@ The vcpkg binary cache (`x-gha,readwrite` backend) is reused across runs so comp
 Contributions of all sizes are welcome — bug fixes, new features, translations, documentation, screenshots, you name it.
 
 1. **Fork** the repo and `git checkout -b feat/something` off `main`.
-2. **Build it locally** following the steps above. For server changes, run `npm run server:build && npm run server:run --verbose`. For client changes, `npm run dev`.
+2. **Build it locally** following the steps above. For server changes, run `pnpm server:build && pnpm server:run --verbose`. For client changes, `pnpm dev`.
 3. **Test your change**. There's no automated test suite yet — please verify the path you touched works end-to-end in the running app. Mention any platform you couldn't test on in the PR description so reviewers can cover it.
 4. **Open a PR** to `main`. CI must pass (server matrix build on the relevant platforms).
 

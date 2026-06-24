@@ -17,19 +17,21 @@
             <span class="material-symbols-rounded">sync</span>
             <span>{{ t('connectionLost.reconnect') }}</span>
           </button>
-          <button class="clm-btn" @click="onRestart">
+          <button v-if="hasElectron" class="clm-btn" @click="onRestart">
             <span class="material-symbols-rounded">restart_alt</span>
             <span>{{ t('connectionLost.restart') }}</span>
           </button>
-          <button class="clm-btn" @click="onExit">
+          <button v-if="hasElectron" class="clm-btn" @click="onExit">
             <span class="material-symbols-rounded">logout</span>
             <span>{{ t('connectionLost.exit') }}</span>
           </button>
         </div>
         <p class="clm-hint">
           {{ t('connectionLost.reconnectHint') }}
-          {{ t('connectionLost.restartHint') }}
-          {{ t('connectionLost.exitHint') }}
+          <template v-if="hasElectron">
+            {{ t('connectionLost.restartHint') }}
+            {{ t('connectionLost.exitHint') }}
+          </template>
         </p>
       </div>
     </div>
@@ -41,6 +43,9 @@ const { t } = useLocalization();
 const server = useLiveplayServer();
 const visible = computed(() => !!server.connectionLost);
 const reconnecting = computed(() => !!server.reconnecting);
+// Restart/Exit drive the Electron app lifecycle; in a browser they have no
+// meaningful target, so show only Reconnect there.
+const hasElectron = import.meta.client && !!(window as any).electronAPI;
 
 function onReconnect() {
   try {

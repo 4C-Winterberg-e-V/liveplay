@@ -78,6 +78,7 @@
             :icon="'headphones'"
             :highlight-color="isPreviewing ? 'var(--color-accent)' : 'var(--color-success)'"
             :is-active="isPreviewing"
+            class="cart-act--hide-mobile"
             :class="{ 'no-device': !hasPreviewDevice }"
             context="Cart"
             @click.stop="isPreviewing ? handleStopPreview() : handleStartPreview()"
@@ -86,6 +87,7 @@
           <ActionButton
             :icon="isPlaying ? 'stop' : 'play_arrow'"
             :highlight-color="isPlaying ? 'var(--color-danger)' : 'var(--color-success)'"
+            class="cart-act--play"
             context="Cart"
             @click.stop="isPlaying ? handleStop() : handlePlay()"
             :title="isPlaying ? t('actions.stop') : t('actions.play')"
@@ -95,6 +97,7 @@
             highlight-color="var(--color-warning)"
             active-text-color="black"
             :is-active="isManuallyQueued"
+            class="cart-act--next"
             context="Cart"
             @click.stop="handleSetAsNext"
             :title="t('actions.setAsNext')"
@@ -102,6 +105,7 @@
           <ActionButton
             icon="settings"
             highlight-color="var(--color-accent)"
+            class="cart-act--settings"
             context="Cart"
             @click.stop="handleEdit"
             :title="t('actions.edit')"
@@ -109,6 +113,7 @@
           <ActionButton
             icon="delete"
             highlight-color="var(--color-danger)"
+            class="cart-act--hide-mobile"
             context="Cart"
             @click.stop="handleDelete"
             :title="t('actions.remove')"
@@ -1189,5 +1194,42 @@ const handleDrop = async (e: DragEvent) => {
   50% {
     opacity: 0.3;
   }
+}
+
+// ---- Touch / phone layout --------------------------------------------------
+// On phones a cart slot only needs Play, Play-Next and Settings. Hide preview +
+// delete, enlarge the two transport buttons to comfortable tap targets, and
+// drop the decorative behaviour icons so nothing crowds the row.
+@media (max-width: 768px) {
+  .cart-act--hide-mobile { display: none; }
+
+  .slot-actions {
+    flex: 1;
+    gap: 8px;
+  }
+
+  // Play + Play-Next stretch to fill the row; Settings stays a fixed square.
+  // flex-basis:0 (via flex:1) overrides ActionButton's fixed 28px width.
+  .slot-actions .cart-act--play,
+  .slot-actions .cart-act--next {
+    flex: 1;
+    height: 44px;
+    min-width: 0;
+  }
+  .slot-actions .cart-act--play :deep(.material-symbols-rounded),
+  .slot-actions .cart-act--next :deep(.material-symbols-rounded) {
+    font-size: 26px;
+  }
+  .slot-actions .cart-act--settings {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+  .slot-actions .cart-act--settings :deep(.material-symbols-rounded) {
+    font-size: 22px;
+  }
+
+  // Decorative start/end-behaviour icons aren't needed on the touch card.
+  .behavior-indicators { display: none; }
 }
 </style>

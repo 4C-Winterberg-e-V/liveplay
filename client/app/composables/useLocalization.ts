@@ -6,23 +6,52 @@ const availableLocalesData = ref<Array<{ code: string; name: string; direction: 
 // useLocalization() re-fetches all 21 locale files from the main process via
 // IPC on every invocation, which saturates the IPC channel and starves
 // other async work in the renderer (e.g. fetch body reads from the server).
+// Web build: bundle every locale JSON at build time so the browser client has
+// translations without any Electron IPC or server round-trip. Resolves
+// identically under any hosting base path. (The Electron build also bundles
+// these but ignores the bundle — it streams locales from the main process.)
+const localeBundle = import.meta.glob('../../locales/*.json', {
+  eager: true,
+  import: 'default',
+}) as Record<string, any>;
+
 let _loadLocalesPromise: Promise<void> | null = null;
 const loadLocales = async (): Promise<void> => {
-  if (!import.meta.client || !(window as any).electronAPI) return;
+  if (!import.meta.client) return;
   if (_loadLocalesPromise) return _loadLocalesPromise;
+
+  const electronAPI = (window as any).electronAPI;
+
   _loadLocalesPromise = (async () => {
     try {
-      const localesList = await (window as any).electronAPI.getAvailableLocales();
-      availableLocalesData.value = localesList;
-      const localePromises = localesList.map(async (locale: any) => {
-        const data = await (window as any).electronAPI.getLocaleData(locale.code);
-        locales.value[locale.code] = data;
-      });
-      await Promise.all(localePromises);
+      if (electronAPI?.getAvailableLocales && electronAPI?.getLocaleData) {
+        // Electron: stream locales from the main process over IPC.
+        const localesList = await electronAPI.getAvailableLocales();
+        availableLocalesData.value = localesList;
+        await Promise.all(localesList.map(async (locale: any) => {
+          locales.value[locale.code] = await electronAPI.getLocaleData(locale.code);
+        }));
+      } else {
+        // Web: read from the build-time bundle.
+        const loaded: Record<string, any> = {};
+        const meta: Array<{ code: string; name: string; direction: string }> = [];
+        for (const [path, data] of Object.entries(localeBundle)) {
+          const code = path.split('/').pop()!.replace('.json', '');
+          loaded[code] = data;
+          const m = (data as any)?._metadata;
+          meta.push({
+            code,
+            name: m?.nativeName ?? code,
+            direction: m?.direction ?? 'ltr',
+          });
+        }
+        locales.value = loaded;
+        availableLocalesData.value = meta;
+      }
       // eslint-disable-next-line no-console
-      console.log(`Dynamically loaded ${Object.keys(locales.value).length} locales`);
+      console.log(`Loaded ${Object.keys(locales.value).length} locales`);
     } catch (error) {
-      console.error('Failed to load locales from main process:', error);
+      console.error('Failed to load locales:', error);
       _loadLocalesPromise = null;   // allow a retry on transient failures
       throw error;
     }

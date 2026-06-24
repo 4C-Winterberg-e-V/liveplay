@@ -1168,19 +1168,21 @@ export const useProject = () => {
     return getCartOnlyItem(uuid);
   };
 
-  // Find item by index
+  // Find item by index. Defensive: a stale/out-of-range index (e.g. an
+  // "auto-next" path computed just before an add/remove/reorder) must return
+  // null, never throw — otherwise it floods the console and breaks renders
+  // (TransportButtons next-item, silence-warning end-behaviour checks).
   const findItemByIndex = (index: number[]): AudioItem | GroupItem | null => {
     if (!currentProject.value) return null;
 
-    let items: (AudioItem | GroupItem)[] = currentProject.value.items;
+    let items: (AudioItem | GroupItem)[] | undefined = currentProject.value.items;
     let currentItem: AudioItem | GroupItem | null = null;
 
     for (const idx of index) {
-      if (idx >= items.length) return null;
+      if (!Array.isArray(items) || idx < 0 || idx >= items.length) return null;
       currentItem = items[idx];
-      if (currentItem.type === 'group') {
-        items = currentItem.children;
-      }
+      if (!currentItem) return null;
+      items = currentItem.type === 'group' ? (currentItem.children as any) : undefined;
     }
 
     return currentItem;

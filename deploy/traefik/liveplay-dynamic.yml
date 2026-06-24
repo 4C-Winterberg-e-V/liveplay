@@ -1,0 +1,33 @@
+# =====================================================================
+# Traefik DYNAMIC configuration (file provider) for LivePlay Mode A.
+#
+# Routes the control API and WebSocket to the EXTERNAL LivePlay C++ server
+# (which runs on a Mac/PC in the LAN, not as a container). Point your Traefik
+# file provider at this file, e.g. in traefik.yml (static config):
+#
+#   providers:
+#     file:
+#       filename: /etc/traefik/dynamic/liveplay-dynamic.yml
+#       watch: true
+#
+# Adjust the Host(...) rule, the certresolver, and the upstream URL.
+# =====================================================================
+http:
+  routers:
+    liveplay-api:
+      # Match API + WebSocket before the SPA catch-all.
+      rule: "Host(`liveplay.example.com`) && (PathPrefix(`/api`) || Path(`/ws`))"
+      entryPoints:
+        - websecure
+      service: liveplay-server
+      priority: 100
+      tls:
+        certResolver: le
+
+  services:
+    liveplay-server:
+      loadBalancer:
+        # The C++ control server, plain HTTP inside the LAN. Traefik forwards
+        # WebSocket upgrades on /ws automatically.
+        servers:
+          - url: "http://192.168.1.42:4480"

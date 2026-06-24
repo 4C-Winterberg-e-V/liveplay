@@ -25,8 +25,43 @@
     </div>
 
     <div ref="rightRef" class="header-right">
-      <Btn icon="tune" :text="t('settings.title')" @click="showProjectSettings = true" />
-      <Btn icon="keyboard" :text="t('controls.shortcutBtn')" @click="showControlConfig = true" />
+      <!-- Phones only: transport moves up here from the controls bar so the
+           active-cue list below gets the full width (icon-only to stay slim). -->
+      <TransportButtons class="header-transport" />
+
+      <Btn class="header-action" icon="tune" :text="t('settings.title')" @click="showProjectSettings = true" />
+      <Btn class="header-action" icon="keyboard" :text="t('controls.shortcutBtn')" @click="showControlConfig = true" />
+      <Btn v-if="hasElectron" class="header-action" icon="share" :text="t('webShare.button')" @click="showWebShare = true" />
+
+      <!-- Mobile overflow menu: folds the actions above into a ⋯ menu so the
+           narrow header isn't overcrowded. Hidden on desktop via CSS. -->
+      <div class="header-overflow">
+        <button
+          type="button"
+          class="header-overflow__btn"
+          aria-label="Menu"
+          @click="showHeaderMenu = !showHeaderMenu"
+        >
+          <span class="material-symbols-rounded">more_vert</span>
+        </button>
+        <template v-if="showHeaderMenu">
+          <div class="header-overflow__backdrop" @click="showHeaderMenu = false"></div>
+          <div class="header-overflow__menu">
+            <button type="button" @click="showProjectSettings = true; showHeaderMenu = false">
+              <span class="material-symbols-rounded">tune</span>
+              <span>{{ t('settings.title') }}</span>
+            </button>
+            <button type="button" @click="showControlConfig = true; showHeaderMenu = false">
+              <span class="material-symbols-rounded">keyboard</span>
+              <span>{{ t('controls.shortcutBtn') }}</span>
+            </button>
+            <button v-if="hasElectron" type="button" @click="showWebShare = true; showHeaderMenu = false">
+              <span class="material-symbols-rounded">share</span>
+              <span>{{ t('webShare.button') }}</span>
+            </button>
+          </div>
+        </template>
+      </div>
 
       <!-- Autosave toggle: on by default; when off the project is only saved
            via File > Save and an "Unsaved Changes" pill appears by the title. -->
@@ -67,10 +102,16 @@
     :open="showProjectSettings"
     @close="showProjectSettings = false"
   />
+  <WebShareModal
+    v-if="showWebShare"
+    @close="showWebShare = false"
+  />
 </template>
 
 <script setup lang="ts">
 import ProjectSettingsModal from './ProjectSettingsModal.vue';
+import WebShareModal from './WebShareModal.vue';
+import TransportButtons from './TransportButtons.vue';
 import Btn from './Btn.vue';
 import type { AudioItem } from '~/types/project';
 
@@ -80,6 +121,12 @@ const { activeCues } = useAudioEngine();
 
 const showControlConfig = ref(false);
 const showProjectSettings = useState('showProjectSettings', () => false);
+const showWebShare = ref(false);
+// Web-sharing (host the mobile UI) is Electron-only — the host server lives in
+// the main process. In the browser build the button is hidden.
+const hasElectron = import.meta.client && !!(window as any).electronAPI;
+// Mobile-only ⋯ overflow menu (settings + shortcuts).
+const showHeaderMenu = ref(false);
 
 const isDark = computed(() => currentProject.value?.theme.mode === 'dark');
 const currentTime = ref('00:00:00');
@@ -321,7 +368,14 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-sm) var(--spacing-lg);
+  // Add the iOS safe-area insets so the header doesn't render under the
+  // status bar / notch when installed as a PWA (black-translucent status bar).
+  // env() is 0 on desktop/Electron, so this is a no-op there.
+  padding:
+    calc(var(--spacing-sm) + env(safe-area-inset-top))
+    calc(var(--spacing-lg) + env(safe-area-inset-right))
+    var(--spacing-sm)
+    calc(var(--spacing-lg) + env(safe-area-inset-left));
   background-color: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   min-height: 60px;
@@ -503,4 +557,124 @@ onMounted(() => {
 @keyframes flash-slow   { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
 @keyframes flash-medium { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
 @keyframes flash-fast   { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+
+// ---- Mobile: keep the logo/name pinned, let the actions scroll ----------
+// ---- Mobile overflow menu (hidden on desktop) --------------------------
+.header-overflow {
+  display: none;
+  position: relative;
+}
+.header-overflow__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  cursor: pointer;
+
+  .material-symbols-rounded { font-size: 22px; }
+}
+.header-overflow__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+.header-overflow__menu {
+  // Fixed so it's never clipped by the header's horizontal overflow.
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 56px);
+  right: calc(env(safe-area-inset-right) + var(--spacing-md));
+  z-index: 1001;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+
+  button {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: transparent;
+    border: none;
+    color: var(--color-text-primary);
+    font-size: 15px;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover { background: var(--color-surface-hover); }
+    .material-symbols-rounded { font-size: 20px; }
+  }
+}
+
+/* Transport (Play-Next / Stop-All) in the title bar — phones only.
+   Higher specificity than the component's own `.transport-buttons{display:flex}`
+   so it stays hidden on desktop regardless of stylesheet order. */
+.header-right .header-transport { display: none; }
+
+@media (max-width: 768px) {
+  // C): fold Settings/Shortcuts into the ⋯ menu and drop the clock pair so the
+  // narrow header has room to breathe.
+  .header-action { display: none; }
+  .header-overflow { display: block; }
+  .clock-pair { display: none; }
+
+  .project-header {
+    gap: var(--spacing-sm);
+    padding:
+      calc(var(--spacing-sm) + env(safe-area-inset-top))
+      calc(var(--spacing-md) + env(safe-area-inset-right))
+      var(--spacing-sm)
+      calc(var(--spacing-md) + env(safe-area-inset-left));
+    min-height: 52px;
+  }
+  .header-left {
+    flex-shrink: 0;
+    min-width: 0;
+  }
+  .project-name {
+    max-width: 30vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  // Actions row shrinks to the remaining space and scrolls horizontally so no
+  // button is permanently cut off.
+  .header-right {
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+
+    & > * {
+      flex-shrink: 0;
+    }
+  }
+
+  // Transport moves into the title bar, icon-only to stay slim.
+  .header-right .header-transport { display: flex; }
+  .header-transport :deep(.control-btn__label) { display: none; }
+  .header-transport :deep(.control-btn) {
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    justify-content: center;
+  }
+  .header-transport :deep(.control-btn .material-symbols-rounded) { font-size: 26px; }
+  .header-transport :deep(.control-btn .icon) { font-size: 24px; }
+
+  // Autosave toggle isn't needed in the phone title bar — drop it for space.
+  .autosave-toggle { display: none; }
+
+  // The silence-warning banner would sit on top of the title-bar transport
+  // buttons on a narrow screen — hide it on phones.
+  .silence-warning { display: none; }
+}
 </style>

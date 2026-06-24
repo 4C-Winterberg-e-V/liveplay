@@ -56,8 +56,10 @@
 
         <!-- Auto-discovered servers on this LAN. Populated by the UDP beacon
              and active solicitation. Header always shown so the user can
-             rescan even when nothing has been found yet. -->
-        <div class="discovered-servers">
+             rescan even when nothing has been found yet. mDNS discovery is
+             Electron-only (no UDP sockets in the browser), so hide the whole
+             section in a pure web context. -->
+        <div v-if="hasElectron" class="discovered-servers">
           <div class="discovered-header">
             <span class="material-symbols-rounded" :class="{ spin: scanning }">radar</span>
             <span>{{ t('welcome.serversOnThisNetwork') }}</span>
@@ -149,7 +151,15 @@
           <button class="link-button" @click="changeMode">{{ t('welcome.changeMode') }}</button>
         </p>
         <div class="welcome-actions">
-          <button class="welcome-button primary" @click="handleNewProject">
+          <!-- Resume: shown when the (detached) server still has a project open.
+               Lets the operator deliberately rejoin instead of it happening
+               silently on startup. -->
+          <button v-if="resumableProject" class="welcome-button primary" @click="handleResume">
+            <span class="button-icon"><span class="material-symbols-rounded">play_arrow</span></span>
+            <span>{{ t('welcome.continueProject', { name: resumableProject.name }) }}</span>
+          </button>
+
+          <button class="welcome-button" :class="{ primary: !resumableProject }" @click="handleNewProject">
             <span class="button-icon"><span class="material-symbols-rounded">add</span></span>
             <span>{{ t('welcome.newProject') }}</span>
           </button>
@@ -209,6 +219,11 @@ const { createNewProject, openProject, tryRejoinExistingProject } = useProject()
 const { t } = useLocalization();
 const server = useLiveplayServer();
 
+// Electron exposes native IPC (local server spawn, mDNS discovery, recent-server
+// persistence). In a pure browser none of that exists, so several UI affordances
+// are hidden and the flow skips straight to remote connection.
+const hasElectron = import.meta.client && !!(window as any).electronAPI;
+
 // Three-stage flow: mode picker → (optional remote address) → project picker.
 type Stage = 'mode' | 'remote' | 'project';
 const stage = ref<Stage>('mode');
@@ -217,6 +232,11 @@ const mode  = ref<'local' | 'remote'>('local');
 const remoteAddress   = ref('');
 const connecting      = ref(false);
 const connectionError = ref<string>('');
+
+// When the (detached) local server still has a project open on startup, we
+// surface a "Continue with <name>" button on the project stage instead of
+// silently rejoining — so the operator always lands on a deliberate choice.
+const resumableProject = ref<{ name: string } | null>(null);
 
 // File-association open. `pendingFileOpen` is set by app.vue when a .liveplay
 // or .lpa is double-clicked; this screen owns the server-connection flow.
@@ -321,10 +341,46 @@ onMounted(async () => {
         if (welcomeIntent === 'new') handleNewProject();
         else                          handleOpenProject();
       });
+    } else if (!(window as any).electronAPI) {
+      // Pure-web context: there is no "local" mode (the browser can't spawn the
+      // C++ server), so skip the Local/Remote picker entirely. Try the resolved
+      // default (a previously saved address, or the same-origin Mode-A proxy)
+      // by probing /api/health first; only connect on success. This avoids
+      // opening a doomed WebSocket against a plain static host (which would spawn
+      // a noisy failing reconnect loop). The candidate is used verbatim —
+      // crucially NOT via normaliseRemoteUrl, which would force http:// and
+      // :4480 and break an https reverse proxy.
+      mode.value = 'remote';
+      const candidate = (server.serverUrl ?? '').replace(/\/+$/, '');
+      const isOrigin  = candidate === window.location.origin;
+      if (candidate) {
+        stage.value = 'remote';
+        connecting.value = true;
+        connectionError.value = '';
+        try {
+          await probeServerReachable(candidate);
+          server.setServerUrl(candidate);
+          if (await tryRejoinExistingProject()) return;
+          stage.value = 'project';
+        } catch (e: any) {
+          // Not reachable. Prefill the field so the operator can connect by
+          // hand. Stay quiet for the same-origin case (a first visit on a plain
+          // static host isn't an error worth shouting about); show the reason
+          // when a previously saved address fails.
+          remoteAddress.value = stripScheme(candidate);
+          connectionError.value = isOrigin
+            ? ''
+            : t('welcome.connectionFailed') + ' (' + (e?.message ?? e) + ')';
+        } finally {
+          connecting.value = false;
+        }
+      } else {
+        stage.value = 'remote';
+      }
     } else {
-      // Always go through the mode-picker so the user is in control of the
-      // current session's server target. We could skip if connected, but the
-      // first-impression UI value of a deliberate choice outweighs the click.
+      // Electron: always go through the mode-picker so the user is in control
+      // of the current session's server target. We could skip if connected, but
+      // the first-impression UI value of a deliberate choice outweighs the click.
       stage.value = 'mode';
     }
   }
@@ -474,11 +530,44 @@ async function chooseLocal() {
     if (!(await ensureLocalServer())) return;
     // .lpa double-click: skip the project picker, go straight to extraction.
     if (importAfterConnect.value) { beginImportDestination(); return; }
-    // If a project is already open server-side (e.g. the user kept the
-    // detached server running between renderer reloads), drop straight
-    // into the workspace.
-    if (await tryRejoinExistingProject()) return;
+    // If the detached server still has a project open, DON'T silently rejoin —
+    // surface it as a "Continue" option on the picker so the operator stays in
+    // control of which project the session uses.
+    await peekResumableProject();
     stage.value = 'project';
+  } catch (e: any) {
+    connectionError.value = e?.message ?? String(e);
+  } finally {
+    connecting.value = false;
+  }
+}
+
+// Peek whether the server already has a project open (without adopting it) so
+// the project stage can offer a "Continue" button. Derives a display name from
+// the server-side project file path.
+async function peekResumableProject(): Promise<void> {
+  try {
+    const header = await server.fetchProjectHeader();
+    if (header?.hasOpenProject) {
+      const filePath = header.server?.projectFilePath || '';
+      const base = filePath.split(/[\\/]/).pop() || '';
+      const name = base.replace(/\.liveplay$/i, '');
+      resumableProject.value = { name: name || t('project.noProject') };
+      return;
+    }
+  } catch { /* server unreachable / no project — fall through */ }
+  resumableProject.value = null;
+}
+
+// Operator clicked "Continue with <name>": adopt the open server project.
+async function handleResume(): Promise<void> {
+  connecting.value = true;
+  connectionError.value = '';
+  try {
+    if (!(await tryRejoinExistingProject())) {
+      // Project vanished server-side between peek and resume — back to picker.
+      resumableProject.value = null;
+    }
   } catch (e: any) {
     connectionError.value = e?.message ?? String(e);
   } finally {
@@ -511,6 +600,7 @@ function chooseRemote() {
 function changeMode() {
   stage.value = 'mode';
   connectionError.value = '';
+  resumableProject.value = null;
 }
 
 async function connectToRemote() {

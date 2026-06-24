@@ -1,0 +1,35 @@
+# =====================================================================
+# Mode A — Same-Origin proxy via an EXISTING Traefik instance.
+#
+# This snippet adds the LivePlay SPA as a service on Traefik's network. The
+# SPA itself is a container; the control API + WebSocket live on the EXTERNAL
+# C++ server (not a container), so they are routed via the file-provider
+# config in `liveplay-dynamic.yml` — see that file.
+#
+# Adjust:
+#   * the Host(...) rule to your domain
+#   * the certresolver name ('le') to whatever your Traefik defines
+#   * the network name ('traefik') to your Traefik network
+# =====================================================================
+services:
+  liveplay-web:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+    image: liveplay-web:modea-traefik
+    networks: [traefik]
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      # --- SPA router (catch-all for the host) ---
+      - "traefik.http.routers.liveplay.rule=Host(`liveplay.example.com`)"
+      - "traefik.http.routers.liveplay.entrypoints=websecure"
+      - "traefik.http.routers.liveplay.tls.certresolver=le"
+      # Lower priority than the API/WS router (defined in liveplay-dynamic.yml)
+      # so /api and /ws are matched first.
+      - "traefik.http.routers.liveplay.priority=1"
+      - "traefik.http.services.liveplay.loadbalancer.server.port=80"
+
+networks:
+  traefik:
+    external: true

@@ -9,6 +9,10 @@ client/.nuxt/
 client/.output/
 dist/
 client/dist/
+# `nuxt generate` creates client/dist as a symlink to .output/public; the
+# trailing-slash patterns above only match directories, so ignore it without
+# the slash too.
+client/dist
 dist-electron/
 client/dist-electron/
 .env

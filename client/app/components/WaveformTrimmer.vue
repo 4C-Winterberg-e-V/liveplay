@@ -1239,13 +1239,14 @@ onUnmounted(() => {
 }
 
 .volume-slider-vertical {
+  /* Vertical range via the standardised writing-mode + direction (bottom→top).
+     The deprecated `appearance: slider-vertical` was redundant here and is
+     dropped to silence the Chromium deprecation warning. */
   writing-mode: vertical-lr;
   direction: rtl;
   width: 150px;
   height: 100%;
   cursor: pointer;
-  -webkit-appearance: slider-vertical;
-  appearance: slider-vertical;
   background: transparent;
   border-radius: 4px;
   position: relative;

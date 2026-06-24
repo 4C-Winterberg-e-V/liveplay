@@ -36,6 +36,25 @@ import type {
 } from '~/types/server';
 
 // ---------------------------------------------------------------------
+// Debug logging gate. The per-request / per-send tracing below is invaluable
+// when debugging the wire protocol but is pure noise in a hosted browser
+// client. Gate it behind a flag: on in dev, or opt-in via
+// localStorage.setItem('liveplay.debug', '1').
+// ---------------------------------------------------------------------
+const LP_DEBUG = (() => {
+  try {
+    if (typeof window !== 'undefined' &&
+        window.localStorage?.getItem('liveplay.debug') === '1') return true;
+  } catch { /* localStorage may throw in some sandboxes */ }
+  return !!(import.meta as any)?.dev;
+})();
+/* eslint-disable no-console */
+function dlog(...args: any[])  { if (LP_DEBUG) console.log(...args); }
+function dwarn(...args: any[]) { if (LP_DEBUG) console.warn(...args); }
+function derr(...args: any[])  { if (LP_DEBUG) console.error(...args); }
+/* eslint-enable no-console */
+
+// ---------------------------------------------------------------------
 // Singleton — created lazily on first useLiveplayServer() call.
 // ---------------------------------------------------------------------
 let _instance: ReturnType<typeof createClient> | null = null;
@@ -45,12 +64,35 @@ export function useLiveplayServer() {
   return _instance;
 }
 
+// ---------------------------------------------------------------------
+// Default server URL resolution (synchronous — runs at module init, before
+// the Nuxt plugin calls connect()).
+//   1. A value the user previously saved in localStorage.
+//   2. Hosting convenience: when the SPA is served over http(s) from a
+//      non-localhost host (a real web deployment — not Electron's file:// and
+//      not a localhost dev/preview server), default to same-origin. That
+//      activates the Mode-A reverse-proxy setup (/api/* and /ws proxied to the
+//      C++ server) with zero manual entry.
+//   3. Loopback fallback for Electron (file://) and localhost.
+// ---------------------------------------------------------------------
+function computeDefaultServerUrl(): string {
+  const FALLBACK = 'http://127.0.0.1:4480';
+  if (typeof window === 'undefined') return FALLBACK;
+  const stored = window.localStorage?.getItem('liveplay.serverUrl');
+  if (stored) return stored;
+  const loc   = window.location;
+  const proto = loc?.protocol ?? '';
+  const host  = (loc?.hostname ?? '').toLowerCase();
+  const isHttp     = proto === 'http:' || proto === 'https:';
+  const isLoopback = host === 'localhost' || host === '127.0.0.1' ||
+                     host === '::1' || host === '[::1]';
+  if (isHttp && host && !isLoopback) return loc.origin;
+  return FALLBACK;
+}
+
 function createClient() {
   // ---- Server URL config (persisted via localStorage) ---------------
-  const defaultUrl = (typeof window !== 'undefined' &&
-                      window.localStorage?.getItem('liveplay.serverUrl')) ||
-                     'http://127.0.0.1:4480';
-  const serverUrl = ref<string>(defaultUrl);
+  const serverUrl = ref<string>(computeDefaultServerUrl());
 
   const httpBase = computed(() => serverUrl.value.replace(/\/+$/, ''));
   const wsUrl    = computed(() =>
@@ -61,9 +103,15 @@ function createClient() {
     if (typeof window !== 'undefined') {
       window.localStorage?.setItem('liveplay.serverUrl', url);
     }
-    // URL change → treat as a brand-new session. Force re-fetch on next
-    // onopen by clearing the first-connect guard.
+    // URL change → treat as a brand-new session. Clear the first-connect guard
+    // so catalogues re-fetch on the next onopen, and reset the disconnect
+    // backoff/flags (forceReconnect semantics) so a stale "connection lost"
+    // modal from the previous target doesn't linger against the new one.
     hasEverConnected = false;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    reconnectDelay = 1500;
+    failedReconnectAttempts.value = 0;
+    connectionLost.value = false;
     disconnect();
     connect();
   }
@@ -171,12 +219,12 @@ function createClient() {
     }
     try {
       // eslint-disable-next-line no-console
-      console.log('[liveplay] connecting to', wsUrl.value);
+      dlog('[liveplay] connecting to', wsUrl.value);
       ws = new WebSocket(wsUrl.value);
     } catch (e) {
       lastError.value = String(e);
       // eslint-disable-next-line no-console
-      console.error('[liveplay] WebSocket constructor threw:', e);
+      derr('[liveplay] WebSocket constructor threw:', e);
       scheduleReconnect();
       return;
     }
@@ -326,13 +374,13 @@ function createClient() {
     const body = JSON.stringify(payload);
     if (ws && ws.readyState === WebSocket.OPEN) {
       // eslint-disable-next-line no-console
-      console.log('[liveplay] WS send:', body);
+      dlog('[liveplay] WS send:', body);
       ws.send(body);
     } else {
       // Loudly flag — silent drops are the most painful class of WS bug.
       const state = ws ? ws.readyState : 'no-ws';
       // eslint-disable-next-line no-console
-      console.warn('[liveplay] WS send DROPPED (readyState=' + state + '):', body);
+      dwarn('[liveplay] WS send DROPPED (readyState=' + state + '):', body);
     }
   }
 
@@ -351,20 +399,34 @@ function createClient() {
   async function rest<T = any>(path: string, init?: RequestInit): Promise<T> {
     const url = httpBase.value + path;
     // eslint-disable-next-line no-console
-    console.log('[liveplay] rest start:', init?.method || 'GET', url);
+    dlog('[liveplay] rest start:', init?.method || 'GET', url);
+    // Keep every request "CORS-simple" so cross-origin hosting (browser on one
+    // host, C++ server on another) works WITHOUT a preflight. A JSON
+    // Content-Type makes the request non-simple → the browser sends an OPTIONS
+    // preflight, and this server's preflight route doesn't cover multi-segment
+    // /api/* paths, so the preflight 204 arrives without Access-Control-Allow-
+    // Origin and the browser blocks the call. We therefore:
+    //   * send NO Content-Type on bodyless GET/DELETE requests, and
+    //   * use the safelisted text/plain for JSON bodies.
+    // The server parses req.body with json::parse() regardless of Content-Type,
+    // so this stays wire-compatible. (Same-origin / Mode-A proxy is unaffected.)
+    const headers: Record<string, string> = { ...(init?.headers as Record<string, string> | undefined) };
+    if (init?.body != null && headers['Content-Type'] == null) {
+      headers['Content-Type'] = 'text/plain;charset=UTF-8';
+    }
     let res: Response;
     try {
       res = await fetch(url, {
-        headers: { 'Content-Type': 'application/json' },
         ...init,
+        headers,
       });
     } catch (e) {
       // eslint-disable-next-line no-console
-      console.error('[liveplay] rest fetch threw:', e);
+      derr('[liveplay] rest fetch threw:', e);
       throw e;
     }
     // eslint-disable-next-line no-console
-    console.log('[liveplay] rest headers:', res.status, res.statusText, 'for', url);
+    dlog('[liveplay] rest headers:', res.status, res.statusText, 'for', url);
     if (!res.ok) {
       const text = await res.text().catch(() => res.statusText);
       throw new Error(`${res.status} ${res.statusText} — ${text}`);
@@ -374,11 +436,11 @@ function createClient() {
       parsed = await (res.json() as Promise<T>);
     } catch (e) {
       // eslint-disable-next-line no-console
-      console.error('[liveplay] rest json() failed for', url, ':', e);
+      derr('[liveplay] rest json() failed for', url, ':', e);
       throw e;
     }
     // eslint-disable-next-line no-console
-    console.log('[liveplay] rest done:', url);
+    dlog('[liveplay] rest done:', url);
     return parsed;
   }
 
@@ -887,7 +949,7 @@ function createClient() {
       : null;
     if (osPath) {
       try { return await copyToMedia(osPath); }
-      catch (e) { console.warn('[import] copyToMedia failed, uploading bytes instead:', e); }
+      catch (e) { dwarn('[import] copyToMedia failed, uploading bytes instead:', e); }
     }
     try {
       const res = await uploadFile(file, file.name);
