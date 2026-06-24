@@ -121,6 +121,67 @@ function writeLiveplayConfig(cfg) {
 }
 
 // ---------------------------------------------------------------------------
+// Stable Web-Share tunnel (optional). By default the in-app share uses a free
+// Cloudflare *quick tunnel* whose https URL is random and changes on every
+// start. An operator who owns a Cloudflare account + domain can pin a STABLE,
+// per-machine URL by configuring a Named Tunnel — the URL then stays identical
+// across restarts/reboots. Resolved per machine (never bundled), highest
+// priority first:
+//   1. Env vars: LIVEPLAY_TUNNEL_HOSTNAME + (LIVEPLAY_TUNNEL_TOKEN
+//      | LIVEPLAY_TUNNEL_CREDENTIALS_FILE + LIVEPLAY_TUNNEL_ID)
+//   2. <userData>/liveplay-tunnel.json
+// Returns null when nothing is configured (→ quick tunnel). See
+// docs/web-sharing-stable-url.md.
+// ---------------------------------------------------------------------------
+const LIVEPLAY_TUNNEL_FILENAME = 'liveplay-tunnel.json';
+
+function tunnelConfigPath() {
+  return path.join(app.getPath('userData'), LIVEPLAY_TUNNEL_FILENAME);
+}
+
+function tunnelConfigFromEnv() {
+  const env = process.env;
+  const hostname = (env.LIVEPLAY_TUNNEL_HOSTNAME || '').trim();
+  if (!hostname) return null;
+  const cfg = { hostname };
+  const token = (env.LIVEPLAY_TUNNEL_TOKEN || '').trim();
+  if (token) {
+    cfg.token = token;
+    const port = Number(env.LIVEPLAY_TUNNEL_PORT);
+    if (Number.isInteger(port)) cfg.port = port;
+  } else {
+    const credentialsFile = (env.LIVEPLAY_TUNNEL_CREDENTIALS_FILE || '').trim();
+    const tunnelId        = (env.LIVEPLAY_TUNNEL_ID || '').trim();
+    const tunnelName      = (env.LIVEPLAY_TUNNEL_NAME || '').trim();
+    if (credentialsFile) cfg.credentialsFile = credentialsFile;
+    if (tunnelId)        cfg.tunnelId = tunnelId;
+    if (tunnelName)      cfg.tunnelName = tunnelName;
+  }
+  return cfg;
+}
+
+function readTunnelConfig() {
+  const fromEnv = tunnelConfigFromEnv();
+  if (fromEnv) return fromEnv;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(tunnelConfigPath(), 'utf-8'));
+    if (parsed && typeof parsed === 'object' && typeof parsed.hostname === 'string' && parsed.hostname.trim()) {
+      return parsed;
+    }
+  } catch {}
+  return null;
+}
+
+function writeTunnelConfig(cfg) {
+  try {
+    if (cfg == null) { try { fs.unlinkSync(tunnelConfigPath()); } catch {} return; }
+    fs.writeFileSync(tunnelConfigPath(), JSON.stringify(cfg, null, 2));
+  } catch (e) {
+    console.error('[web-share] could not persist tunnel config:', e);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Recent-servers history (separate file so it survives config rewrites).
 // Stored newest-first, capped, keyed by normalised URL.
 // ---------------------------------------------------------------------------
@@ -637,7 +698,12 @@ function getWebShare() {
   // sharing can be tested without packaging (npm run dev, no build needed).
   const staticRoot = path.join(__dirname, '../.output/public');
   const devServerUrl = (isDevMode && !app.isPackaged) ? 'http://localhost:3000' : null;
-  webShare.configure({ staticRoot, devServerUrl, serverPort: readLiveplayConfig().localPort });
+  webShare.configure({
+    staticRoot,
+    devServerUrl,
+    serverPort: readLiveplayConfig().localPort,
+    namedTunnel: readTunnelConfig(),     // null ⇒ random quick tunnel
+  });
   return webShare;
 }
 
@@ -667,6 +733,69 @@ ipcMain.handle('web-share:stop-tunnel', async () => {
   if (!webShare) return { ok: true };
   try { await webShare.stopTunnel(); return { ok: true }; }
   catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+});
+
+// Read the stable-URL (named-tunnel) config for the settings UI. Never returns
+// the token/secret itself — only whether one is set, plus the non-secret bits.
+ipcMain.handle('web-share:get-tunnel-config', async () => {
+  const cfg = readTunnelConfig();
+  return {
+    ok: true,
+    configured: !!cfg,
+    fromEnv: !!tunnelConfigFromEnv(),         // env-provided ⇒ read-only in the UI
+    configPath: tunnelConfigPath(),
+    hostname: cfg ? String(cfg.hostname || '') : '',
+    mode: cfg ? (cfg.token ? 'token' : 'creds') : null,
+    hasToken: !!(cfg && cfg.token),
+    credentialsFile: cfg && cfg.credentialsFile ? cfg.credentialsFile : '',
+    tunnelId: cfg && cfg.tunnelId ? cfg.tunnelId : '',
+  };
+});
+
+// Persist (or clear) the stable-URL config. Takes effect on the next tunnel
+// start. Refuses to overwrite an env-var configuration. Leaving the secret
+// (token / credentials) blank on an edit keeps the previously stored one, so
+// the hostname can be changed without re-entering the token.
+ipcMain.handle('web-share:set-tunnel-config', async (_e, cfg) => {
+  try {
+    if (tunnelConfigFromEnv()) {
+      return { ok: false, error: 'Tunnel ist über Umgebungsvariablen konfiguriert — bitte dort ändern.' };
+    }
+    const hostname = String((cfg && cfg.hostname) || '').trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    if (!hostname) {
+      writeTunnelConfig(null);                // empty hostname ⇒ back to quick tunnel
+    } else {
+      const prev = (() => {
+        try { return JSON.parse(fs.readFileSync(tunnelConfigPath(), 'utf-8')) || {}; }
+        catch { return {}; }
+      })();
+      const clean = { hostname };
+      const token = String((cfg && cfg.token) || '').trim();
+      const credentialsFile = String((cfg && cfg.credentialsFile) || '').trim();
+      const tunnelId   = String((cfg && cfg.tunnelId) || '').trim();
+      const tunnelName = String((cfg && cfg.tunnelName) || '').trim();
+      if (token) {
+        clean.token = token;
+        if (Number.isInteger(cfg.port)) clean.port = cfg.port;
+      } else if (credentialsFile && (tunnelId || tunnelName)) {
+        clean.credentialsFile = credentialsFile;
+        if (tunnelId)   clean.tunnelId = tunnelId;
+        if (tunnelName) clean.tunnelName = tunnelName;
+      } else if (typeof prev.token === 'string' && prev.token.trim()) {
+        clean.token = prev.token.trim();        // keep previously stored token
+        if (Number.isInteger(prev.port)) clean.port = prev.port;
+      } else if (typeof prev.credentialsFile === 'string' && prev.credentialsFile.trim() && (prev.tunnelId || prev.tunnelName)) {
+        clean.credentialsFile = prev.credentialsFile.trim();   // keep stored creds
+        if (prev.tunnelId)   clean.tunnelId = String(prev.tunnelId).trim();
+        if (prev.tunnelName) clean.tunnelName = String(prev.tunnelName).trim();
+      } else {
+        return { ok: false, error: 'Hostname plus entweder Token oder Credentials-Datei + Tunnel-ID erforderlich.' };
+      }
+      writeTunnelConfig(clean);
+    }
+    if (webShare) webShare.configure({ namedTunnel: readTunnelConfig() });
+    return { ok: true, ...await getWebShare().status() };
+  } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
 });
 
 // ===========================================================================

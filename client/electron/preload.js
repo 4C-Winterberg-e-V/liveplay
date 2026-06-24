@@ -189,15 +189,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // In-app web sharing — host the bundled web UI for phones on the LAN or via
-  // a bundled Cloudflare quick-tunnel. All status comes back as a single
-  // object: { hosting, webPort, lanUrls, lanQr, tunnel, tunnelUrl, tunnelQr,
-  // auth: { user, pass } | null }.
+  // a Cloudflare tunnel. All status comes back as a single object:
+  // { hosting, webPort, lanUrls, lanQr, tunnel, tunnelUrl, tunnelQr,
+  //   tunnelStable, tunnelHostname, auth: { user, pass } | null }.
+  // A "stable" tunnel keeps the same URL across restarts (named tunnel on the
+  // operator's own Cloudflare account); otherwise the URL is random per start.
   webShare: {
     getStatus:   ()     => ipcRenderer.invoke('web-share:get-status'),
     startLan:    (opts) => ipcRenderer.invoke('web-share:start-lan', opts),
     stopLan:     ()     => ipcRenderer.invoke('web-share:stop-lan'),
     startTunnel: (opts) => ipcRenderer.invoke('web-share:start-tunnel', opts),
     stopTunnel:  ()     => ipcRenderer.invoke('web-share:stop-tunnel'),
+    getTunnelConfig: ()    => ipcRenderer.invoke('web-share:get-tunnel-config'),
+    setTunnelConfig: (cfg) => ipcRenderer.invoke('web-share:set-tunnel-config', cfg),
     onStateChange: (callback) => {
       const listener = (_e, payload) => callback(payload);
       ipcRenderer.on('web-share:state', listener);

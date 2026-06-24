@@ -502,6 +502,18 @@
     "copy": "Copy",
     "login": "Login",
     "lanScanHint": "Open this address on a device in the same network.",
-    "tunnelWarn": "Internet-facing. Anyone with the link and login can control the server and access files — share the login only with trusted people and stop the tunnel after the event."
+    "tunnelWarn": "Internet-facing. Anyone with the link and login can control the server and access files — share the login only with trusted people and stop the tunnel after the event.",
+    "tunnelStableBadge": "Fixed URL",
+    "tunnelStableHint": "This address stays the same on this machine — even after a restart.",
+    "tunnelConfigTitle": "Set up a fixed URL (optional)",
+    "tunnelConfigIntro": "By default Cloudflare assigns a random address on every start. With your own Cloudflare account + domain the address stays the same on this machine. Create a Named Tunnel, set the service to http://localhost:8088 in the Cloudflare dashboard, and enter the hostname + token here.",
+    "tunnelConfigHostname": "Hostname (e.g. liveplay.your-domain.com)",
+    "tunnelConfigToken": "Cloudflare tunnel token",
+    "tunnelConfigSave": "Save",
+    "tunnelConfigClear": "Back to random URL",
+    "tunnelConfigEnv": "Configured via environment variables — read-only here.",
+    "tunnelConfigSaved": "Saved. Active on the next tunnel start.",
+    "tunnelConfigKeepToken": "Existing saved token is kept. Enter a new token to change it.",
+    "tunnelConfigPath": "Config file:"
   }
 }

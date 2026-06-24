@@ -35,6 +35,11 @@ In der App: Kopfzeile → **Teilen** (Icon `share`; auf Mobile im ⋯-Menü).
   `cloudflared` und zeigt eine `https://<zufall>.trycloudflare.com`-Adresse +
   QR. **Kein Cloudflare-Account, keine Domain, kein DNS** nötig (Quick-Tunnel).
   TLS macht Cloudflare; intern bleibt alles Plain-HTTP auf dem Mac.
+  - **Feste URL (optional):** Die Quick-Tunnel-Adresse ist **bei jedem Start
+    zufällig**. Wer ein eigenes Cloudflare-Konto + Domain hat, kann pro Rechner
+    eine **dauerhaft gleiche** Adresse hinterlegen (Named Tunnel) – siehe
+    [`web-sharing-stable-url.md`](web-sharing-stable-url.md). Bei hinterlegter
+    Config zeigt der Dialog das Badge **„Feste URL"**.
 
 Der C++-Server bindet ohnehin auf `0.0.0.0:4480`; der Host-Server proxyt nur
 same-origin davor.
