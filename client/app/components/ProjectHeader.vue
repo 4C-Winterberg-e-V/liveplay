@@ -25,8 +25,34 @@
     </div>
 
     <div ref="rightRef" class="header-right">
-      <Btn icon="tune" :text="t('settings.title')" @click="showProjectSettings = true" />
-      <Btn icon="keyboard" :text="t('controls.shortcutBtn')" @click="showControlConfig = true" />
+      <Btn class="header-action" icon="tune" :text="t('settings.title')" @click="showProjectSettings = true" />
+      <Btn class="header-action" icon="keyboard" :text="t('controls.shortcutBtn')" @click="showControlConfig = true" />
+
+      <!-- Mobile overflow menu: folds the actions above into a ⋯ menu so the
+           narrow header isn't overcrowded. Hidden on desktop via CSS. -->
+      <div class="header-overflow">
+        <button
+          type="button"
+          class="header-overflow__btn"
+          aria-label="Menu"
+          @click="showHeaderMenu = !showHeaderMenu"
+        >
+          <span class="material-symbols-rounded">more_vert</span>
+        </button>
+        <template v-if="showHeaderMenu">
+          <div class="header-overflow__backdrop" @click="showHeaderMenu = false"></div>
+          <div class="header-overflow__menu">
+            <button type="button" @click="showProjectSettings = true; showHeaderMenu = false">
+              <span class="material-symbols-rounded">tune</span>
+              <span>{{ t('settings.title') }}</span>
+            </button>
+            <button type="button" @click="showControlConfig = true; showHeaderMenu = false">
+              <span class="material-symbols-rounded">keyboard</span>
+              <span>{{ t('controls.shortcutBtn') }}</span>
+            </button>
+          </div>
+        </template>
+      </div>
 
       <!-- Autosave toggle: on by default; when off the project is only saved
            via File > Save and an "Unsaved Changes" pill appears by the title. -->
@@ -80,6 +106,8 @@ const { activeCues } = useAudioEngine();
 
 const showControlConfig = ref(false);
 const showProjectSettings = useState('showProjectSettings', () => false);
+// Mobile-only ⋯ overflow menu (settings + shortcuts).
+const showHeaderMenu = ref(false);
 
 const isDark = computed(() => currentProject.value?.theme.mode === 'dark');
 const currentTime = ref('00:00:00');
@@ -512,7 +540,69 @@ onMounted(() => {
 @keyframes flash-fast   { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
 
 // ---- Mobile: keep the logo/name pinned, let the actions scroll ----------
+// ---- Mobile overflow menu (hidden on desktop) --------------------------
+.header-overflow {
+  display: none;
+  position: relative;
+}
+.header-overflow__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  cursor: pointer;
+
+  .material-symbols-rounded { font-size: 22px; }
+}
+.header-overflow__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+.header-overflow__menu {
+  // Fixed so it's never clipped by the header's horizontal overflow.
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 56px);
+  right: calc(env(safe-area-inset-right) + var(--spacing-md));
+  z-index: 1001;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+
+  button {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: transparent;
+    border: none;
+    color: var(--color-text-primary);
+    font-size: 15px;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover { background: var(--color-surface-hover); }
+    .material-symbols-rounded { font-size: 20px; }
+  }
+}
+
 @media (max-width: 768px) {
+  // C): fold Settings/Shortcuts into the ⋯ menu and drop the clock pair so the
+  // narrow header has room to breathe.
+  .header-action { display: none; }
+  .header-overflow { display: block; }
+  .clock-pair { display: none; }
+
   .project-header {
     gap: var(--spacing-sm);
     padding:
@@ -535,11 +625,8 @@ onMounted(() => {
   // Actions row shrinks to the remaining space and scrolls horizontally so no
   // button is permanently cut off.
   .header-right {
-    flex: 1 1 auto;
-    min-width: 0;
+    flex: 0 0 auto;
     justify-content: flex-end;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
     gap: var(--spacing-sm);
 
     & > * {
