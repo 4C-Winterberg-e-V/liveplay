@@ -65,6 +65,9 @@ class WebShare extends EventEmitter {
 
     this.auth = null;           // { user, pass } when the auth gate is armed
     this.sessionToken = null;   // cookie token issued after a successful login
+    this.pin = null;            // stable PIN for this app process — generated
+                                // once, reused across tunnel restarts; a fresh
+                                // app launch (new process) gets a new one.
   }
 
   /** Wire up paths/ports before first use. Safe to call repeatedly. */
@@ -218,9 +221,12 @@ class WebShare extends EventEmitter {
     }
 
     // Internet exposure ⇒ arm the auth gate before the tunnel goes live.
+    // Reuse the PIN for the whole app session so a tunnel restart keeps the
+    // same login; only a fresh app launch mints a new PIN.
+    if (!this.pin) this.pin = makePin(4);
     this.auth = {
       user: 'liveplay',
-      pass: makePin(4),
+      pass: this.pin,
     };
     // Session cookie issued after a successful BasicAuth login — browsers send
     // cookies on the WebSocket handshake (unlike BasicAuth headers), so this is
