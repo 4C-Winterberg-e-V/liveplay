@@ -476,4 +476,21 @@ const handlePlayNext = () => {
   transition: opacity var(--transition-fast);
   pointer-events: none;
 }
+
+/* Mobile: compact controls, horizontal scroll for overflow */
+@media (max-width: 768px) {
+  .playback-controls {
+    gap: var(--spacing-md);
+    padding: 0 var(--spacing-md);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .controls-left {
+    flex-shrink: 0;
+  }
+  .control-btn {
+    padding: var(--spacing-sm) var(--spacing-md);
+    flex-shrink: 0;
+  }
+}
 </style>

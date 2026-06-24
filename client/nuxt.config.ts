@@ -43,7 +43,13 @@ export default defineNuxtConfig({
       title: 'LivePlay',
       meta: [
         { charset: 'utf-8' },
-        { name: 'viewport', content: 'width=device-width, initial-scale=1' }
+        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
+        // Mobile / add-to-home-screen polish (ignored by Electron).
+        { name: 'mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
+        { name: 'apple-mobile-web-app-title', content: 'LivePlay' },
+        { name: 'theme-color', content: '#1a1a1a' }
       ]
     },
     // Electron: relative paths for file://. Web: absolute base (see weiche above).

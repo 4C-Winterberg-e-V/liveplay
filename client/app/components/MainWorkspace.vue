@@ -541,4 +541,25 @@ onUnmounted(() => {
 .cart-section {
   overflow: hidden;
 }
+
+// ---- Mobile: stack the panels vertically -------------------------------
+// On phones the side-by-side playlist|cart layout overflows horizontally and
+// squeezes the playlist into a sliver. Stack them and split the height; each
+// panel keeps its own internal scroll. The JS-driven inline widths are
+// overridden with !important. Desktop (>768px) is unaffected.
+@media (max-width: 768px) {
+  .workspace-content {
+    flex-direction: column;
+  }
+  .playlist-section,
+  .cart-section {
+    width: 100% !important;
+    min-width: 0;
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  .resize-handle {
+    display: none;
+  }
+}
 </style>

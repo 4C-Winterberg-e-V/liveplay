@@ -503,4 +503,37 @@ onMounted(() => {
 @keyframes flash-slow   { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
 @keyframes flash-medium { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
 @keyframes flash-fast   { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+
+// ---- Mobile: keep the logo/name pinned, let the actions scroll ----------
+@media (max-width: 768px) {
+  .project-header {
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    min-height: 52px;
+  }
+  .header-left {
+    flex-shrink: 0;
+    min-width: 0;
+  }
+  .project-name {
+    max-width: 30vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  // Actions row shrinks to the remaining space and scrolls horizontally so no
+  // button is permanently cut off.
+  .header-right {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-end;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: var(--spacing-sm);
+
+    & > * {
+      flex-shrink: 0;
+    }
+  }
+}
 </style>
