@@ -64,6 +64,7 @@ class WebShare extends EventEmitter {
     this.tunnelStarting = false;
 
     this.auth = null;           // { user, pass } when the auth gate is armed
+    this.sessionToken = null;   // cookie token issued after a successful login
   }
 
   /** Wire up paths/ports before first use. Safe to call repeatedly. */
@@ -157,7 +158,11 @@ class WebShare extends EventEmitter {
     server.on('upgrade', (req, socket, head) => {
       if (!req.url) { socket.destroy(); return; }
       if (!this._authOkUpgrade(req)) {
-        socket.write('HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="LivePlay"\r\n\r\n');
+        // Deliberately NO WWW-Authenticate header: a 401 carrying it on a WS
+        // handshake makes browsers pop the BasicAuth dialog, and the auto-
+        // reconnecting socket would re-trigger it forever. The authenticated
+        // page load sets the session cookie that lets this through normally.
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
         socket.destroy();
         return;
       }
@@ -197,6 +202,7 @@ class WebShare extends EventEmitter {
     this.webPort = null;
     this.lanUrls = [];
     this.auth = null;
+    this.sessionToken = null;
     this.emitStatus();
     return this.status();
   }
@@ -216,6 +222,10 @@ class WebShare extends EventEmitter {
       user: 'liveplay',
       pass: makePassword(8),
     };
+    // Session cookie issued after a successful BasicAuth login — browsers send
+    // cookies on the WebSocket handshake (unlike BasicAuth headers), so this is
+    // what authenticates the /ws and HMR sockets.
+    this.sessionToken = crypto.randomBytes(18).toString('base64url');
     this.tunnelStarting = true;
     this.emitStatus();
 
@@ -264,6 +274,7 @@ class WebShare extends EventEmitter {
     this.tunnelUrl = null;
     this.tunnelStarting = false;
     this.auth = null;
+    this.sessionToken = null;
     if (proc) {
       try { proc.kill('SIGTERM'); } catch {}
     }
@@ -282,13 +293,39 @@ class WebShare extends EventEmitter {
   // ── auth helpers ──────────────────────────────────────────────────────────
   _authGate(req, res, next) {
     if (!this.auth) return next();
-    if (this._authOk(req.headers['authorization'])) return next();
+    if (this._authOk(req.headers['authorization'])) {
+      // Issue a session cookie on the authenticated page load. Browsers send
+      // cookies on the WebSocket handshake (but not reliably BasicAuth), so the
+      // cookie is what lets /ws and the HMR socket through without a re-prompt.
+      // No Secure flag: while a tunnel is up, LAN clients still reach this same
+      // server over plain http on :<port> and must be able to store the cookie.
+      if (!this._cookieOk(req)) {
+        res.set('Set-Cookie', `lp_auth=${this.sessionToken}; Path=/; HttpOnly; SameSite=Lax`);
+      }
+      return next();
+    }
+    if (this._cookieOk(req)) return next();
     res.set('WWW-Authenticate', 'Basic realm="LivePlay"');
     res.status(401).send('Authentication required');
   }
   _authOkUpgrade(req) {
     if (!this.auth) return true;
-    return this._authOk(req.headers['authorization']);
+    // Prefer the cookie (reliably sent on WS handshakes); fall back to BasicAuth.
+    return this._cookieOk(req) || this._authOk(req.headers['authorization']);
+  }
+  _cookieToken(req) {
+    const raw = req.headers['cookie'];
+    if (!raw) return null;
+    for (const part of raw.split(';')) {
+      const eq = part.indexOf('=');
+      if (eq < 0) continue;
+      if (part.slice(0, eq).trim() === 'lp_auth') return part.slice(eq + 1).trim();
+    }
+    return null;
+  }
+  _cookieOk(req) {
+    const t = this._cookieToken(req);
+    return !!(this.sessionToken && t && safeEqual(t, this.sessionToken));
   }
   _authOk(header) {
     if (!this.auth) return true;
