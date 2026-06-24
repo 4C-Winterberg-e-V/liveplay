@@ -558,6 +558,10 @@ onUnmounted(() => {
     flex: 1 1 0;
     min-height: 0;
   }
+  // Keep the bottom panel's content clear of the iOS home indicator in PWA mode.
+  .cart-section {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
   .resize-handle {
     display: none;
   }

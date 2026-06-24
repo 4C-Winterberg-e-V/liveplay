@@ -321,7 +321,14 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-sm) var(--spacing-lg);
+  // Add the iOS safe-area insets so the header doesn't render under the
+  // status bar / notch when installed as a PWA (black-translucent status bar).
+  // env() is 0 on desktop/Electron, so this is a no-op there.
+  padding:
+    calc(var(--spacing-sm) + env(safe-area-inset-top))
+    calc(var(--spacing-lg) + env(safe-area-inset-right))
+    var(--spacing-sm)
+    calc(var(--spacing-lg) + env(safe-area-inset-left));
   background-color: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   min-height: 60px;
@@ -508,7 +515,11 @@ onMounted(() => {
 @media (max-width: 768px) {
   .project-header {
     gap: var(--spacing-sm);
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding:
+      calc(var(--spacing-sm) + env(safe-area-inset-top))
+      calc(var(--spacing-md) + env(safe-area-inset-right))
+      var(--spacing-sm)
+      calc(var(--spacing-md) + env(safe-area-inset-left));
     min-height: 52px;
   }
   .header-left {
