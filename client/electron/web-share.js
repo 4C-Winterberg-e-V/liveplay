@@ -220,7 +220,7 @@ class WebShare extends EventEmitter {
     // Internet exposure ⇒ arm the auth gate before the tunnel goes live.
     this.auth = {
       user: 'liveplay',
-      pass: makePassword(8),
+      pass: makePin(6),
     };
     // Session cookie issued after a successful BasicAuth login — browsers send
     // cookies on the WebSocket handshake (unlike BasicAuth headers), so this is
@@ -373,14 +373,13 @@ function resolveCloudflared() {
   return null;
 }
 
-// Short, mobile-friendly password from an unambiguous alphabet — no 0/O/o,
-// 1/l/I, all lowercase so it's quick to type on a phone keyboard. crypto.randomInt
-// is uniform (no modulo bias). 8 chars over 32 symbols ≈ 40 bits — fine for an
-// ephemeral per-session tunnel login.
-function makePassword(len = 8) {
-  const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789';
+// Numeric PIN — fastest to type on a phone (numeric keypad). crypto.randomInt
+// is uniform (no modulo bias); leading zeros are kept since it's a string.
+// NB: 6 digits ≈ 20 bits — weak against sustained brute force. Acceptable only
+// because the tunnel hostname is random/ephemeral; stop the tunnel after use.
+function makePin(len = 6) {
   let out = '';
-  for (let i = 0; i < len; i++) out += alphabet[crypto.randomInt(alphabet.length)];
+  for (let i = 0; i < len; i++) out += String(crypto.randomInt(10));
   return out;
 }
 
