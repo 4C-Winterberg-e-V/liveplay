@@ -58,7 +58,8 @@
     "rescan": "Rescan",
     "scanning": "Scanning…",
     "noServersFound": "No servers found yet — make sure a server is running on this network.",
-    "forget": "Forget"
+    "forget": "Forget",
+    "continueProject": "Continue with “{name}”"
   },
   "settings": {
     "title": "Project Settings",
@@ -486,5 +487,21 @@
     "deleteAll": "Delete {count} Selected Items",
     "deleteOnly": "Delete Only \"{name}\"",
     "cancel": "Cancel"
+  },
+  "webShare": {
+    "button": "Share",
+    "title": "Share with phones & tablets",
+    "subtitle": "Serve the LivePlay UI to other devices — straight from this app, nothing else to install.",
+    "lanTitle": "Local network",
+    "lanHint": "Same Wi-Fi. Scan the code to open the UI on a phone.",
+    "tunnelTitle": "Cloudflare tunnel (internet)",
+    "tunnelHint": "Reachable from anywhere over HTTPS. Needs internet at the venue.",
+    "start": "Start",
+    "stop": "Stop",
+    "starting": "Starting…",
+    "copy": "Copy",
+    "login": "Login",
+    "lanScanHint": "Open this address on a device in the same network.",
+    "tunnelWarn": "Internet-facing. Anyone with the link and login can control the server and access files — share the login only with trusted people and stop the tunnel after the event."
   }
 }

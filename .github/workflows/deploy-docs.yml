@@ -28,17 +28,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Clean install dependencies
         working-directory: ./docs-site
         shell: bash
         run: |
-          rm -rf node_modules package-lock.json
-          npm install --include=optional
+          rm -rf node_modules
+          pnpm install --no-frozen-lockfile
 
       - name: Copy additional files
         run: |
@@ -49,7 +52,7 @@ jobs:
 
       - name: Build static site
         working-directory: ./docs-site
-        run: npm run generate
+        run: pnpm generate
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

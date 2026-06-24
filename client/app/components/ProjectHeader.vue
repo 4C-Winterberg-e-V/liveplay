@@ -25,8 +25,13 @@
     </div>
 
     <div ref="rightRef" class="header-right">
+      <!-- Phones only: transport moves up here from the controls bar so the
+           active-cue list below gets the full width (icon-only to stay slim). -->
+      <TransportButtons class="header-transport" />
+
       <Btn class="header-action" icon="tune" :text="t('settings.title')" @click="showProjectSettings = true" />
       <Btn class="header-action" icon="keyboard" :text="t('controls.shortcutBtn')" @click="showControlConfig = true" />
+      <Btn v-if="hasElectron" class="header-action" icon="share" :text="t('webShare.button')" @click="showWebShare = true" />
 
       <!-- Mobile overflow menu: folds the actions above into a ⋯ menu so the
            narrow header isn't overcrowded. Hidden on desktop via CSS. -->
@@ -49,6 +54,10 @@
             <button type="button" @click="showControlConfig = true; showHeaderMenu = false">
               <span class="material-symbols-rounded">keyboard</span>
               <span>{{ t('controls.shortcutBtn') }}</span>
+            </button>
+            <button v-if="hasElectron" type="button" @click="showWebShare = true; showHeaderMenu = false">
+              <span class="material-symbols-rounded">share</span>
+              <span>{{ t('webShare.button') }}</span>
             </button>
           </div>
         </template>
@@ -93,10 +102,16 @@
     :open="showProjectSettings"
     @close="showProjectSettings = false"
   />
+  <WebShareModal
+    v-if="showWebShare"
+    @close="showWebShare = false"
+  />
 </template>
 
 <script setup lang="ts">
 import ProjectSettingsModal from './ProjectSettingsModal.vue';
+import WebShareModal from './WebShareModal.vue';
+import TransportButtons from './TransportButtons.vue';
 import Btn from './Btn.vue';
 import type { AudioItem } from '~/types/project';
 
@@ -106,6 +121,10 @@ const { activeCues } = useAudioEngine();
 
 const showControlConfig = ref(false);
 const showProjectSettings = useState('showProjectSettings', () => false);
+const showWebShare = ref(false);
+// Web-sharing (host the mobile UI) is Electron-only — the host server lives in
+// the main process. In the browser build the button is hidden.
+const hasElectron = import.meta.client && !!(window as any).electronAPI;
 // Mobile-only ⋯ overflow menu (settings + shortcuts).
 const showHeaderMenu = ref(false);
 
@@ -596,6 +615,11 @@ onMounted(() => {
   }
 }
 
+/* Transport (Play-Next / Stop-All) in the title bar — phones only.
+   Higher specificity than the component's own `.transport-buttons{display:flex}`
+   so it stays hidden on desktop regardless of stylesheet order. */
+.header-right .header-transport { display: none; }
+
 @media (max-width: 768px) {
   // C): fold Settings/Shortcuts into the ⋯ menu and drop the clock pair so the
   // narrow header has room to breathe.
@@ -633,5 +657,24 @@ onMounted(() => {
       flex-shrink: 0;
     }
   }
+
+  // Transport moves into the title bar, icon-only to stay slim.
+  .header-right .header-transport { display: flex; }
+  .header-transport :deep(.control-btn__label) { display: none; }
+  .header-transport :deep(.control-btn) {
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    justify-content: center;
+  }
+  .header-transport :deep(.control-btn .material-symbols-rounded) { font-size: 26px; }
+  .header-transport :deep(.control-btn .icon) { font-size: 24px; }
+
+  // Autosave toggle isn't needed in the phone title bar — drop it for space.
+  .autosave-toggle { display: none; }
+
+  // The silence-warning banner would sit on top of the title-bar transport
+  // buttons on a narrow screen — hide it on phones.
+  .silence-warning { display: none; }
 }
 </style>

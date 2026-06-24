@@ -188,6 +188,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
 
+  // In-app web sharing — host the bundled web UI for phones on the LAN or via
+  // a bundled Cloudflare quick-tunnel. All status comes back as a single
+  // object: { hosting, webPort, lanUrls, lanQr, tunnel, tunnelUrl, tunnelQr,
+  // auth: { user, pass } | null }.
+  webShare: {
+    getStatus:   ()     => ipcRenderer.invoke('web-share:get-status'),
+    startLan:    (opts) => ipcRenderer.invoke('web-share:start-lan', opts),
+    stopLan:     ()     => ipcRenderer.invoke('web-share:stop-lan'),
+    startTunnel: (opts) => ipcRenderer.invoke('web-share:start-tunnel', opts),
+    stopTunnel:  ()     => ipcRenderer.invoke('web-share:stop-tunnel'),
+    onStateChange: (callback) => {
+      const listener = (_e, payload) => callback(payload);
+      ipcRenderer.on('web-share:state', listener);
+      return () => ipcRenderer.removeListener('web-share:state', listener);
+    },
+  },
+
   // LAN auto-discovery of other LivePlay servers (UDP beacons on the LAN).
   liveplayDiscovery: {
     start:   () => ipcRenderer.invoke('liveplay-discovery:start'),

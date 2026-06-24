@@ -1,7 +1,18 @@
 <template>
-  <div class="cart-player" ref="cartPlayerRef">
+  <div class="cart-player" :class="{ collapsed: cartCollapsed }" ref="cartPlayerRef">
     <div class="cart-header">
-      <h2>{{ t('cart.title') }}</h2>
+      <!-- Collapse toggle: phones only. Folds the cart away to give the
+           playlist more height. -->
+      <button
+        type="button"
+        class="cart-collapse-toggle"
+        :aria-expanded="!cartCollapsed"
+        :aria-label="t('cart.title')"
+        @click="cartCollapsed = !cartCollapsed"
+      >
+        <span class="material-symbols-rounded">{{ cartCollapsed ? 'expand_more' : 'expand_less' }}</span>
+      </button>
+      <h2 @click="onCartTitleClick">{{ t('cart.title') }}</h2>
       <div class="cart-header-actions">
         <Btn
           v-if="!isDetachedWindow && hasElectron"
@@ -49,6 +60,16 @@ const { t } = useLocalization();
 // Popping the cart into a separate OS window needs Electron's multi-window IPC;
 // hide the button in a pure browser context (no dead click).
 const hasElectron = import.meta.client && !!(window as any).electronAPI;
+
+// Mobile: collapse the cart to free vertical space for the playlist. Shared via
+// useState so MainWorkspace can shrink the cart section to its header. No effect
+// on desktop (toggle + collapse CSS are gated to the phone media query).
+const cartCollapsed = useState('cart.collapsed', () => false);
+function onCartTitleClick() {
+  if (import.meta.client && window.matchMedia?.('(max-width: 768px)').matches) {
+    cartCollapsed.value = !cartCollapsed.value;
+  }
+}
 
 const handleDetach = () => {
   if (!currentProject.value || !import.meta.client || !window.electronAPI) return;
@@ -156,6 +177,38 @@ onMounted(() => {
 .cart-header-actions {
   display: flex;
   gap: var(--spacing-sm);
+}
+
+/* Collapse chevron — hidden on desktop, shown only in the phone media query. */
+.cart-collapse-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-right: var(--spacing-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.cart-collapse-toggle .material-symbols-rounded { font-size: 22px; }
+
+/* Phones: enable collapse, fold the grid away, and drop the Attach button
+   (pointless in a browser/touch context). */
+@media (max-width: 768px) {
+  /* Slimmer header to reclaim vertical space. */
+  .cart-header {
+    min-height: 44px;
+    padding: var(--spacing-xs) var(--spacing-md);
+  }
+  .cart-header h2 { font-size: 16px; cursor: pointer; flex: 1; }
+  .cart-collapse-toggle { display: inline-flex; width: 32px; height: 32px; }
+  .cart-header-actions { display: none; }
+  .cart-player.collapsed { height: auto; }
+  .cart-player.collapsed .cart-grid { display: none; }
 }
 
 

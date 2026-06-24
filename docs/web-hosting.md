@@ -22,8 +22,8 @@ absolute `baseURL` statt der relativen `'./'` des Electron-Builds.
 
 ```bash
 cd client
-npm install
-npm run generate:web        # → client/.output/public
+pnpm install
+pnpm generate:web        # → client/.output/public
 ```
 
 Das Ergebnis (`.output/public`) ist auf jedem statischen Webserver auslieferbar.
@@ -31,13 +31,13 @@ Das Ergebnis (`.output/public`) ist auf jedem statischen Webserver auslieferbar.
 **Sub-Pfad-Hosting** (Auslieferung unter z. B. `/liveplay/`):
 
 ```bash
-NUXT_APP_BASE_URL=/liveplay/ npm run generate:web
+NUXT_APP_BASE_URL=/liveplay/ pnpm generate:web
 ```
 
 Die Docker-Artefakte nehmen den Pfad als Build-Arg:
 `--build-arg NUXT_APP_BASE_URL=/liveplay/`.
 
-> Der Electron-Build (`npm run generate` / `npm run build:electron`) bleibt davon
+> Der Electron-Build (`pnpm generate` / `pnpm build:electron`) bleibt davon
 > unberührt und verwendet weiterhin relative Pfade für `file://`.
 
 ---
@@ -95,7 +95,7 @@ docker compose -f deploy/docker-compose.mode-b.yml up --build
 ```
 
 Alternativ ohne Docker: `.output/public` mit einem beliebigen statischen Server
-ausliefern (`npx serve .output/public`, nginx, …).
+ausliefern (`pnpm dlx serve .output/public`, nginx, …).
 
 ---
 

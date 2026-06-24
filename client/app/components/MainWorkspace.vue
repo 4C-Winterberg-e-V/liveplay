@@ -4,7 +4,7 @@
     <PlaybackControls />
     
     <div class="workspace-content">
-      <div v-if="!cartFullscreen" class="playlist-section" :style="{ width: (cartClosed || cartDetached) ? '100%' : `calc(100% - ${cartWidth}px)` }">
+      <div v-if="!cartFullscreen" class="playlist-section" :class="{ 'playlist-collapsed': playlistCollapsed }" :style="{ width: (cartClosed || cartDetached) ? '100%' : `calc(100% - ${cartWidth}px)` }">
         <PlaylistView />
       </div>
 
@@ -15,7 +15,7 @@
         @mousedown="startResize"
       ></div>
 
-      <div v-if="!cartClosed && !cartDetached" class="cart-section" :style="{ width: cartFullscreen ? '100%' : `${cartWidth}px` }">
+      <div v-if="!cartClosed && !cartDetached" class="cart-section" :class="{ 'cart-collapsed': cartCollapsed }" :style="{ width: cartFullscreen ? '100%' : `${cartWidth}px` }">
         <CartPlayer />
       </div>
     </div>
@@ -92,6 +92,14 @@ const isResizing = ref(false);
 const cartClosed = ref(false);
 const cartFullscreen = ref(false);
 const cartDetached = ref(false);
+
+// Phone-only: when the playlist is collapsed (toggled in PlaylistView) shrink
+// its section to the header so the cart player takes the remaining height.
+// Shared via useState. No effect on desktop (the collapse CSS is gated to the
+// phone media query).
+const playlistCollapsed = useState('playlist.collapsed', () => false);
+// Same idea for the cart player — collapse it to hand the height to the playlist.
+const cartCollapsed = useState('cart.collapsed', () => false);
 
 const startResize = (e: MouseEvent) => {
   isResizing.value = true;
@@ -453,6 +461,10 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Themed dark background so any area not covered by a panel (e.g. when the
+     playlist/cart are collapsed on mobile) stays in the app's dark tone
+     instead of showing the page's default white. */
+  background-color: var(--color-background);
 }
 
 .workspace-content {
@@ -460,6 +472,7 @@ onUnmounted(() => {
   display: flex;
   overflow: hidden;
   position: relative;
+  background-color: var(--color-background);
 }
 
 .playlist-section {
@@ -557,6 +570,12 @@ onUnmounted(() => {
     min-width: 0;
     flex: 1 1 0;
     min-height: 0;
+  }
+  // Collapsed playlist: shrink to its header row so the cart player expands
+  // into the freed height. More specific than the rule above, so it wins.
+  .playlist-section.playlist-collapsed,
+  .cart-section.cart-collapsed {
+    flex: 0 0 auto;
   }
   // Keep the bottom panel's content clear of the iOS home indicator in PWA mode.
   .cart-section {

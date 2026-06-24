@@ -1009,4 +1009,34 @@ const findItemByIndex = (index: number[]): AudioItem | GroupItem | null => {
 .group-children {
   padding-left: var(--spacing-md);
 }
+
+/* ---- Phones: stack name over actions ---------------------------------- */
+/* On a narrow screen the index + large name + 4–5 action buttons can't share
+   one line — the buttons end up covering the (especially group) name. Let the
+   row wrap: the name keeps the full first line and the buttons drop to their
+   own line as comfortable touch targets. */
+@media (max-width: 768px) {
+  .item-left {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  /* flex-basis:100% forces the action cluster onto its own line below the name. */
+  .item-actions {
+    flex-basis: 100%;
+    gap: 8px;
+    margin-top: 2px;
+  }
+  .item-actions :deep(.action-btn) {
+    width: 40px;
+    height: 40px;
+  }
+  .item-actions :deep(.action-btn .material-symbols-rounded) {
+    font-size: 22px;
+  }
+  /* Decorative behaviour icons aren't needed on the touch layout — drop them so
+     they don't crowd the duration/name. */
+  .behavior-indicators {
+    display: none;
+  }
+}
 </style>

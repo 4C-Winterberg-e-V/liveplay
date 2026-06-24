@@ -343,4 +343,14 @@ const formatTime = (seconds: number): string => {
   transition: opacity var(--transition-fast);
   pointer-events: none;
 }
+
+/* Phones: the fixed 400px card overflows the screen. Fit it to the available
+   width instead (the MAIN meter keeps its size to the right). */
+@media (max-width: 768px) {
+  .active-cue-item {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+  }
+}
 </style>

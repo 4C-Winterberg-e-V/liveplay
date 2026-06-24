@@ -73,6 +73,15 @@ export default defineNuxtConfig({
   ],
 
   vite: {
+    // Dev server only: the in-app web-share proxy (electron/web-share.js)
+    // forwards phone/tunnel requests to this Vite dev server. Vite blocks
+    // unknown Host headers (DNS-rebinding guard) — LAN access via IP is fine,
+    // but a Cloudflare quick-tunnel domain gets rejected ("This host is not
+    // allowed"). Allow any *.trycloudflare.com subdomain (the hostname is
+    // random per tunnel). No effect on production builds (no dev server).
+    server: {
+      allowedHosts: ['.trycloudflare.com']
+    },
     css: {
       preprocessorOptions: {
         scss: {

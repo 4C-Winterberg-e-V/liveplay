@@ -1,22 +1,9 @@
 <template>
   <div class="playback-controls">
-    <div class="controls-left">
-      <button
-        class="control-btn play-next-btn"
-        :class="{ 'has-next': !!effectiveNextUuid }"
-        @click="handlePlayNext"
-        :disabled="!effectiveNextUuid"
-        :title="playNextTooltip"
-      >
-        <span class="material-symbols-rounded">fast_forward</span>
-        <span>{{ t('controls.playNext') }}</span>
-      </button>
-      <button class="control-btn panic-btn" @click="handlePanic" :disabled="activeCues.size === 0" :title="stopAllTooltip">
-        <span class="icon">⚠</span>
-        <span>{{ t('playback.panic') }}</span>
-      </button>
-    </div>
-    
+    <!-- Desktop: transport lives here. On phones it moves into the title bar
+         (ProjectHeader) so the active-cue list gets the full width. -->
+    <TransportButtons class="controls-left" />
+
     <div class="active-cues">
       <div v-if="activeCues.size === 0 && !previewingItem" class="no-cues">
         {{ t('playback.noActiveCues') }}
@@ -103,6 +90,7 @@ import type { AudioItem } from '~/types/project';
 import { useLiveplayServer } from '~/composables/useLiveplayServer';
 import { useCueMeters } from '~/composables/useLiveMeters';
 import VolumeSlider from './VolumeSlider.vue';
+import TransportButtons from './TransportButtons.vue';
 
 const { activeCues, panicStop, nextItemOverrideUuid, autoNextItemUuid, setNextItem, playCue, triggerGroup } = useAudioEngine();
 const { findItemByUuid, previewItemUuid, previewCueId, stopPreview, currentProject } = useProject();
@@ -477,20 +465,31 @@ const handlePlayNext = () => {
   pointer-events: none;
 }
 
-/* Mobile: compact controls, horizontal scroll for overflow */
+/* Mobile: the transport moves into the title bar (ProjectHeader), so hide it
+   here and let the active-cue list use the full width. */
 @media (max-width: 768px) {
   .playback-controls {
     gap: var(--spacing-md);
     padding: 0 var(--spacing-md);
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    overflow-x: hidden;
   }
-  .controls-left {
-    flex-shrink: 0;
+  /* Higher specificity than the component's own .transport-buttons{display:flex}
+     so the desktop-location transport stays hidden on phones. */
+  .playback-controls .controls-left {
+    display: none;
   }
-  .control-btn {
-    padding: var(--spacing-sm) var(--spacing-md);
-    flex-shrink: 0;
+  .active-cues {
+    min-width: 0;
+  }
+  /* Let a running cue fit the available width instead of the fixed 400px. */
+  .cue-list {
+    min-width: 0;
+    width: 100%;
+  }
+  .preview-cue-card {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
   }
 }
 </style>
