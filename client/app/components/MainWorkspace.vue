@@ -4,7 +4,7 @@
     <PlaybackControls />
     
     <div class="workspace-content">
-      <div v-if="!cartFullscreen" class="playlist-section" :style="{ width: (cartClosed || cartDetached) ? '100%' : `calc(100% - ${cartWidth}px)` }">
+      <div v-if="!cartFullscreen" class="playlist-section" :class="{ 'playlist-collapsed': playlistCollapsed }" :style="{ width: (cartClosed || cartDetached) ? '100%' : `calc(100% - ${cartWidth}px)` }">
         <PlaylistView />
       </div>
 
@@ -92,6 +92,12 @@ const isResizing = ref(false);
 const cartClosed = ref(false);
 const cartFullscreen = ref(false);
 const cartDetached = ref(false);
+
+// Phone-only: when the playlist is collapsed (toggled in PlaylistView) shrink
+// its section to the header so the cart player takes the remaining height.
+// Shared via useState. No effect on desktop (the collapse CSS is gated to the
+// phone media query).
+const playlistCollapsed = useState('playlist.collapsed', () => false);
 
 const startResize = (e: MouseEvent) => {
   isResizing.value = true;
@@ -557,6 +563,11 @@ onUnmounted(() => {
     min-width: 0;
     flex: 1 1 0;
     min-height: 0;
+  }
+  // Collapsed playlist: shrink to its header row so the cart player expands
+  // into the freed height. More specific than the rule above, so it wins.
+  .playlist-section.playlist-collapsed {
+    flex: 0 0 auto;
   }
   // Keep the bottom panel's content clear of the iOS home indicator in PWA mode.
   .cart-section {

@@ -1,7 +1,18 @@
 <template>
-  <div class="playlist-view">
+  <div class="playlist-view" :class="{ collapsed: playlistCollapsed }">
     <div class="playlist-header">
-      <h2>{{ t('playlist.title') }}</h2>
+      <!-- Collapse toggle: phones only (stacked layout). Folds the playlist
+           away so the cart player gets the full height. -->
+      <button
+        type="button"
+        class="playlist-collapse-toggle"
+        :aria-expanded="!playlistCollapsed"
+        :aria-label="t('playlist.title')"
+        @click="playlistCollapsed = !playlistCollapsed"
+      >
+        <span class="material-symbols-rounded">{{ playlistCollapsed ? 'expand_more' : 'expand_less' }}</span>
+      </button>
+      <h2 @click="onTitleClick">{{ t('playlist.title') }}</h2>
       <div class="playlist-actions">
         <Btn icon="audio_file" :text="t('playlist.importAudio')" :disabled="!currentProject" @click="handleImport" />
         <Btn v-if="hasElectron" icon="youtube_activity" :text="t('youtube.importFromYouTube')" bg-style="youtube" :disabled="!currentProject" @click="showYouTubeModal = true" />
@@ -56,6 +67,20 @@ import { useOutputTarget } from '~/composables/useOutputTarget';
 const { currentProject, addItem, consumePendingAutoProcess, updateIndices, saveProject, triggerWaveformUpdate, isLoading, getAllItemsFlat, resolveProjectPath } = useProject();
 const { t } = useLocalization();
 const { levels: outputTargetLevels } = useOutputTarget();
+
+// Mobile: collapse the playlist to free vertical space for the cart player.
+// Shared via useState so MainWorkspace can shrink the playlist section to its
+// header. Has no visible effect on desktop (toggle + collapse CSS are gated to
+// the phone media query).
+const playlistCollapsed = useState('playlist.collapsed', () => false);
+
+// Tapping the title toggles collapse, but only on the phone layout — on desktop
+// the header has no collapse affordance, so the title click is a no-op there.
+function onTitleClick() {
+  if (import.meta.client && window.matchMedia?.('(max-width: 768px)').matches) {
+    playlistCollapsed.value = !playlistCollapsed.value;
+  }
+}
 
 // Auto-process only items that were just imported this session (marked by
 // addItem). Consumes the mark so it never runs twice for the same item.
@@ -556,6 +581,37 @@ const handleDrop = async (e: DragEvent) => {
 .playlist-actions {
   display: flex;
   gap: var(--spacing-sm);
+}
+
+/* Collapse chevron — hidden on desktop, shown only in the phone media query. */
+.playlist-collapse-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-right: var(--spacing-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+
+  .material-symbols-rounded { font-size: 22px; }
+}
+
+/* Phones: enable the collapse affordance and fold the content away. */
+@media (max-width: 768px) {
+  .playlist-collapse-toggle { display: inline-flex; }
+  .playlist-header h2 { cursor: pointer; flex: 1; }
+  /* Collapsed: drop to the header's natural height (don't stretch to 100%) so
+     the section above can shrink and hand the height to the cart player. */
+  .playlist-view.collapsed { height: auto; }
+  .playlist-view.collapsed .playlist-content { display: none; }
+  /* Collapsed: actions would wrap awkwardly with no list below — keep just the
+     toggle + title so the row stays a slim bar. */
+  .playlist-view.collapsed .playlist-actions { display: none; }
 }
 
 
