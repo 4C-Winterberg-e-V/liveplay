@@ -58,7 +58,8 @@
     "rescan": "Rescan",
     "scanning": "Scanning…",
     "noServersFound": "No servers found yet — make sure a server is running on this network.",
-    "forget": "Forget"
+    "forget": "Forget",
+    "continueProject": "Continue with “{name}”"
   },
   "settings": {
     "title": "Project Settings",

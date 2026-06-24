@@ -58,7 +58,8 @@
     "rescan": "Erneut suchen",
     "scanning": "Suche läuft…",
     "noServersFound": "Noch keine Server gefunden — stellen Sie sicher, dass ein Server in diesem Netzwerk läuft.",
-    "forget": "Entfernen"
+    "forget": "Entfernen",
+    "continueProject": "Mit „{name}“ fortsetzen"
   },
   "project": {
     "enterName": "Projektnamen eingeben",

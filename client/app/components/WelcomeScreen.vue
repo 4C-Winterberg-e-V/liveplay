@@ -151,7 +151,15 @@
           <button class="link-button" @click="changeMode">{{ t('welcome.changeMode') }}</button>
         </p>
         <div class="welcome-actions">
-          <button class="welcome-button primary" @click="handleNewProject">
+          <!-- Resume: shown when the (detached) server still has a project open.
+               Lets the operator deliberately rejoin instead of it happening
+               silently on startup. -->
+          <button v-if="resumableProject" class="welcome-button primary" @click="handleResume">
+            <span class="button-icon"><span class="material-symbols-rounded">play_arrow</span></span>
+            <span>{{ t('welcome.continueProject', { name: resumableProject.name }) }}</span>
+          </button>
+
+          <button class="welcome-button" :class="{ primary: !resumableProject }" @click="handleNewProject">
             <span class="button-icon"><span class="material-symbols-rounded">add</span></span>
             <span>{{ t('welcome.newProject') }}</span>
           </button>
@@ -224,6 +232,11 @@ const mode  = ref<'local' | 'remote'>('local');
 const remoteAddress   = ref('');
 const connecting      = ref(false);
 const connectionError = ref<string>('');
+
+// When the (detached) local server still has a project open on startup, we
+// surface a "Continue with <name>" button on the project stage instead of
+// silently rejoining — so the operator always lands on a deliberate choice.
+const resumableProject = ref<{ name: string } | null>(null);
 
 // File-association open. `pendingFileOpen` is set by app.vue when a .liveplay
 // or .lpa is double-clicked; this screen owns the server-connection flow.
@@ -517,11 +530,44 @@ async function chooseLocal() {
     if (!(await ensureLocalServer())) return;
     // .lpa double-click: skip the project picker, go straight to extraction.
     if (importAfterConnect.value) { beginImportDestination(); return; }
-    // If a project is already open server-side (e.g. the user kept the
-    // detached server running between renderer reloads), drop straight
-    // into the workspace.
-    if (await tryRejoinExistingProject()) return;
+    // If the detached server still has a project open, DON'T silently rejoin —
+    // surface it as a "Continue" option on the picker so the operator stays in
+    // control of which project the session uses.
+    await peekResumableProject();
     stage.value = 'project';
+  } catch (e: any) {
+    connectionError.value = e?.message ?? String(e);
+  } finally {
+    connecting.value = false;
+  }
+}
+
+// Peek whether the server already has a project open (without adopting it) so
+// the project stage can offer a "Continue" button. Derives a display name from
+// the server-side project file path.
+async function peekResumableProject(): Promise<void> {
+  try {
+    const header = await server.fetchProjectHeader();
+    if (header?.hasOpenProject) {
+      const filePath = header.server?.projectFilePath || '';
+      const base = filePath.split(/[\\/]/).pop() || '';
+      const name = base.replace(/\.liveplay$/i, '');
+      resumableProject.value = { name: name || t('project.noProject') };
+      return;
+    }
+  } catch { /* server unreachable / no project — fall through */ }
+  resumableProject.value = null;
+}
+
+// Operator clicked "Continue with <name>": adopt the open server project.
+async function handleResume(): Promise<void> {
+  connecting.value = true;
+  connectionError.value = '';
+  try {
+    if (!(await tryRejoinExistingProject())) {
+      // Project vanished server-side between peek and resume — back to picker.
+      resumableProject.value = null;
+    }
   } catch (e: any) {
     connectionError.value = e?.message ?? String(e);
   } finally {
@@ -554,6 +600,7 @@ function chooseRemote() {
 function changeMode() {
   stage.value = 'mode';
   connectionError.value = '';
+  resumableProject.value = null;
 }
 
 async function connectToRemote() {
