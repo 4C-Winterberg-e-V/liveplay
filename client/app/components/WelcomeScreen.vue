@@ -330,33 +330,38 @@ onMounted(async () => {
       });
     } else if (!(window as any).electronAPI) {
       // Pure-web context: there is no "local" mode (the browser can't spawn the
-      // C++ server), so skip the Local/Remote picker entirely. When the SPA is
-      // served same-origin (a hosted Mode-A deployment) connect to
-      // window.location.origin verbatim — crucially NOT via normaliseRemoteUrl,
-      // which would force http:// and :4480 and break an https reverse proxy.
-      // Otherwise fall back to the address field, prefilled from the default.
+      // C++ server), so skip the Local/Remote picker entirely. Try the resolved
+      // default (a previously saved address, or the same-origin Mode-A proxy)
+      // by probing /api/health first; only connect on success. This avoids
+      // opening a doomed WebSocket against a plain static host (which would spawn
+      // a noisy failing reconnect loop). The candidate is used verbatim —
+      // crucially NOT via normaliseRemoteUrl, which would force http:// and
+      // :4480 and break an https reverse proxy.
       mode.value = 'remote';
-      const origin = window.location.origin;
-      const sameOrigin = (server.serverUrl ?? '').replace(/\/+$/, '') === origin;
-      if (sameOrigin) {
+      const candidate = (server.serverUrl ?? '').replace(/\/+$/, '');
+      const isOrigin  = candidate === window.location.origin;
+      if (candidate) {
         stage.value = 'remote';
         connecting.value = true;
         connectionError.value = '';
         try {
-          await probeServerReachable(origin);
-          server.setServerUrl(origin);
+          await probeServerReachable(candidate);
+          server.setServerUrl(candidate);
           if (await tryRejoinExistingProject()) return;
           stage.value = 'project';
         } catch (e: any) {
-          // Proxy not reachable — let the operator edit the address by hand.
-          remoteAddress.value = stripScheme(origin);
-          connectionError.value =
-            t('welcome.connectionFailed') + ' (' + (e?.message ?? e) + ')';
+          // Not reachable. Prefill the field so the operator can connect by
+          // hand. Stay quiet for the same-origin case (a first visit on a plain
+          // static host isn't an error worth shouting about); show the reason
+          // when a previously saved address fails.
+          remoteAddress.value = stripScheme(candidate);
+          connectionError.value = isOrigin
+            ? ''
+            : t('welcome.connectionFailed') + ' (' + (e?.message ?? e) + ')';
         } finally {
           connecting.value = false;
         }
       } else {
-        remoteAddress.value = stripScheme(server.serverUrl ?? '');
         stage.value = 'remote';
       }
     } else {

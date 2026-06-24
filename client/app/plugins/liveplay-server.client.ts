@@ -42,9 +42,12 @@ export default defineNuxtPlugin(async () => {
         : `http://127.0.0.1:${cfg.localPort ?? 4480}`;
       if (url !== server.serverUrl) server.setServerUrl(url);
     });
-  } else {
-    server.connect();
   }
+  // Pure web (no Electron): do NOT open the WebSocket here. The page's own
+  // origin may be a plain static host with no /api or /ws (Mode B), in which
+  // case a blind connect just spawns a failing reconnect loop that spams the
+  // console. The WelcomeScreen owns the web connection flow — it probes
+  // /api/health and only then calls setServerUrl()/connect().
 
   return {
     provide: { liveplay: server },

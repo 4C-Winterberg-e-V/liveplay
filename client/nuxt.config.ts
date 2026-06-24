@@ -50,6 +50,13 @@ export default defineNuxtConfig({
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
         { name: 'apple-mobile-web-app-title', content: 'LivePlay' },
         { name: 'theme-color', content: '#1a1a1a' }
+      ],
+      // Relative hrefs so they resolve under any base path (web '/', sub-path,
+      // or Electron file://). Providing an explicit icon also stops the browser
+      // from requesting /favicon.ico and logging a 404.
+      link: [
+        { rel: 'icon', type: 'image/png', href: 'assets/icons/1x/liveplay-icon-darkmode@1x.png' },
+        { rel: 'apple-touch-icon', href: 'assets/icons/2x/liveplay-icon-darkmode@2x.png' }
       ]
     },
     // Electron: relative paths for file://. Web: absolute base (see weiche above).
