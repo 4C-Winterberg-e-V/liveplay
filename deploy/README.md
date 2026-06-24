@@ -41,6 +41,13 @@ Schritt-für-Schritt: [`../docs/web-hosting-vps-wireguard.md`](../docs/web-hosti
 - `vps-wireguard/wg0.vps.conf`, `vps-wireguard/liveplay.mac.conf` – WireGuard-Configs (Vorlagen).
 
 
+## Modus D – In-App (Mac, ohne Zusatzsoftware)
+Die Mac-App liefert die Mobile-UI **selbst** aus (Static + Reverse-Proxy auf den
+gebündelten C++-Server) und kann optional einen **gebündelten Cloudflare-Tunnel**
+starten – **ohne Docker/nginx/WireGuard/VPS**. Bedienung über Kopfzeile →
+**Teilen**. Keine Deploy-Artefakte hier nötig.
+Details: [`../docs/web-hosting-inapp-mac.md`](../docs/web-hosting-inapp-mac.md).
+
 ## Sub-Pfad-Hosting
 Beide Dockerfiles akzeptieren `--build-arg NUXT_APP_BASE_URL=/liveplay/` für
 Auslieferung unter einem Unterpfad.

@@ -10,6 +10,7 @@ const ffmpeg = require('fluent-ffmpeg');
 const { promisify } = require('util');
 const https = require('https');
 const execPromise = promisify(exec);
+const { WebShare, DEFAULT_WEB_PORT } = require('./web-share');
 
 let ffmpegPath = null;
 let ffmpegAvailable = false;
@@ -601,6 +602,57 @@ ipcMain.handle('liveplay-server:ensure-running', async () => {
     await new Promise(r => setTimeout(r, 200));
   }
   return { ok: false, port: cfg.localPort, error: 'server did not become healthy within 10s' };
+});
+
+// ===========================================================================
+// In-App Web-Sharing — host the bundled web UI for phones/tablets, either on
+// the LAN or via a bundled Cloudflare quick-tunnel. No extra software needed
+// on the operator's machine (see electron/web-share.js).
+// ===========================================================================
+let webShare = null;
+function getWebShare() {
+  if (!webShare) {
+    webShare = new WebShare();
+    // Push status/log updates to the renderer.
+    webShare.on('status', (s) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('web-share:state', s);
+      }
+    });
+    webShare.on('log', (msg) => console.log(msg));
+  }
+  // The renderer (.output/public/index.html) sits one level up from electron/.
+  const staticRoot = path.join(__dirname, '../.output/public');
+  webShare.configure({ staticRoot, serverPort: readLiveplayConfig().localPort });
+  return webShare;
+}
+
+ipcMain.handle('web-share:get-status', async () => {
+  return webShare ? await webShare.status() : await getWebShare().status();
+});
+
+ipcMain.handle('web-share:start-lan', async (_e, opts) => {
+  const port = (opts && Number.isInteger(opts.port)) ? opts.port : DEFAULT_WEB_PORT;
+  try { return { ok: true, ...(await getWebShare().startLan(port)) }; }
+  catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+});
+
+ipcMain.handle('web-share:stop-lan', async () => {
+  if (!webShare) return { ok: true };
+  try { await webShare.stopLan(); return { ok: true }; }
+  catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+});
+
+ipcMain.handle('web-share:start-tunnel', async (_e, opts) => {
+  const port = (opts && Number.isInteger(opts.port)) ? opts.port : DEFAULT_WEB_PORT;
+  try { return { ok: true, ...(await getWebShare().startTunnel(port)) }; }
+  catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+});
+
+ipcMain.handle('web-share:stop-tunnel', async () => {
+  if (!webShare) return { ok: true };
+  try { await webShare.stopTunnel(); return { ok: true }; }
+  catch (e) { return { ok: false, error: String(e && e.message || e) }; }
 });
 
 // ===========================================================================
@@ -3213,6 +3265,11 @@ ipcMain.handle('write-midi-config', async (event, config) => {
 app.on('window-all-closed', () => {
   if (apiServer) {
     apiServer.close();
+  }
+  // Tear down web-sharing + cloudflared so we don't leak a tunnel or a
+  // listening socket after the app closes.
+  if (webShare) {
+    webShare.stopLan().catch(() => {});
   }
   // The liveplay audio server is intentionally NOT stopped here — it was
   // spawned detached so it survives renderer reloads and Electron quits.

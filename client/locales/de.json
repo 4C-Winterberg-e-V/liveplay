@@ -486,5 +486,21 @@
     "deleteAll": "{count} ausgewählte Elemente löschen",
     "deleteOnly": "Nur „{name}\" löschen",
     "cancel": "Abbrechen"
+  },
+  "webShare": {
+    "button": "Teilen",
+    "title": "Mit Handy & Tablet teilen",
+    "subtitle": "Liefere die LivePlay-Oberfläche an andere Geräte — direkt aus dieser App, ohne Zusatzsoftware.",
+    "lanTitle": "Lokales Netzwerk",
+    "lanHint": "Gleiches WLAN. Code scannen, um die Oberfläche am Handy zu öffnen.",
+    "tunnelTitle": "Cloudflare-Tunnel (Internet)",
+    "tunnelHint": "Von überall per HTTPS erreichbar. Braucht Internet am Veranstaltungsort.",
+    "start": "Starten",
+    "stop": "Stoppen",
+    "starting": "Startet…",
+    "copy": "Kopieren",
+    "login": "Login",
+    "lanScanHint": "Diese Adresse auf einem Gerät im selben Netz öffnen.",
+    "tunnelWarn": "Öffentlich im Internet. Wer Link und Login hat, kann den Server steuern und auf Dateien zugreifen — Login nur an vertraute Personen geben und den Tunnel nach dem Event stoppen."
   }
 }
