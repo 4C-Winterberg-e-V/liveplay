@@ -70,13 +70,31 @@ class WebShare extends EventEmitter {
     this.pin = null;            // stable PIN for this app process — generated
                                 // once, reused across tunnel restarts; a fresh
                                 // app launch (new process) gets a new one.
+    this.authEnabled = true;    // when false the BasicAuth gate stays OFF even
+                                // while a tunnel is up — the shared site is then
+                                // PUBLIC. Opt-out only; default on for safety.
+    this.customPin = null;      // operator-chosen PIN; when set it's used as the
+                                // auth password instead of a random one (and it
+                                // persists across app launches). null ⇒ random.
+
+    this.namedTunnel = null;    // optional per-machine config for a STABLE URL
+                                // (operator's own Cloudflare account). When set,
+                                // startTunnel runs a named tunnel whose
+                                // https://<hostname> stays identical across
+                                // restarts/reboots; when null we fall back to
+                                // the free random quick tunnel.
+    this._tunnelTmpConfig = null; // path of the throwaway cloudflared ingress
+                                  // config (credentials-file mode only).
   }
 
   /** Wire up paths/ports before first use. Safe to call repeatedly. */
-  configure({ staticRoot, serverPort, devServerUrl }) {
+  configure({ staticRoot, serverPort, devServerUrl, namedTunnel, authEnabled, pin }) {
     if (staticRoot) this.staticRoot = staticRoot;
     if (Number.isInteger(serverPort)) this.serverPort = serverPort;
     if (devServerUrl !== undefined) this.devServerUrl = devServerUrl;
+    if (namedTunnel !== undefined) this.namedTunnel = normaliseNamedTunnel(namedTunnel);
+    if (authEnabled !== undefined) this.authEnabled = !!authEnabled;
+    if (pin !== undefined) this.customPin = (typeof pin === 'string' && pin.trim()) ? pin.trim() : null;
   }
 
   // ── status ────────────────────────────────────────────────────────────
@@ -95,6 +113,12 @@ class WebShare extends EventEmitter {
       tunnelUrl: this.tunnelUrl,
       tunnelQr,
       tunnelError: this.tunnelError,
+      // true ⇒ a named tunnel is configured, so the URL stays the same on this
+      // machine across restarts (vs. the random quick-tunnel URL).
+      tunnelStable: !!this.namedTunnel,
+      tunnelHostname: this.namedTunnel ? this.namedTunnel.hostname : null,
+      authEnabled: this.authEnabled,
+      customPin: this.customPin || '',   // '' ⇒ a random PIN is used
       auth: this.auth ? { user: this.auth.user, pass: this.auth.pass } : null,
     };
   }
@@ -213,25 +237,52 @@ class WebShare extends EventEmitter {
     return this.status();
   }
 
-  // ── Cloudflare quick-tunnel ───────────────────────────────────────────────
+  // ── Cloudflare tunnel ─────────────────────────────────────────────────────
+  // Two flavours, picked automatically by whether a named-tunnel config is set:
+  //   • Named tunnel (this.namedTunnel) → a STABLE https://<hostname> that stays
+  //     identical across restarts/reboots, on the operator's own Cloudflare
+  //     account (set up once per machine, via token or credentials file).
+  //   • Quick tunnel (no config) → the free random https://<rand>.trycloudflare
+  //     .com whose URL changes on every start.
   async startTunnel(webPort = DEFAULT_WEB_PORT) {
     if (this.tunnelUrl || this.tunnelStarting) return this.status();
-    if (!this.httpServer) await this.startLan(webPort);
+
+    const named = this.namedTunnel;
+    // A token (remotely-managed) tunnel has its ingress pinned in the Cloudflare
+    // dashboard to a fixed local port — host the web UI on exactly that port so
+    // the dashboard's `service: http://localhost:<port>` resolves.
+    const effectivePort = (named && named.mode === 'token' && named.port) ? named.port : webPort;
+    if (!this.httpServer) await this.startLan(effectivePort);
 
     const bin = resolveCloudflared();
     if (!bin) {
       throw new Error('cloudflared binary not found (bundle it under resources/bin or add the "cloudflared" npm dep)');
     }
 
-    // NOTE: the auth gate is armed only once the tunnel is actually UP (URL
-    // received) — see onData below. Arming it earlier would lock the LAN while
-    // the tunnel is still "starting" (or after it fails) WITHOUT showing the
-    // PIN, since the PIN is only displayed for an up tunnel.
+    // NOTE: the auth gate is armed only once the tunnel is actually UP — see
+    // _onTunnelUp. Arming it earlier would lock the LAN while the tunnel is
+    // still "starting" (or after it fails) WITHOUT showing the PIN, since the
+    // PIN is only displayed for an up tunnel.
     this.tunnelStarting = true;
     this.tunnelError = null;
     this.lastTunnelStderr = '';
     this.emitStatus();
 
+    try {
+      return named ? this._startNamedTunnel(bin, named) : this._startQuickTunnel(bin);
+    } catch (e) {
+      // Synchronous failure before the process was wired up (e.g. couldn't
+      // write the temp ingress config) — don't leave the UI stuck on "starting".
+      this.tunnelStarting = false;
+      this.tunnelError = String((e && e.message) || e);
+      this._cleanupTunnelTmp();
+      this.emitStatus();
+      throw e;
+    }
+  }
+
+  // Free quick tunnel: cloudflared prints the assigned random URL to stderr.
+  _startQuickTunnel(bin) {
     const args = [
       'tunnel', '--no-autoupdate',
       '--url', `http://127.0.0.1:${this.webPort}`,
@@ -245,46 +296,120 @@ class WebShare extends EventEmitter {
       const line = text.split('\n').map(s => s.trim()).filter(Boolean).pop();
       if (line) this.lastTunnelStderr = line;
       const m = text.match(TUNNEL_URL_RE);
-      if (m && !this.tunnelUrl) {
-        this.tunnelUrl = m[0];
-        this.tunnelStarting = false;
-        // Tunnel is live and internet-facing → arm the auth gate now. Reuse the
-        // per-session PIN (stable across tunnel restarts; new only per app
-        // launch). The session cookie authenticates the WebSocket handshake.
-        if (!this.pin) this.pin = makePin(4);
-        this.auth = { user: 'liveplay', pass: this.pin };
-        this.sessionToken = crypto.randomBytes(18).toString('base64url');
-        this.emit('log', `[web-share] tunnel up: ${this.tunnelUrl}`);
-        this.emitStatus();
-      }
+      if (m && !this.tunnelUrl) this._onTunnelUp(m[0]);
     };
     proc.stdout.on('data', onData);
     proc.stderr.on('data', onData);
-
-    proc.on('exit', (code) => {
-      this.emit('log', `[web-share] cloudflared exited (${code})`);
-      // A non-zero exit before a URL arrived ⇒ surface the last stderr line.
-      if (!this.tunnelUrl && code) {
-        this.tunnelError = this.lastTunnelStderr || `cloudflared exited (${code})`;
-      }
-      this.tunnelProc = null;
-      this.tunnelUrl = null;
-      this.tunnelStarting = false;
-      this.auth = null;
-      this.sessionToken = null;
-      this.emitStatus();
-    });
-    proc.on('error', (err) => {
-      this.emit('log', `[web-share] cloudflared spawn error: ${err.message}`);
-      this.tunnelError = `cloudflared konnte nicht gestartet werden: ${err.message}`;
-      this.tunnelProc = null;
-      this.tunnelStarting = false;
-      this.auth = null;
-      this.sessionToken = null;
-      this.emitStatus();
-    });
-
+    proc.on('exit', (code) => this._onTunnelExit(code));
+    proc.on('error', (err) => this._onTunnelSpawnError(err));
     return this.status();
+  }
+
+  // Stable named tunnel on the operator's own Cloudflare account. The public URL
+  // is known up-front (https://<hostname>); we surface it once cloudflared
+  // reports at least one registered edge connection (= the hostname now routes).
+  _startNamedTunnel(bin, named) {
+    const publicUrl = `https://${named.hostname}`;
+    let args;
+    if (named.mode === 'token') {
+      // Remotely-managed: the connector token carries the tunnel identity +
+      // secret; the hostname→service ingress lives in the Cloudflare dashboard.
+      args = ['tunnel', '--no-autoupdate', 'run', '--token', named.token];
+    } else {
+      // Locally-managed: generate an ingress config so the (possibly dynamic)
+      // web port is routed to the configured hostname.
+      this._tunnelTmpConfig = this._writeNamedTunnelConfig(named);
+      args = ['tunnel', '--no-autoupdate', '--config', this._tunnelTmpConfig, 'run', named.tunnelId || named.tunnelName];
+    }
+
+    const proc = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    this.tunnelProc = proc;
+
+    // cloudflared logs e.g. "INF Registered tunnel connection connIndex=0 …"
+    // once an edge connection is live — that's when the hostname starts routing.
+    const READY_RE = /Registered tunnel connection|Connection .+ registered/i;
+    const onData = (buf) => {
+      const text = buf.toString();
+      const line = text.split('\n').map(s => s.trim()).filter(Boolean).pop();
+      if (line) this.lastTunnelStderr = line;
+      if (!this.tunnelUrl && READY_RE.test(text)) this._onTunnelUp(publicUrl);
+    };
+    proc.stdout.on('data', onData);
+    proc.stderr.on('data', onData);
+    proc.on('exit', (code) => this._onTunnelExit(code));
+    proc.on('error', (err) => this._onTunnelSpawnError(err));
+    return this.status();
+  }
+
+  // Tunnel reached the "up" state → record the URL and (unless the operator
+  // opted out) arm the auth gate. The PIN is per app process (stable across
+  // tunnel restarts); the session cookie authenticates the WebSocket handshake.
+  _onTunnelUp(url) {
+    this.tunnelUrl = url;
+    this.tunnelStarting = false;
+    if (this.authEnabled) this._armAuth();
+    this.emit('log', `[web-share] tunnel up: ${this.tunnelUrl}${this.auth ? '' : ' (no auth)'}`);
+    this.emitStatus();
+  }
+
+  _armAuth() {
+    // An operator-chosen PIN wins; otherwise reuse this process's random PIN
+    // (generated once) or mint a fresh one.
+    if (this.customPin) this.pin = this.customPin;
+    else if (!this.pin) this.pin = makePin(4);
+    this.auth = { user: 'liveplay', pass: this.pin };
+    this.sessionToken = crypto.randomBytes(18).toString('base64url');
+  }
+
+  // Set (or clear) the operator-chosen PIN. Empty ⇒ back to a random PIN. When a
+  // tunnel is already up with auth armed, re-arm so the new PIN takes effect at
+  // once (existing logged-in devices are dropped — the password changed).
+  setPin(pin) {
+    const clean = String(pin || '').trim();
+    this.customPin = clean || null;
+    this.pin = this.customPin;   // null ⇒ a fresh random PIN on the next arm
+    if (this.tunnelUrl && this.authEnabled) this._armAuth();
+    this.emitStatus();
+    return this.status();
+  }
+
+  // Toggle the BasicAuth gate. When a tunnel is already up we (dis)arm it on the
+  // fly so the change takes effect without restarting the tunnel. Turning it OFF
+  // makes the shared site PUBLIC — anyone with the URL can control the server.
+  setAuthEnabled(enabled) {
+    this.authEnabled = !!enabled;
+    if (this.tunnelUrl) {
+      if (this.authEnabled && !this.auth) this._armAuth();
+      else if (!this.authEnabled && this.auth) { this.auth = null; this.sessionToken = null; }
+    }
+    this.emitStatus();
+    return this.status();
+  }
+
+  _onTunnelExit(code) {
+    this.emit('log', `[web-share] cloudflared exited (${code})`);
+    // A non-zero exit before a URL arrived ⇒ surface the last stderr line.
+    if (!this.tunnelUrl && code) {
+      this.tunnelError = this.lastTunnelStderr || `cloudflared exited (${code})`;
+    }
+    this._cleanupTunnelTmp();
+    this.tunnelProc = null;
+    this.tunnelUrl = null;
+    this.tunnelStarting = false;
+    this.auth = null;
+    this.sessionToken = null;
+    this.emitStatus();
+  }
+
+  _onTunnelSpawnError(err) {
+    this.emit('log', `[web-share] cloudflared spawn error: ${err.message}`);
+    this.tunnelError = `cloudflared konnte nicht gestartet werden: ${err.message}`;
+    this._cleanupTunnelTmp();
+    this.tunnelProc = null;
+    this.tunnelStarting = false;
+    this.auth = null;
+    this.sessionToken = null;
+    this.emitStatus();
   }
 
   async stopTunnel() {
@@ -297,7 +422,33 @@ class WebShare extends EventEmitter {
     if (proc) {
       try { proc.kill('SIGTERM'); } catch {}
     }
+    this._cleanupTunnelTmp();
     this.emitStatus();
+  }
+
+  // Write a throwaway cloudflared ingress config for credentials-file mode. It
+  // lives in the OS temp dir and is removed when the tunnel stops. JSON.stringify
+  // double-quotes the values — valid YAML scalars, so paths with spaces survive.
+  _writeNamedTunnelConfig(named) {
+    const p = path.join(os.tmpdir(), `liveplay-cloudflared-${process.pid}.yml`);
+    const yml = [
+      `tunnel: ${JSON.stringify(named.tunnelId || named.tunnelName)}`,
+      `credentials-file: ${JSON.stringify(named.credentialsFile)}`,
+      `ingress:`,
+      `  - hostname: ${JSON.stringify(named.hostname)}`,
+      `    service: http://127.0.0.1:${this.webPort}`,
+      `  - service: http_status:404`,
+      ``,
+    ].join('\n');
+    fs.writeFileSync(p, yml);
+    return p;
+  }
+
+  _cleanupTunnelTmp() {
+    if (this._tunnelTmpConfig) {
+      try { fs.unlinkSync(this._tunnelTmpConfig); } catch {}
+      this._tunnelTmpConfig = null;
+    }
   }
 
   // The tunnel QR embeds the BasicAuth credentials so the first load on the
@@ -371,6 +522,32 @@ function lanIpv4() {
     }
   }
   return out.length ? out : ['127.0.0.1'];
+}
+
+// Validate/normalise the per-machine named-tunnel config. Returns a clean
+// object or null (→ fall back to the random quick tunnel). A hostname is always
+// required; then EITHER a connector `token` (remotely-managed, ingress in the
+// dashboard) OR a `credentialsFile` + tunnel id/name (locally-managed).
+function normaliseNamedTunnel(cfg) {
+  if (!cfg || typeof cfg !== 'object') return null;
+  const hostname = typeof cfg.hostname === 'string'
+    ? cfg.hostname.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '')
+    : '';
+  if (!hostname) return null;
+
+  const token = typeof cfg.token === 'string' ? cfg.token.trim() : '';
+  if (token) {
+    const port = Number.isInteger(cfg.port) ? cfg.port : DEFAULT_WEB_PORT;
+    return { mode: 'token', hostname, token, port };
+  }
+
+  const credentialsFile = typeof cfg.credentialsFile === 'string' ? cfg.credentialsFile.trim() : '';
+  const tunnelId   = typeof cfg.tunnelId === 'string'   ? cfg.tunnelId.trim()   : '';
+  const tunnelName = typeof cfg.tunnelName === 'string' ? cfg.tunnelName.trim() : '';
+  if (credentialsFile && (tunnelId || tunnelName)) {
+    return { mode: 'creds', hostname, credentialsFile, tunnelId, tunnelName };
+  }
+  return null;
 }
 
 function resolveCloudflared() {

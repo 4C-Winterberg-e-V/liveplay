@@ -35,6 +35,11 @@ In der App: Kopfzeile → **Teilen** (Icon `share`; auf Mobile im ⋯-Menü).
   `cloudflared` und zeigt eine `https://<zufall>.trycloudflare.com`-Adresse +
   QR. **Kein Cloudflare-Account, keine Domain, kein DNS** nötig (Quick-Tunnel).
   TLS macht Cloudflare; intern bleibt alles Plain-HTTP auf dem Mac.
+  - **Feste URL (optional):** Die Quick-Tunnel-Adresse ist **bei jedem Start
+    zufällig**. Wer ein eigenes Cloudflare-Konto + Domain hat, kann pro Rechner
+    eine **dauerhaft gleiche** Adresse hinterlegen (Named Tunnel) – siehe
+    [`web-sharing-stable-url.md`](web-sharing-stable-url.md). Bei hinterlegter
+    Config zeigt der Dialog das Badge **„Feste URL"**.
 
 Der C++-Server bindet ohnehin auf `0.0.0.0:4480`; der Host-Server proxyt nur
 same-origin davor.
@@ -50,12 +55,20 @@ Der C++-Server hat **keine eigene Authentifizierung** und die API erlaubt
   **vertrauten Netz** nutzen (Event-VLAN, kein Gäste-WLAN).
 - **Tunnel-Modus:** internet-erreichbar → die App **erzwingt automatisch ein
   BasicAuth-Gate** für die *gesamte* geteilte Seite (HTTP **und**
-  WebSocket-Handshake). Benutzer `liveplay`, **zufälliges Passwort pro Sitzung**,
-  im Teilen-Dialog angezeigt. Der Tunnel-QR enthält die Zugangsdaten, damit der
+  WebSocket-Handshake). Benutzer `liveplay`, standardmäßig **zufälliges Passwort
+  pro Sitzung** – alternativ lässt sich im Teilen-Dialog eine **feste PIN**
+  vergeben (Feld „PIN", leer = zufällig; persistiert in `liveplay-webshare.json`,
+  Umschalten wirkt sofort). Das Passwort wird im Teilen-Dialog angezeigt; der
+  Tunnel-QR enthält die Zugangsdaten, damit der
   erste Aufruf am Handy automatisch authentifiziert (Safari merkt sie sich und
   sendet sie auch beim WS-Handshake mit).
 - Da LAN und Tunnel denselben Host-Server teilen, gilt das Auth-Gate bei aktivem
   Tunnel auch für LAN-Clients – bewusst sicherer.
+- **Auth optional:** Das BasicAuth-Gate lässt sich im Teilen-Dialog per Schalter
+  „Login verlangen" abschalten (persistiert in `liveplay-webshare.json`,
+  Standard: **an**). **Ist es aus, ist die geteilte Seite öffentlich** – jeder mit
+  der URL kann den Server steuern und auf Dateien zugreifen. Umschalten wirkt
+  sofort, auch bei bereits laufendem Tunnel.
 - **Nach dem Event den Tunnel stoppen.** Beim App-Beenden wird er automatisch
   geschlossen.
 

@@ -57,7 +57,13 @@
       <section class="ws-section">
         <div class="ws-section__head">
           <div>
-            <h2>{{ t('webShare.tunnelTitle') }}</h2>
+            <h2>
+              {{ t('webShare.tunnelTitle') }}
+              <span v-if="status.tunnelStable" class="ws-badge" :title="t('webShare.tunnelStableHint')">
+                <span class="material-symbols-rounded">push_pin</span>
+                {{ t('webShare.tunnelStableBadge') }}
+              </span>
+            </h2>
             <p class="ws-hint">{{ t('webShare.tunnelHint') }}</p>
           </div>
           <button
@@ -71,6 +77,26 @@
             <template v-else>{{ status.tunnel === 'up' ? t('webShare.stop') : t('webShare.start') }}</template>
           </button>
         </div>
+
+        <!-- Optional BasicAuth gate. Off ⇒ the shared site is public. -->
+        <label class="ws-authtoggle">
+          <input type="checkbox" :checked="status.authEnabled" :disabled="busy" @change="toggleAuth" />
+          <span>{{ t('webShare.authToggle') }}</span>
+        </label>
+        <p v-if="!status.authEnabled" class="ws-hint ws-hint--warn">{{ t('webShare.authOffWarn') }}</p>
+
+        <!-- Manual PIN (empty ⇒ random). -->
+        <div v-if="status.authEnabled" class="ws-pinrow">
+          <label class="ws-field">
+            <span>{{ t('webShare.pinLabel') }}</span>
+            <input v-model.trim="pinInput" type="text" inputmode="numeric" maxlength="32"
+                   :placeholder="t('webShare.pinRandom')" @keyup.enter="savePin" />
+          </label>
+          <button type="button" class="ws-toggle" :disabled="busy" @click="savePin">
+            {{ t('webShare.pinSave') }}
+          </button>
+        </div>
+        <p v-if="status.authEnabled && pinMsg" class="ws-hint ws-config__saved">{{ pinMsg }}</p>
 
         <div v-if="status.tunnel === 'up' && status.tunnelUrl" class="ws-share">
           <img v-if="status.tunnelQr" :src="status.tunnelQr" alt="Tunnel QR" class="ws-qr" />
@@ -93,6 +119,41 @@
         <p v-if="status.tunnel === 'down' && status.tunnelError" class="ws-error">
           {{ status.tunnelError }}
         </p>
+
+        <!-- ── Stable-URL setup (optional, per machine) ──────────────────── -->
+        <details class="ws-config" :open="tcfg.configured && !tcfg.fromEnv">
+          <summary>{{ t('webShare.tunnelConfigTitle') }}</summary>
+          <p class="ws-hint ws-config__intro">{{ t('webShare.tunnelConfigIntro') }}</p>
+
+          <p v-if="tcfg.fromEnv" class="ws-hint ws-config__env">
+            <span class="material-symbols-rounded">terminal</span>
+            {{ t('webShare.tunnelConfigEnv') }}
+          </p>
+
+          <fieldset class="ws-config__form" :disabled="tcfg.fromEnv || busy">
+            <label class="ws-field">
+              <span>{{ t('webShare.tunnelConfigHostname') }}</span>
+              <input v-model.trim="form.hostname" type="text" inputmode="url"
+                     placeholder="liveplay.deine-domain.de" />
+            </label>
+            <label class="ws-field">
+              <span>{{ t('webShare.tunnelConfigToken') }}</span>
+              <input v-model.trim="form.token" type="password" autocomplete="off"
+                     :placeholder="tcfg.hasToken ? '••••••••••  (gespeichert)' : 'eyJ…'" />
+            </label>
+
+            <div class="ws-config__actions">
+              <button type="button" class="ws-toggle ws-toggle--on" @click="saveTunnelConfig">
+                {{ t('webShare.tunnelConfigSave') }}
+              </button>
+              <button v-if="tcfg.configured" type="button" class="ws-toggle" @click="clearTunnelConfig">
+                {{ t('webShare.tunnelConfigClear') }}
+              </button>
+            </div>
+            <p v-if="tcfgMsg" class="ws-hint ws-config__saved">{{ tcfgMsg }}</p>
+            <p class="ws-hint ws-config__path">{{ t('webShare.tunnelConfigPath') }} <code>{{ tcfg.configPath }}</code></p>
+          </fieldset>
+        </details>
       </section>
 
       <p v-if="error" class="ws-error">{{ error }}</p>
@@ -113,15 +174,37 @@ interface WebShareStatus {
   tunnelUrl: string | null;
   tunnelQr: string | null;
   tunnelError: string | null;
+  tunnelStable: boolean;
+  tunnelHostname: string | null;
+  authEnabled: boolean;
+  customPin: string;
   auth: { user: string; pass: string } | null;
 }
 
 const defaultStatus: WebShareStatus = {
   hosting: false, webPort: null, lanUrls: [], lanQr: null,
-  tunnel: 'down', tunnelUrl: null, tunnelQr: null, tunnelError: null, auth: null,
+  tunnel: 'down', tunnelUrl: null, tunnelQr: null, tunnelError: null,
+  tunnelStable: false, tunnelHostname: null, authEnabled: true, customPin: '', auth: null,
+};
+
+// Stable-URL (named-tunnel) config — fetched once on mount, refreshed on save.
+interface TunnelConfig {
+  configured: boolean;
+  fromEnv: boolean;
+  configPath: string;
+  hostname: string;
+  hasToken: boolean;
+}
+const defaultTcfg: TunnelConfig = {
+  configured: false, fromEnv: false, configPath: '', hostname: '', hasToken: false,
 };
 
 const status = ref<WebShareStatus>({ ...defaultStatus });
+const tcfg = ref<TunnelConfig>({ ...defaultTcfg });
+const form = ref({ hostname: '', token: '' });
+const tcfgMsg = ref('');
+const pinInput = ref('');     // editable copy of the custom PIN ('' ⇒ random)
+const pinMsg = ref('');
 const busy = ref(false);
 const error = ref('');
 
@@ -154,13 +237,79 @@ const stopLan      = () => run(() => api()?.stopLan());
 const startTunnel  = () => run(() => api()?.startTunnel({ port: 8088 }));
 const stopTunnel   = () => run(() => api()?.stopTunnel());
 
+const toggleAuth = (e: Event) =>
+  run(() => api()?.setAuthEnabled?.((e.target as HTMLInputElement).checked));
+
+async function savePin() {
+  pinMsg.value = '';
+  await run(async () => {
+    const res = await api()?.setPin?.(pinInput.value);
+    if (res && res.ok) {
+      pinMsg.value = pinInput.value ? t('webShare.pinSaved') : t('webShare.pinClearedMsg');
+      if (res.tunnel !== undefined) status.value = { ...defaultStatus, ...res };
+      pinInput.value = res.customPin || '';
+    } else if (res && res.error) {
+      error.value = res.error;
+    }
+  });
+}
+
+async function loadTunnelConfig() {
+  const res = await api()?.getTunnelConfig?.();
+  if (res && res.ok) {
+    tcfg.value = {
+      configured: !!res.configured, fromEnv: !!res.fromEnv,
+      configPath: res.configPath || '', hostname: res.hostname || '',
+      hasToken: !!res.hasToken,
+    };
+    form.value.hostname = res.hostname || '';
+    form.value.token = '';   // never pre-fill the secret
+  }
+}
+
+async function saveTunnelConfig() {
+  tcfgMsg.value = '';
+  await run(async () => {
+    // A blank token field on an edit keeps the previously stored token
+    // (the backend merges it), so the hostname can change on its own.
+    const payload: any = { hostname: form.value.hostname };
+    if (form.value.token) payload.token = form.value.token;
+    const res = await api()?.setTunnelConfig?.(payload);
+    if (res && res.ok) {
+      tcfgMsg.value = (!form.value.token && tcfg.value.hasToken)
+        ? t('webShare.tunnelConfigKeepToken')
+        : t('webShare.tunnelConfigSaved');
+      form.value.token = '';
+      await loadTunnelConfig();
+      if (res.tunnel !== undefined) status.value = { ...defaultStatus, ...res };
+    } else if (res && res.error) {
+      error.value = res.error;
+    }
+  });
+}
+
+async function clearTunnelConfig() {
+  tcfgMsg.value = '';
+  await run(async () => {
+    const res = await api()?.setTunnelConfig?.({ hostname: '' });
+    if (res && res.ok) {
+      form.value = { hostname: '', token: '' };
+      await loadTunnelConfig();
+      if (res.tunnel !== undefined) status.value = { ...defaultStatus, ...res };
+    } else if (res && res.error) {
+      error.value = res.error;
+    }
+  });
+}
+
 onMounted(async () => {
   const w = api();
   if (!w) return;
   // Live status pushes (tunnel coming up, cloudflared exiting, …).
   unsub = w.onStateChange((s: WebShareStatus) => { status.value = { ...defaultStatus, ...s }; });
   const s = await w.getStatus();
-  if (s) status.value = { ...defaultStatus, ...s };
+  if (s) { status.value = { ...defaultStatus, ...s }; pinInput.value = s.customPin || ''; }
+  await loadTunnelConfig();
 });
 
 onUnmounted(() => { if (unsub) unsub(); });
@@ -318,5 +467,100 @@ onUnmounted(() => { if (unsub) unsub(); });
   color: var(--color-error, #dc2626);
   font-size: 13px;
   margin: var(--spacing-sm) 0 0;
+}
+
+/* Manual-PIN row. */
+.ws-pinrow {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+  .ws-field { flex: 1; margin-top: 0; }
+  .ws-toggle { flex-shrink: 0; }
+}
+
+/* Optional-auth toggle. */
+.ws-authtoggle {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  input { cursor: pointer; }
+}
+
+/* "Feste URL" badge next to the tunnel title. */
+.ws-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: var(--spacing-sm);
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+  background: var(--color-accent);
+  color: #fff;
+  .material-symbols-rounded { font-size: 13px; }
+}
+
+/* Collapsible stable-URL setup. */
+.ws-config {
+  margin-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--spacing-sm);
+
+  summary {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    &:hover { color: var(--color-text-primary); }
+  }
+}
+.ws-config__intro { margin-top: var(--spacing-sm); }
+.ws-config__env {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: var(--spacing-sm);
+  color: var(--color-warning);
+  .material-symbols-rounded { font-size: 15px; }
+}
+.ws-config__form {
+  border: none;
+  margin: 0;
+  padding: 0;
+  &:disabled { opacity: 0.6; }
+}
+.ws-field {
+  display: block;
+  margin-top: var(--spacing-sm);
+  span { display: block; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 3px; }
+  input {
+    width: 100%;
+    box-sizing: border-box;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    padding: 6px 8px;
+    color: var(--color-text-primary);
+    &:focus { outline: none; border-color: var(--color-accent); }
+  }
+}
+.ws-config__actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+.ws-config__saved { margin-top: var(--spacing-sm); color: var(--color-accent); }
+.ws-config__path {
+  margin-top: var(--spacing-sm);
+  code { font-family: var(--font-mono); font-size: 11px; word-break: break-all; }
 }
 </style>
