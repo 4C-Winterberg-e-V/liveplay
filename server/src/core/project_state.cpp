@@ -4,10 +4,12 @@
 #include "liveplay/core/project_state.hpp"
 #include "liveplay/logger.hpp"
 #include "liveplay/meta/metadata.hpp"
+#include "liveplay/net/osc_client.hpp"
 #include "liveplay/util/unicode_path.hpp"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <ctime>
 #include <fstream>
 #include <functional>
@@ -2229,6 +2231,10 @@ bool ProjectState::play_item(const std::string& uuid,
         play_item(start_behavior_target_uuid);
     }
 
+    // Drive the Behringer X18 console for this cue's start actions (no-op when
+    // no console IP is configured or the item has no start actions).
+    fire_x18_actions(uuid, "start");
+
     return true;
 }
 
@@ -2256,6 +2262,10 @@ bool ProjectState::stop_item(const std::string& uuid) {
     }
 
     engine_.stop(cue);
+
+    // Drive the Behringer X18 console for this cue's stop actions.
+    fire_x18_actions(uuid, "stop");
+
     return true;
 }
 
@@ -3237,10 +3247,84 @@ void ProjectState::set_external_action_handler(std::function<void(const json&)> 
     external_action_handler_ = std::move(h);
 }
 
+// ---------------------------------------------------------------------------
+// Behringer X18 fader actions — fired on item start/stop. The console is
+// driven directly from the server over OSC/UDP (port 10024) so it reacts even
+// when no UI client is connected. An action's `level` is a percentage 0..100
+// mapping linearly to the X-Air fader value 0.0..1.0 (0 % = fader fully down).
+// Master uses /lr/mix/fader; a channel uses /ch/NN/mix/fader (NN = 01..16).
+// ---------------------------------------------------------------------------
+void ProjectState::fire_x18_actions(const std::string& uuid,
+                                    const std::string& trigger) {
+    // Snapshot the console IP and the matching actions under the lock; do the
+    // network I/O afterwards without holding mutex_.
+    std::string ip;
+    // Each entry: (osc_address, fader_value 0..1).
+    std::vector<std::pair<std::string, float>> sends;
+    {
+        std::lock_guard lock{mutex_};
+        if (document_.contains("settings") && document_["settings"].is_object()) {
+            const auto& s = document_["settings"];
+            if (s.contains("x18Ip") && s["x18Ip"].is_string())
+                ip = s["x18Ip"].get<std::string>();
+        }
+        if (ip.empty()) return;  // no console configured — nothing to do
+
+        json* found = nullptr;
+        std::function<void(json&)> walk;
+        walk = [&](json& arr) {
+            if (found || !arr.is_array()) return;
+            for (auto& it : arr) {
+                if (found) return;
+                if (!it.is_object()) continue;
+                if (it.value("uuid", std::string{}) == uuid) { found = &it; return; }
+                if (it.value("type", std::string{}) == "group" &&
+                    it.contains("children")) walk(it["children"]);
+            }
+        };
+        if (document_.contains("items"))              walk(document_["items"]);
+        if (!found && document_.contains("cartOnlyItems")) walk(document_["cartOnlyItems"]);
+        if (!found) return;
+
+        if (!found->contains("x18Actions") || !(*found)["x18Actions"].is_array())
+            return;
+
+        for (const auto& a : (*found)["x18Actions"]) {
+            if (!a.is_object()) continue;
+            if (a.value("trigger", std::string{}) != trigger) continue;
+
+            const std::string target = a.value("target", std::string{"master"});
+            float pct = a.value("level", 0.0f);
+            pct = std::clamp(pct, 0.0f, 100.0f);
+            const float fader = pct / 100.0f;
+
+            std::string address;
+            if (target == "channel") {
+                int ch = a.value("channel", 0);
+                if (ch < 1 || ch > 16) continue;   // out of range — skip
+                char nn[3];
+                std::snprintf(nn, sizeof(nn), "%02d", ch);
+                address = std::string{"/ch/"} + nn + "/mix/fader";
+            } else {
+                address = "/lr/mix/fader";
+            }
+            sends.emplace_back(std::move(address), fader);
+        }
+    }
+
+    constexpr std::uint16_t kX18OscPort = 10024;
+    for (const auto& [addr, val] : sends)
+        net::osc_send_float(ip, kX18OscPort, addr, val);
+}
+
 void ProjectState::handle_item_ended(const SequencedItem& item) {
-    // Ensure the engine explicitly transitions the transport state and 
+    // Ensure the engine explicitly transitions the transport state and
     // triggers a cue_state broadcast so the client UI updates.
     engine_.stop(item.cue_id);
+
+    // Drive the Behringer X18 console for this cue's stop actions when it ends
+    // naturally (the manual-stop path runs through stop_item()).
+    fire_x18_actions(item.uuid, "stop");
 
     // Restore ducked gains first so the next item starts with clean levels.
     for (const auto& dk : item.ducked) {

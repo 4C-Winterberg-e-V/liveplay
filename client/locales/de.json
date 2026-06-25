@@ -120,6 +120,9 @@
     "volume": "Lautstärke",
     "endBehavior": "Endverhalten",
     "startBehavior": "Startverhalten",
+    "x18": "X18-Pult",
+    "x18Help": "Beim Starten oder Beenden dieses Liedes den Master- oder einen Kanal-Fader des Behringer X18 setzen.",
+    "x18RequiresIp": "Trage die Behringer-X18-IP in den Projekt-Einstellungen ein, damit diese Aktionen wirken.",
     "duckingBehavior": "Dämpfungsverhalten",
     "fadeOutDuration": "Ausblenden-Dauer",
     "duckFadeIn": "Dämpfung Einblenden",
@@ -189,6 +192,15 @@
     "playIndex": "Index abspielen",
     "playFirst": "Erstes abspielen",
     "playAll": "Alle abspielen"
+  },
+  "x18": {
+    "triggerStart": "Beim Starten",
+    "triggerStop": "Beim Beenden",
+    "targetMaster": "Master",
+    "targetChannel": "Kanal",
+    "channel": "Kanal",
+    "level": "Pegel",
+    "addAction": "X18-Aktion hinzufügen"
   },
   "duckingBehavior": {
     "stopAll": "Alle anderen Signale stoppen",
@@ -366,6 +378,8 @@
     "previewDeviceHelp": "Gerät für die Signalvorschau über den Kopfhörer-Button.",
     "ltcDevice": "LTC-Gerät",
     "ltcDeviceHelp": "Gerät zum Senden von LTC-Timecode (optional).",
+    "x18Ip": "Behringer X18 IP",
+    "x18IpHelp": "Netzwerk-Adresse des Behringer X18 für die OSC-Steuerung (optional). Das Pult muss über das Netzwerk erreichbar sein — eine USB-Verbindung überträgt nur Audio, nicht die Steuerung.",
     "outputTarget": "Ausgabeziel",
     "outputTargetHelp": "Legt Brickwall-Limiter-Pegel, Messzonenfarben, Wellenformfarben und Auto-Lautstärke-Ziel für dieses Projekt fest.",
     "outputTargetEbuR128": "EBU R128 (Rundfunk / Post)",
@@ -394,7 +408,8 @@
     "default": "Standard",
     "loading": "Wird geladen…",
     "error": "Fehler",
-    "cancel": "Abbrechen"
+    "cancel": "Abbrechen",
+    "delete": "Löschen"
   },
   "repair": {
     "title": "Beschädigtes Projekt erkannt",

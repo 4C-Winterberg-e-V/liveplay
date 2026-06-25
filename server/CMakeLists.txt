@@ -139,6 +139,7 @@ add_executable(liveplay-server
     src/core/backup_manager.cpp
     src/net/control_server.cpp
     src/net/discovery.cpp
+    src/net/osc_client.cpp
 
     # Milestone 4 — metadata + waveform
     src/meta/metadata.cpp

@@ -26,6 +26,7 @@ export interface AudioItem extends BaseItem {
   endBehavior: EndBehavior;
   startBehavior: StartBehavior;
   customActions: CustomAction[];
+  x18Actions?: X18Action[]; // Behringer X18 fader commands on start/stop
   duckingBehavior: DuckingBehavior;
   duration: number; // total duration in seconds
   fadeOutDuration: number; // fade out duration in seconds when stopping (default: 1)
@@ -51,6 +52,7 @@ export interface GroupItem extends BaseItem {
   children: (AudioItem | GroupItem)[];
   startBehavior: GroupStartBehavior;
   endBehavior: EndBehavior;
+  x18Actions?: X18Action[]; // Behringer X18 fader commands on start/stop
   isExpanded: boolean; // UI state
 }
 
@@ -90,6 +92,15 @@ export interface HttpRequest {
   url: string;
   contentType: 'form' | 'json';
   body?: Record<string, any>;
+}
+
+// Behringer X18 fader action. Fired by the server (OSC/UDP) when the item
+// starts or stops. The console IP lives in project settings (`x18Ip`).
+export interface X18Action {
+  trigger: 'start' | 'stop';   // when to send the command
+  target: 'master' | 'channel';
+  channel?: number;            // 1-16, required when target === 'channel'
+  level: number;               // 0-100 (%), 0 = fader fully down
 }
 
 // Ducking behavior
@@ -194,6 +205,7 @@ export const DEFAULT_AUDIO_ITEM: Partial<AudioItem> = {
   endBehavior: { action: 'next' }, // Default: play next item
   startBehavior: { action: 'nothing' },
   customActions: [],
+  x18Actions: [],
   duckingBehavior: {
     mode: 'stop-all', // Default for playlist items: stop all other cues
     duckFadeIn: 0.25,
@@ -216,6 +228,7 @@ export const DEFAULT_CART_AUDIO_ITEM: Partial<AudioItem> = {
   endBehavior: { action: 'nothing' },
   startBehavior: { action: 'nothing' },
   customActions: [],
+  x18Actions: [],
   duckingBehavior: {
     mode: 'duck-others', // Default for cart items: duck to -20dB
     duckLevel: 0.1,
@@ -232,6 +245,7 @@ export const DEFAULT_GROUP_ITEM: Partial<GroupItem> = {
   color: PRESET_COLORS[8],
   startBehavior: { action: 'play-first' },
   endBehavior: { action: 'nothing' },
+  x18Actions: [],
   isExpanded: true,
   children: []
 };

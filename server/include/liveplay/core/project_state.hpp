@@ -410,6 +410,14 @@ private:
     void handle_item_ended(const SequencedItem& item);
     void execute_custom_action(const json& action);
 
+    // Fire an item's configured Behringer X18 fader actions for the given
+    // trigger ("start" or "stop"). Reads the console IP from project settings
+    // (`x18Ip`) and the per-item `x18Actions` array, then sends one OSC/UDP
+    // fader command per matching action. No-op when no IP is configured or the
+    // item has no matching actions. Acquires mutex_ internally to snapshot the
+    // actions, then does the network I/O without the lock held.
+    void fire_x18_actions(const std::string& uuid, const std::string& trigger);
+
 public:
     // Subscribe to "external" custom actions the server can't perform on its
     // own — currently just http-request. The control server installs a

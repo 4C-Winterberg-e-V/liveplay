@@ -76,6 +76,8 @@
     "previewDeviceHelp": "Device used when previewing cues with the headphones button.",
     "ltcDevice": "LTC Device",
     "ltcDeviceHelp": "Device used to send LTC timecode (optional).",
+    "x18Ip": "Behringer X18 IP",
+    "x18IpHelp": "Network address of the Behringer X18 mixer for OSC control (optional). The mixer must be reachable over the network — a USB connection carries audio only, not control.",
     "outputTarget": "Output Target",
     "outputTargetHelp": "Sets the brickwall limiter level, meter zone colours, waveform colours, and auto-volume target for this project.",
     "outputTargetEbuR128": "EBU R128 (Broadcast / Post)",
@@ -104,7 +106,8 @@
     "default": "default",
     "loading": "Loading…",
     "error": "Error",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "delete": "Delete"
   },
   "project": {
     "enterName": "Enter Project Name",
@@ -175,6 +178,9 @@
     "volume": "Volume",
     "endBehavior": "End Behavior",
     "startBehavior": "Start Behavior",
+    "x18": "X18 Mixer",
+    "x18Help": "Set the Behringer X18 master or a channel fader when this cue starts or stops.",
+    "x18RequiresIp": "Set the Behringer X18 IP in Project Settings for these actions to take effect.",
     "duckingBehavior": "Ducking Behavior",
     "fadeOutDuration": "Fade Out Duration",
     "duckFadeIn": "Duck Fade In",
@@ -244,6 +250,15 @@
     "playIndex": "Play Index",
     "playFirst": "Play First",
     "playAll": "Play All"
+  },
+  "x18": {
+    "triggerStart": "On start",
+    "triggerStop": "On stop",
+    "targetMaster": "Master",
+    "targetChannel": "Channel",
+    "channel": "Channel",
+    "level": "Level",
+    "addAction": "Add X18 action"
   },
   "duckingBehavior": {
     "stopAll": "Stop All Other Cues",
