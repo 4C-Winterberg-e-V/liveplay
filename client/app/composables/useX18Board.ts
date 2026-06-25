@@ -21,6 +21,11 @@ export const useX18Board = () => {
   // unknown to us — first press always performs the "active" action.
   const toggleState = useState<Record<string, boolean>>('x18.toggleState', () => ({}));
 
+  // Whether the X18 board is in edit mode. Shared so the global keyboard
+  // handler can suppress live OSC triggering while the operator is editing
+  // buttons (otherwise pressing a bound key would change the console).
+  const editMode = useState<boolean>('x18.editMode', () => false);
+
   const isActive = (id: string) => !!toggleState.value[id];
 
   // Resolve the muted value for a mute / mute-group button given its mode and
@@ -60,6 +65,8 @@ export const useX18Board = () => {
   };
 
   const findButtonForEvent = (e: KeyboardEvent): X18BoardButton | null => {
+    // Don't fire live OSC from key presses while the board is being edited.
+    if (editMode.value) return null;
     for (const b of buttons.value) {
       const k = b.key;
       if (!k) continue;
@@ -73,5 +80,5 @@ export const useX18Board = () => {
     return null;
   };
 
-  return { buttons, toggleState, isActive, triggerButton, findButtonForEvent };
+  return { buttons, toggleState, editMode, isActive, triggerButton, findButtonForEvent };
 };

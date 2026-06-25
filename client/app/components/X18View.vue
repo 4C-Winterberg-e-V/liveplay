@@ -169,7 +169,7 @@ import { eventToBinding, isReservedCombo, formatKeyLabel } from '~/composables/u
 
 const { t } = useLocalization();
 const { currentProject, saveProject } = useProject();
-const { buttons, isActive, triggerButton } = useX18Board();
+const { buttons, isActive, triggerButton, editMode } = useX18Board();
 
 const hasElectron = import.meta.client && !!(window as any).electronAPI;
 
@@ -178,7 +178,6 @@ const x18Configured = computed(() => {
   return typeof ip === 'string' && ip.trim().length > 0;
 });
 
-const editMode = ref(false);
 const selectedId = ref<string | null>(null);
 const selectedButton = computed<X18BoardButton | null>(() =>
   buttons.value.find(b => b.id === selectedId.value) ?? null
@@ -363,7 +362,11 @@ const handleCaptureKeydown = (e: KeyboardEvent) => {
 };
 
 onMounted(() => window.addEventListener('keydown', handleCaptureKeydown, true));
-onUnmounted(() => window.removeEventListener('keydown', handleCaptureKeydown, true));
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleCaptureKeydown, true);
+  // Leaving the view must re-enable live key triggering.
+  editMode.value = false;
+});
 </script>
 
 <style scoped>
