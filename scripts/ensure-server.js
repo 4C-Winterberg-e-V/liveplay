@@ -3,9 +3,11 @@
 // scripts/ensure-server.js
 // -----------------------------------------------------------------------------
 // Run before `nuxt dev` / electron at the monorepo root. Verifies the C++
-// audio server binary exists; if it doesn't, configures + builds it. Designed
-// to be a no-op when the binary is already built (fast dev-loop iteration).
-// Cross-platform — no shell-specific syntax.
+// audio server binary exists AND is up to date; builds (or rebuilds) it when
+// it's missing or any server source is newer than the binary. A no-op when
+// the binary is already current (fast dev-loop iteration). Without the
+// freshness check, edits to the C++ server were silently ignored under
+// `pnpm dev` — the stale binary kept running. Cross-platform, no shell syntax.
 // =============================================================================
 const fs        = require('node:fs');
 const path      = require('node:path');
@@ -24,6 +26,28 @@ const BIN_CANDIDATES = [
 
 function findBinary() {
   return BIN_CANDIDATES.find(p => fs.existsSync(p));
+}
+
+// Newest mtime (ms) across everything that feeds the server build: sources,
+// headers, and the CMake/vcpkg manifests. Used to decide whether a present
+// binary is stale relative to the tree.
+function newestSourceMtime() {
+  let newest = 0;
+  const visit = (p) => {
+    let st;
+    try { st = fs.statSync(p); } catch { return; }
+    if (st.isDirectory()) {
+      for (const entry of fs.readdirSync(p)) visit(path.join(p, entry));
+    } else if (st.mtimeMs > newest) {
+      newest = st.mtimeMs;
+    }
+  };
+  visit(path.join(SERVER_DIR, 'src'));
+  visit(path.join(SERVER_DIR, 'include'));
+  visit(path.join(SERVER_DIR, 'CMakeLists.txt'));
+  visit(path.join(SERVER_DIR, 'CMakePresets.json'));
+  visit(path.join(SERVER_DIR, 'vcpkg.json'));
+  return newest;
 }
 
 function run(cmd, args, opts = {}) {
@@ -53,11 +77,17 @@ function build() {
 
 const existing = findBinary();
 if (existing) {
-  console.log(`[liveplay] server binary present: ${existing}`);
-  process.exit(0);
+  const binMtime = fs.statSync(existing).mtimeMs;
+  if (newestSourceMtime() <= binMtime) {
+    console.log(`[liveplay] server binary up to date: ${existing}`);
+    process.exit(0);
+  }
+  // Sources changed since the last build — fall through to an incremental
+  // rebuild so the running app actually picks up the new server code.
+  console.log('[liveplay] server sources changed since last build — rebuilding (incremental).');
+} else {
+  console.log('[liveplay] server binary not found — building once. Subsequent dev runs skip this step when unchanged.');
 }
-
-console.log('[liveplay] server binary not found — building once. Subsequent dev runs skip this step.');
 
 // Configure step is idempotent; skip if CMakeCache.txt is already there.
 const cmakeCache = path.join(BUILD_DIR, 'CMakeCache.txt');
