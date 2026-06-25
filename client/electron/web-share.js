@@ -70,6 +70,9 @@ class WebShare extends EventEmitter {
     this.pin = null;            // stable PIN for this app process — generated
                                 // once, reused across tunnel restarts; a fresh
                                 // app launch (new process) gets a new one.
+    this.authEnabled = true;    // when false the BasicAuth gate stays OFF even
+                                // while a tunnel is up — the shared site is then
+                                // PUBLIC. Opt-out only; default on for safety.
 
     this.namedTunnel = null;    // optional per-machine config for a STABLE URL
                                 // (operator's own Cloudflare account). When set,
@@ -82,11 +85,12 @@ class WebShare extends EventEmitter {
   }
 
   /** Wire up paths/ports before first use. Safe to call repeatedly. */
-  configure({ staticRoot, serverPort, devServerUrl, namedTunnel }) {
+  configure({ staticRoot, serverPort, devServerUrl, namedTunnel, authEnabled }) {
     if (staticRoot) this.staticRoot = staticRoot;
     if (Number.isInteger(serverPort)) this.serverPort = serverPort;
     if (devServerUrl !== undefined) this.devServerUrl = devServerUrl;
     if (namedTunnel !== undefined) this.namedTunnel = normaliseNamedTunnel(namedTunnel);
+    if (authEnabled !== undefined) this.authEnabled = !!authEnabled;
   }
 
   // ── status ────────────────────────────────────────────────────────────
@@ -109,6 +113,7 @@ class WebShare extends EventEmitter {
       // machine across restarts (vs. the random quick-tunnel URL).
       tunnelStable: !!this.namedTunnel,
       tunnelHostname: this.namedTunnel ? this.namedTunnel.hostname : null,
+      authEnabled: this.authEnabled,
       auth: this.auth ? { user: this.auth.user, pass: this.auth.pass } : null,
     };
   }
@@ -331,17 +336,34 @@ class WebShare extends EventEmitter {
     return this.status();
   }
 
-  // Tunnel reached the "up" state → record the URL and arm the auth gate. The
-  // PIN is per app process (stable across tunnel restarts); the session cookie
-  // authenticates the WebSocket handshake.
+  // Tunnel reached the "up" state → record the URL and (unless the operator
+  // opted out) arm the auth gate. The PIN is per app process (stable across
+  // tunnel restarts); the session cookie authenticates the WebSocket handshake.
   _onTunnelUp(url) {
     this.tunnelUrl = url;
     this.tunnelStarting = false;
+    if (this.authEnabled) this._armAuth();
+    this.emit('log', `[web-share] tunnel up: ${this.tunnelUrl}${this.auth ? '' : ' (no auth)'}`);
+    this.emitStatus();
+  }
+
+  _armAuth() {
     if (!this.pin) this.pin = makePin(4);
     this.auth = { user: 'liveplay', pass: this.pin };
     this.sessionToken = crypto.randomBytes(18).toString('base64url');
-    this.emit('log', `[web-share] tunnel up: ${this.tunnelUrl}`);
+  }
+
+  // Toggle the BasicAuth gate. When a tunnel is already up we (dis)arm it on the
+  // fly so the change takes effect without restarting the tunnel. Turning it OFF
+  // makes the shared site PUBLIC — anyone with the URL can control the server.
+  setAuthEnabled(enabled) {
+    this.authEnabled = !!enabled;
+    if (this.tunnelUrl) {
+      if (this.authEnabled && !this.auth) this._armAuth();
+      else if (!this.authEnabled && this.auth) { this.auth = null; this.sessionToken = null; }
+    }
     this.emitStatus();
+    return this.status();
   }
 
   _onTunnelExit(code) {

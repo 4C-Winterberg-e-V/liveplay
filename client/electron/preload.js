@@ -202,6 +202,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     stopTunnel:  ()     => ipcRenderer.invoke('web-share:stop-tunnel'),
     getTunnelConfig: ()    => ipcRenderer.invoke('web-share:get-tunnel-config'),
     setTunnelConfig: (cfg) => ipcRenderer.invoke('web-share:set-tunnel-config', cfg),
+    setAuthEnabled:  (on)  => ipcRenderer.invoke('web-share:set-auth-enabled', on),
     onStateChange: (callback) => {
       const listener = (_e, payload) => callback(payload);
       ipcRenderer.on('web-share:state', listener);

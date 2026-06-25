@@ -78,6 +78,13 @@
           </button>
         </div>
 
+        <!-- Optional BasicAuth gate. Off ⇒ the shared site is public. -->
+        <label class="ws-authtoggle">
+          <input type="checkbox" :checked="status.authEnabled" :disabled="busy" @change="toggleAuth" />
+          <span>{{ t('webShare.authToggle') }}</span>
+        </label>
+        <p v-if="!status.authEnabled" class="ws-hint ws-hint--warn">{{ t('webShare.authOffWarn') }}</p>
+
         <div v-if="status.tunnel === 'up' && status.tunnelUrl" class="ws-share">
           <img v-if="status.tunnelQr" :src="status.tunnelQr" alt="Tunnel QR" class="ws-qr" />
           <div class="ws-share__info">
@@ -156,13 +163,14 @@ interface WebShareStatus {
   tunnelError: string | null;
   tunnelStable: boolean;
   tunnelHostname: string | null;
+  authEnabled: boolean;
   auth: { user: string; pass: string } | null;
 }
 
 const defaultStatus: WebShareStatus = {
   hosting: false, webPort: null, lanUrls: [], lanQr: null,
   tunnel: 'down', tunnelUrl: null, tunnelQr: null, tunnelError: null,
-  tunnelStable: false, tunnelHostname: null, auth: null,
+  tunnelStable: false, tunnelHostname: null, authEnabled: true, auth: null,
 };
 
 // Stable-URL (named-tunnel) config — fetched once on mount, refreshed on save.
@@ -212,6 +220,9 @@ const startLan     = () => run(() => api()?.startLan({ port: 8088 }));
 const stopLan      = () => run(() => api()?.stopLan());
 const startTunnel  = () => run(() => api()?.startTunnel({ port: 8088 }));
 const stopTunnel   = () => run(() => api()?.stopTunnel());
+
+const toggleAuth = (e: Event) =>
+  run(() => api()?.setAuthEnabled?.((e.target as HTMLInputElement).checked));
 
 async function loadTunnelConfig() {
   const res = await api()?.getTunnelConfig?.();
@@ -426,6 +437,18 @@ onUnmounted(() => { if (unsub) unsub(); });
   color: var(--color-error, #dc2626);
   font-size: 13px;
   margin: var(--spacing-sm) 0 0;
+}
+
+/* Optional-auth toggle. */
+.ws-authtoggle {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  input { cursor: pointer; }
 }
 
 /* "Feste URL" badge next to the tunnel title. */

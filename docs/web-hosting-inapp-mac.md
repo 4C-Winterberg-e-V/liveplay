@@ -61,6 +61,11 @@ Der C++-Server hat **keine eigene Authentifizierung** und die API erlaubt
   sendet sie auch beim WS-Handshake mit).
 - Da LAN und Tunnel denselben Host-Server teilen, gilt das Auth-Gate bei aktivem
   Tunnel auch für LAN-Clients – bewusst sicherer.
+- **Auth optional:** Das BasicAuth-Gate lässt sich im Teilen-Dialog per Schalter
+  „Login verlangen" abschalten (persistiert in `liveplay-webshare.json`,
+  Standard: **an**). **Ist es aus, ist die geteilte Seite öffentlich** – jeder mit
+  der URL kann den Server steuern und auf Dateien zugreifen. Umschalten wirkt
+  sofort, auch bei bereits laufendem Tunnel.
 - **Nach dem Event den Tunnel stoppen.** Beim App-Beenden wird er automatisch
   geschlossen.
 

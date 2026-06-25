@@ -181,6 +181,32 @@ function writeTunnelConfig(cfg) {
   }
 }
 
+// Web-Share preferences (separate from the tunnel config). Currently just the
+// auth toggle: when false the BasicAuth gate stays OFF even on an internet-
+// facing tunnel → the shared site is PUBLIC. Defaults to on (true) for safety.
+const LIVEPLAY_WEBSHARE_FILENAME = 'liveplay-webshare.json';
+
+function webSharePrefsPath() {
+  return path.join(app.getPath('userData'), LIVEPLAY_WEBSHARE_FILENAME);
+}
+
+function readWebSharePrefs() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(webSharePrefsPath(), 'utf-8'));
+    return { authEnabled: parsed && parsed.authEnabled === false ? false : true };
+  } catch {
+    return { authEnabled: true };
+  }
+}
+
+function writeWebSharePrefs(prefs) {
+  try {
+    fs.writeFileSync(webSharePrefsPath(), JSON.stringify(prefs, null, 2));
+  } catch (e) {
+    console.error('[web-share] could not persist preferences:', e);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Recent-servers history (separate file so it survives config rewrites).
 // Stored newest-first, capped, keyed by normalised URL.
@@ -703,6 +729,7 @@ function getWebShare() {
     devServerUrl,
     serverPort: readLiveplayConfig().localPort,
     namedTunnel: readTunnelConfig(),     // null ⇒ random quick tunnel
+    authEnabled: readWebSharePrefs().authEnabled,
   });
   return webShare;
 }
@@ -733,6 +760,16 @@ ipcMain.handle('web-share:stop-tunnel', async () => {
   if (!webShare) return { ok: true };
   try { await webShare.stopTunnel(); return { ok: true }; }
   catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+});
+
+// Toggle the BasicAuth gate (persisted). Takes effect immediately — if a tunnel
+// is already up the gate is (dis)armed on the fly.
+ipcMain.handle('web-share:set-auth-enabled', async (_e, enabled) => {
+  try {
+    const on = !!enabled;
+    writeWebSharePrefs({ authEnabled: on });
+    return { ok: true, ...(await getWebShare().setAuthEnabled(on)) };
+  } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
 });
 
 // Read the stable-URL (named-tunnel) config for the settings UI. Never returns
