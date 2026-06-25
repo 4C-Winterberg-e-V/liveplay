@@ -140,6 +140,9 @@ add_executable(liveplay-server
     src/net/control_server.cpp
     src/net/discovery.cpp
 
+    # Shared utilities
+    src/util/fs_sandbox.cpp
+
     # Milestone 4 — metadata + waveform
     src/meta/metadata.cpp
     src/meta/waveform.cpp
@@ -169,7 +172,9 @@ elseif(TARGET unofficial::taglib::tag)
 endif()
 
 if(WIN32)
-    target_link_libraries(liveplay-server PRIVATE ws2_32 mswsock dbghelp)
+    # shell32 + ole32: SHGetKnownFolderPath / CoTaskMemFree for the filesystem
+    # sandbox's default media-folder roots (src/util/fs_sandbox.cpp).
+    target_link_libraries(liveplay-server PRIVATE ws2_32 mswsock dbghelp shell32 ole32)
     # Modern Windows console: opt in to UTF-8 + VT for the banner.
     target_compile_definitions(liveplay-server PRIVATE UNICODE _UNICODE)
 endif()

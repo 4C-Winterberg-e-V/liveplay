@@ -343,12 +343,13 @@ const importFromServerPath = async (serverPath: string) => {
   try {
     const server = useLiveplayServer();
 
-    // Copy file into the project's media root (no-op if already there).
-    let destPath = serverPath;
-    try {
-      destPath = await server.copyToMedia(serverPath);
-    } catch (e) {
-      console.warn('[cart import] copyToMedia failed, using original path:', e);
+    // Land the file in the project's media root (no-op if already there).
+    // Sandbox-aware: server-side copy when possible, local byte-upload fallback
+    // for native picks outside the server's allowed folders. Skip on failure.
+    const destPath = await server.importPathToMedia(serverPath);
+    if (!destPath) {
+      console.error('[cart import] could not land file in project media:', serverPath);
+      return;
     }
 
     const fileName = destPath.split(/[\\/]/).pop() || 'audio';

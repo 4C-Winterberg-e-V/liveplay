@@ -860,6 +860,16 @@ static std::string handle_ws_message(crow::websocket::connection& conn,
     return {};
 }
 
+// Re-point the filesystem sandbox at the open project's folder so the
+// project's own media (and its .liveplay) stay reachable no matter where the
+// operator saved it. Reads the authoritative path from ProjectState. Cheap —
+// called at the head of every path-accepting handler.
+void ControlServer::sync_sandbox_project_root() {
+    const auto project_file = state_.project_file_path();
+    fs_sandbox_.set_project_root(
+        project_file.empty() ? std::filesystem::path{} : project_file.parent_path());
+}
+
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
@@ -956,7 +966,10 @@ void ControlServer::install_routes() {
         ([this](const crow::request& req){
             try {
                 auto j = json::parse(req.body);
-                const fs::path file = liveplay::util::utf8_to_path(j.at("file_path").get<std::string>());
+                sync_sandbox_project_root();
+                auto file_auth = fs_sandbox_.authorize(j.at("file_path").get<std::string>());
+                if (!file_auth) return json_err(403, "file_path is outside the allowed folders");
+                const fs::path file = *file_auth;
                 std::string name = j.value("display_name", "");
                 const auto id = state_.add_cue_from_file(file, std::move(name));
                 if (id.empty()) return json_err(400, "failed to load file");
@@ -1192,48 +1205,45 @@ void ControlServer::install_routes() {
                 std::string path        = path_param ? path_param : "";
                 std::string filter      = filter_param ? filter_param : "audio";
 
-                // Empty path == "computer" root. On Windows we enumerate
-                // logical drives (and mapped network drives). On POSIX we
-                // start at '/'. This lets the picker behave like a native
-                // file dialog.
+                sync_sandbox_project_root();
+
+                // Empty path == "computer" root. Instead of exposing the whole
+                // machine (all drives on Windows, "/" on POSIX), we surface the
+                // sandbox's allowed roots — the user's media folders plus the
+                // open project. This is what keeps the picker from opening at
+                // "/" and browsing the entire filesystem.
                 if (path.empty()) {
                     json out;
                     out["path"]    = "";        // sentinel: computer root
                     out["parent"]  = "";
                     out["is_root"] = true;
                     out["entries"] = json::array();
-#if defined(_WIN32)
-                    DWORD mask = GetLogicalDrives();
-                    for (char letter = 'A'; letter <= 'Z'; ++letter, mask >>= 1) {
-                        if (!(mask & 1)) continue;
-                        char drive[4] = { letter, ':', '\\', 0 };
+                    for (const auto& r : fs_sandbox_.roots()) {
                         json e;
-                        e["name"]      = std::string{letter} + ":";
-                        e["full_path"] = drive;
-                        e["kind"]      = "drive";
+                        e["name"]      = r.label;
+                        e["full_path"] = liveplay::util::path_to_utf8(r.path);
+                        e["kind"]      = "drive";   // top-level "place" in the client UI
                         out["entries"].push_back(std::move(e));
                     }
-#else
-                    // On POSIX, root is just '/'; surface it as a single drive.
-                    json e;
-                    e["name"]      = "/";
-                    e["full_path"] = "/";
-                    e["kind"]      = "drive";
-                    out["entries"].push_back(std::move(e));
-#endif
                     return json_ok(out);
                 }
 
-                fs::path p = liveplay::util::utf8_to_path(path);
-                std::error_code canon_ec;
-                fs::path canon = fs::weakly_canonical(p, canon_ec);
-                if (!canon_ec) p = canon;
+                // Any concrete path must resolve inside an allowed root.
+                auto authorized = fs_sandbox_.authorize(path);
+                if (!authorized)
+                    return json_err(403, "path is outside the allowed folders");
+                fs::path p = *authorized;
                 if (!fs::exists(p)) return json_err(404, "no such path");
 
                 json out;
                 out["path"]    = liveplay::util::path_to_utf8(p);
-                out["parent"]  = p.has_parent_path() && p.parent_path() != p
-                                   ? liveplay::util::path_to_utf8(p.parent_path()) : "";
+                // Only advertise a parent that is itself inside the sandbox, so
+                // the browser's "Up" button can never climb above an allowed
+                // root — at a root it returns to the roots list instead.
+                const fs::path parent = p.has_parent_path() ? p.parent_path() : fs::path{};
+                out["parent"]  = (!parent.empty() && parent != p &&
+                                  fs_sandbox_.is_within_roots(parent))
+                                   ? liveplay::util::path_to_utf8(parent) : "";
                 out["is_root"] = false;
                 out["entries"] = json::array();
 
@@ -1307,17 +1317,20 @@ void ControlServer::install_routes() {
     // POST /api/fs/mkdir  body: { "path": "<utf8-absolute-path>" }
     // Creates a new directory (and all parent directories). Returns { "path": "<created>" }.
     CROW_ROUTE(app, "/api/fs/mkdir").methods(crow::HTTPMethod::Post)
-        ([](const crow::request& req){
+        ([this](const crow::request& req){
             try {
                 auto j = json::parse(req.body);
                 if (!j.contains("path") || !j["path"].is_string())
                     return json_err(400, "missing 'path'");
-                const fs::path dir = liveplay::util::utf8_to_path(j["path"].get<std::string>());
-                if (dir.empty()) return json_err(400, "empty path");
+                const std::string path_str = j["path"].get<std::string>();
+                if (path_str.empty()) return json_err(400, "empty path");
+                sync_sandbox_project_root();
+                auto dir = fs_sandbox_.authorize(path_str);
+                if (!dir) return json_err(403, "path is outside the allowed folders");
                 std::error_code ec;
-                fs::create_directories(dir, ec);
+                fs::create_directories(*dir, ec);
                 if (ec) return json_err(400, ec.message());
-                return json_ok(json({{"path", liveplay::util::path_to_utf8(dir)}}));
+                return json_ok(json({{"path", liveplay::util::path_to_utf8(*dir)}}));
             } catch (const std::exception& e) { return json_err(400, e.what()); }
         });
 
@@ -1374,7 +1387,10 @@ void ControlServer::install_routes() {
                 const std::string src_str = body.value("source_path", std::string{});
                 if (src_str.empty()) return json_err(400, "missing source_path");
 
-                const fs::path src  = liveplay::util::utf8_to_path(src_str);
+                sync_sandbox_project_root();
+                auto src_auth = fs_sandbox_.authorize(src_str);
+                if (!src_auth) return json_err(403, "source is outside the allowed folders");
+                const fs::path src = *src_auth;
                 if (!fs::exists(src)) return json_err(404, "source file not found");
 
                 const fs::path media = state_.media_root();
@@ -1412,6 +1428,10 @@ void ControlServer::install_routes() {
                 if (path_str.empty() || item_uuid.empty())
                     return json_err(400, "missing path or item_uuid");
 
+                sync_sandbox_project_root();
+                auto src_auth = fs_sandbox_.authorize(path_str);
+                if (!src_auth) return json_err(403, "path is outside the allowed folders");
+
                 const auto proj_path = state_.project_file_path();
                 const auto wdir = proj_path.empty()
                     ? fs::path{}
@@ -1420,7 +1440,7 @@ void ControlServer::install_routes() {
                 {
                     std::lock_guard lock{impl_->waveform_q_mutex};
                     impl_->waveform_q.push_back({
-                        liveplay::util::utf8_to_path(path_str),
+                        *src_auth,
                         item_uuid,
                         wdir,
                         force
@@ -1433,10 +1453,13 @@ void ControlServer::install_routes() {
 
     // ---- Metadata + Waveform ----
     CROW_ROUTE(app, "/api/metadata").methods(crow::HTTPMethod::Get)
-        ([](const crow::request& req) {
+        ([this](const crow::request& req) {
             const char* path = req.url_params.get("path");
             if (!path) return json_err(400, "missing ?path=");
-            const auto md = liveplay::meta::read_metadata(liveplay::util::utf8_to_path(path));
+            sync_sandbox_project_root();
+            auto src = fs_sandbox_.authorize(path);
+            if (!src) return json_err(403, "path is outside the allowed folders");
+            const auto md = liveplay::meta::read_metadata(*src);
             return json_ok(json{
                 {"valid",        md.valid},
                 {"artist",       md.artist},
@@ -1487,7 +1510,7 @@ void ControlServer::install_routes() {
     // Used by the client immediately after import, before the cue is registered
     // with the engine. Query params: path=<absolute-path>&buckets=<count>.
     CROW_ROUTE(app, "/api/waveform_path").methods(crow::HTTPMethod::Get)
-        ([](const crow::request& req) {
+        ([this](const crow::request& req) {
             try {
                 const auto* path_param = req.url_params.get("path");
                 if (!path_param) return json_err(400, "missing path parameter");
@@ -1498,8 +1521,10 @@ void ControlServer::install_routes() {
                     catch (...) {}
                 }
 
-                const std::filesystem::path file_path =
-                    liveplay::util::utf8_to_path(std::string{path_param});
+                sync_sandbox_project_root();
+                auto file_auth = fs_sandbox_.authorize(std::string{path_param});
+                if (!file_auth) return json_err(403, "path is outside the allowed folders");
+                const std::filesystem::path file_path = *file_auth;
 
                 const auto wf = liveplay::meta::compute_waveform(file_path, buckets);
                 if (!wf.ok) return json_err(500, "waveform decode failed");
@@ -1586,11 +1611,19 @@ void ControlServer::install_routes() {
                     const std::string path_str = j["path"].get<std::string>();
                     Logger::api_request("Client ({}) -> Server ({}) : POST /api/project/load path='{}'",
                                         req.remote_ip_address, impl_->server_addr, path_str);
+                    // Opening a project by absolute path is the user explicitly
+                    // designating their workspace (recent list, double-clicked
+                    // .liveplay, …) — it is NOT browsing, so it is allowed from
+                    // anywhere. The folder it lives in then becomes an allowed
+                    // sandbox root, so the project's own media stays reachable
+                    // and a subsequent save lands back in the same place. The
+                    // whole-disk *browse* surface stays closed regardless.
                     const fs::path p = liveplay::util::utf8_to_path(path_str);
                     if (!state_.load(p)) {
                         Logger::error("POST /api/project/load FAILED — load returned false for '{}'", path_str);
                         return json_err(400, "load failed");
                     }
+                    fs_sandbox_.set_project_root(p.parent_path());
                 } else if (j.contains("document")) {
                     Logger::api_request("Client ({}) -> Server ({}) : POST /api/project/load (from document)",
                                         req.remote_ip_address, impl_->server_addr);
@@ -1678,8 +1711,10 @@ void ControlServer::install_routes() {
                 if (!j.contains("folderPath") || !j["folderPath"].is_string()) {
                     return json_err(400, "expected 'folderPath'");
                 }
-                const fs::path src = liveplay::util::utf8_to_path(
-                    j["folderPath"].get<std::string>());
+                sync_sandbox_project_root();
+                auto src_auth = fs_sandbox_.authorize(j["folderPath"].get<std::string>());
+                if (!src_auth) return json_err(403, "folderPath is outside the allowed folders");
+                const fs::path src = *src_auth;
                 if (!fs::exists(src) || !fs::is_directory(src)) {
                     return json_err(400, "folderPath does not exist or is not a directory");
                 }
@@ -1690,7 +1725,9 @@ void ControlServer::install_routes() {
                 bool to_temp = false;
                 if (j.contains("outputPath") && j["outputPath"].is_string() &&
                     !j["outputPath"].get<std::string>().empty()) {
-                    out = liveplay::util::utf8_to_path(j["outputPath"].get<std::string>());
+                    auto out_auth = fs_sandbox_.authorize(j["outputPath"].get<std::string>());
+                    if (!out_auth) return json_err(403, "outputPath is outside the allowed folders");
+                    out = *out_auth;
                     if (out.has_parent_path()) fs::create_directories(out.parent_path());
                 } else {
                     // Stage in a temp directory; surface via download token.
@@ -1820,6 +1857,27 @@ void ControlServer::install_routes() {
                     extract_path = liveplay::util::utf8_to_path(j["extractPath"].get<std::string>());
                 }
 
+                sync_sandbox_project_root();
+                {
+                    // The extraction destination must be inside the sandbox.
+                    auto ext_auth = fs_sandbox_.authorize(
+                        liveplay::util::path_to_utf8(extract_path));
+                    if (!ext_auth) {
+                        if (delete_archive_after) { std::error_code ec; fs::remove(archive_path, ec); }
+                        return json_err(403, "extractPath is outside the allowed folders");
+                    }
+                    extract_path = *ext_auth;
+                    // A user-supplied archive path (JSON mode) must also be in
+                    // the sandbox. The multipart upload is staged in our own
+                    // temp dir, so it is trusted and skips this check.
+                    if (!delete_archive_after) {
+                        auto arc_auth = fs_sandbox_.authorize(
+                            liveplay::util::path_to_utf8(archive_path));
+                        if (!arc_auth) return json_err(403, "archivePath is outside the allowed folders");
+                        archive_path = *arc_auth;
+                    }
+                }
+
                 if (!fs::exists(archive_path))
                     return json_err(400, "archive does not exist");
                 fs::create_directories(extract_path);
@@ -1894,8 +1952,15 @@ void ControlServer::install_routes() {
                 auto j = json::parse(req.body);
                 fs::path p;
                 if (j.contains("path") && j["path"].is_string()) {
-                    p = liveplay::util::utf8_to_path(j["path"].get<std::string>());
+                    sync_sandbox_project_root();
+                    auto p_auth = fs_sandbox_.authorize(j["path"].get<std::string>());
+                    if (!p_auth) {
+                        Logger::warn("POST /api/project/save DENIED — path outside sandbox");
+                        return json_err(403, "path is outside the allowed folders");
+                    }
+                    p = *p_auth;
                     state_.set_project_file_path(p);
+                    fs_sandbox_.set_project_root(p.parent_path());
                 } else {
                     p = state_.project_file_path();
                     if (p.empty()) {
