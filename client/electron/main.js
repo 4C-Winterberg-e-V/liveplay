@@ -27,6 +27,59 @@ let ffmpegPath = null;
 let ffmpegAvailable = false;
 
 // ===========================================================================
+// Native file-dialog default location
+// ---------------------------------------------------------------------------
+// The OS open/save dialogs must never open at the filesystem root ("/"),
+// which is jarring and invites browsing the whole disk. We default them to a
+// dedicated "LivePlay" folder under the user's Documents (created on first
+// use) and then remember the last directory the user actually browsed to, so
+// subsequent dialogs reopen where they left off. This is the client-side
+// counterpart to the server's filesystem sandbox.
+// ===========================================================================
+let lastBrowseDir = null;
+
+// The dedicated projects library under the OS Documents folder. Mirrors the
+// server's "LivePlay Projects" sandbox root so client and server agree on
+// where projects live. Best-effort: created on demand.
+function liveplayDocumentsDir() {
+  try {
+    const dir = path.join(app.getPath('documents'), 'LivePlay');
+    try { fs.mkdirSync(dir, { recursive: true }); } catch { /* best-effort */ }
+    return dir;
+  } catch {
+    // 'documents' may be unavailable on headless Linux — fall back to home.
+    try { return app.getPath('home'); } catch { return undefined; }
+  }
+}
+
+// Directory a file dialog should open in: the last place the user browsed (if
+// it still exists), else the LivePlay documents folder. May be undefined only
+// when even 'home' is unavailable, in which case Electron uses its own default.
+function defaultDialogDir() {
+  if (lastBrowseDir) {
+    try { if (fs.existsSync(lastBrowseDir)) return lastBrowseDir; } catch { /* ignore */ }
+  }
+  return liveplayDocumentsDir();
+}
+
+// Build a defaultPath for a *save* dialog: <dir>/<filename>, falling back to
+// the bare filename when no directory is available (path.join rejects undefined).
+function defaultSavePath(filename) {
+  const dir = defaultDialogDir();
+  return dir ? path.join(dir, filename) : filename;
+}
+
+// Remember where the user landed so the next dialog reopens there. Accepts a
+// file or directory path; files are reduced to their containing folder.
+function rememberBrowseDir(p) {
+  if (!p) return;
+  try {
+    const stat = fs.existsSync(p) ? fs.statSync(p) : null;
+    lastBrowseDir = (stat && stat.isDirectory()) ? p : path.dirname(p);
+  } catch { /* ignore */ }
+}
+
+// ===========================================================================
 // LivePlay C++ server lifecycle
 // ---------------------------------------------------------------------------
 // When the user runs the desktop client in "local" server mode, Electron
@@ -2428,10 +2481,12 @@ function createMenu(locale = 'en', isDev = false) {
 // IPC Handlers
 ipcMain.handle('select-project-folder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
+    defaultPath: defaultDialogDir(),
     properties: ['openDirectory', 'createDirectory']
   });
 
   if (!result.canceled && result.filePaths.length > 0) {
+    rememberBrowseDir(result.filePaths[0]);
     return result.filePaths[0];
   }
   return null;
@@ -2439,11 +2494,13 @@ ipcMain.handle('select-project-folder', async () => {
 
 ipcMain.handle('select-project-file', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
+    defaultPath: defaultDialogDir(),
     properties: ['openFile'],
     filters: [{ name: 'LivePlay Project', extensions: ['liveplay'] }]
   });
 
   if (!result.canceled && result.filePaths.length > 0) {
+    rememberBrowseDir(result.filePaths[0]);
     return result.filePaths[0];
   }
   return null;
@@ -2451,6 +2508,7 @@ ipcMain.handle('select-project-file', async () => {
 
 ipcMain.handle('select-audio-files', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
+    defaultPath: defaultDialogDir(),
     properties: ['openFile', 'multiSelections'],
     filters: [
       { name: 'Audio Files', extensions: ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac'] }
@@ -2458,6 +2516,7 @@ ipcMain.handle('select-audio-files', async () => {
   });
 
   if (!result.canceled && result.filePaths.length > 0) {
+    rememberBrowseDir(result.filePaths[0]);
     return result.filePaths;
   }
   return null;
@@ -2497,10 +2556,11 @@ ipcMain.handle('write-file', async (event, filePath, data) => {
 ipcMain.handle('show-save-archive-dialog', async (event, defaultName) => {
   const result = await dialog.showSaveDialog(mainWindow, {
     title: 'Save Project Archive',
-    defaultPath: defaultName || 'project.lpa',
+    defaultPath: defaultSavePath(defaultName || 'project.lpa'),
     filters: [{ name: 'LivePlay Archive', extensions: ['lpa'] }],
   });
   if (result.canceled || !result.filePath) return null;
+  rememberBrowseDir(result.filePath);
   return result.filePath;
 });
 
@@ -2510,10 +2570,12 @@ ipcMain.handle('show-save-archive-dialog', async (event, defaultName) => {
 ipcMain.handle('show-open-archive-dialog', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Choose Project Archive',
+    defaultPath: defaultDialogDir(),
     properties: ['openFile'],
     filters: [{ name: 'LivePlay Archive', extensions: ['lpa'] }],
   });
   if (result.canceled || result.filePaths.length === 0) return null;
+  rememberBrowseDir(result.filePaths[0]);
   return result.filePaths[0];
 });
 
@@ -2674,7 +2736,7 @@ ipcMain.handle('export-project', async (event, projectFolderPath, projectName = 
     // Show save dialog for .lpa file
     const result = await dialog.showSaveDialog(mainWindow, {
       title: 'Export Project',
-      defaultPath: `${defaultName}.lpa`,
+      defaultPath: defaultSavePath(`${defaultName}.lpa`),
       filters: [
         { name: 'LivePlay Archive', extensions: ['lpa'] }
       ]
@@ -2755,6 +2817,7 @@ ipcMain.handle('import-project', async (event) => {
     // Show open dialog for .lpa file
     const fileResult = await dialog.showOpenDialog(mainWindow, {
       title: 'Import Project',
+      defaultPath: defaultDialogDir(),
       properties: ['openFile'],
       filters: [
         { name: 'LivePlay Archive', extensions: ['lpa'] }
@@ -2771,6 +2834,7 @@ ipcMain.handle('import-project', async (event) => {
     // Show folder dialog for extraction location
     const folderResult = await dialog.showOpenDialog(mainWindow, {
       title: 'Select Extraction Location',
+      defaultPath: defaultDialogDir(),
       properties: ['openDirectory', 'createDirectory']
     });
 
@@ -2836,6 +2900,7 @@ ipcMain.handle('import-lpa-file', async (event, archivePath) => {
     // Show folder dialog for extraction location
     const folderResult = await dialog.showOpenDialog(mainWindow, {
       title: 'Select Extraction Location',
+      defaultPath: defaultDialogDir(),
       properties: ['openDirectory', 'createDirectory']
     });
 

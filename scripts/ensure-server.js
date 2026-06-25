@@ -3,9 +3,11 @@
 // scripts/ensure-server.js
 // -----------------------------------------------------------------------------
 // Run before `nuxt dev` / electron at the monorepo root. Verifies the C++
-// audio server binary exists; if it doesn't, configures + builds it. Designed
-// to be a no-op when the binary is already built (fast dev-loop iteration).
-// Cross-platform — no shell-specific syntax.
+// audio server binary exists AND is up to date; builds (or rebuilds) it when
+// it's missing or any server source is newer than the binary. A no-op when
+// the binary is already current (fast dev-loop iteration). Without the
+// freshness check, edits to the C++ server were silently ignored under
+// `pnpm dev` — the stale binary kept running. Cross-platform, no shell syntax.
 // =============================================================================
 const fs        = require('node:fs');
 const path      = require('node:path');
@@ -26,12 +28,59 @@ function findBinary() {
   return BIN_CANDIDATES.find(p => fs.existsSync(p));
 }
 
+// Newest mtime (ms) across everything that feeds the server build: sources,
+// headers, and the CMake/vcpkg manifests. Used to decide whether a present
+// binary is stale relative to the tree.
+function newestSourceMtime() {
+  let newest = 0;
+  const visit = (p) => {
+    let st;
+    try { st = fs.statSync(p); } catch { return; }
+    if (st.isDirectory()) {
+      for (const entry of fs.readdirSync(p)) visit(path.join(p, entry));
+    } else if (st.mtimeMs > newest) {
+      newest = st.mtimeMs;
+    }
+  };
+  visit(path.join(SERVER_DIR, 'src'));
+  visit(path.join(SERVER_DIR, 'include'));
+  visit(path.join(SERVER_DIR, 'CMakeLists.txt'));
+  visit(path.join(SERVER_DIR, 'CMakePresets.json'));
+  visit(path.join(SERVER_DIR, 'vcpkg.json'));
+  return newest;
+}
+
 function run(cmd, args, opts = {}) {
   console.log(`> ${cmd} ${args.join(' ')}`);
   const res = spawnSync(cmd, args, { stdio: 'inherit', shell: false, ...opts });
   if (res.status !== 0) {
     process.exitCode = res.status ?? 1;
     process.exit(process.exitCode);
+  }
+}
+
+// Stop a server that is already listening on `port`. The desktop client runs
+// the C++ server *detached* (it survives app quit) and reattaches to it via a
+// lockfile on the next launch — so after a rebuild the freshly-built binary is
+// never spawned unless the stale process is stopped first. Best-effort: POSIX
+// uses lsof; on Windows we just print a hint (no portable one-liner).
+function stopStaleServer() {
+  const port = process.env.LIVEPLAY_PORT || '4480';
+  if (process.platform === 'win32') {
+    console.log(`[liveplay] rebuilt — if a server is still running on :${port}, ` +
+                'stop it (close its console window) so the new build is used.');
+    return;
+  }
+  let pids = [];
+  try {
+    const res = spawnSync('lsof', ['-ti', `tcp:${port}`], { encoding: 'utf8' });
+    pids = (res.stdout || '').split('\n').map(s => s.trim()).filter(Boolean);
+  } catch { /* lsof unavailable — nothing we can do */ }
+  for (const pid of pids) {
+    try {
+      process.kill(Number(pid), 'SIGTERM');
+      console.log(`[liveplay] stopped stale server (pid ${pid}, :${port}) so the rebuilt binary is used`);
+    } catch { /* already gone / not ours */ }
   }
 }
 
@@ -52,12 +101,20 @@ function build() {
 }
 
 const existing = findBinary();
+let rebuildingStale = false;
 if (existing) {
-  console.log(`[liveplay] server binary present: ${existing}`);
-  process.exit(0);
+  const binMtime = fs.statSync(existing).mtimeMs;
+  if (newestSourceMtime() <= binMtime) {
+    console.log(`[liveplay] server binary up to date: ${existing}`);
+    process.exit(0);
+  }
+  // Sources changed since the last build — fall through to an incremental
+  // rebuild so the running app actually picks up the new server code.
+  rebuildingStale = true;
+  console.log('[liveplay] server sources changed since last build — rebuilding (incremental).');
+} else {
+  console.log('[liveplay] server binary not found — building once. Subsequent dev runs skip this step when unchanged.');
 }
-
-console.log('[liveplay] server binary not found — building once. Subsequent dev runs skip this step.');
 
 // Configure step is idempotent; skip if CMakeCache.txt is already there.
 const cmakeCache = path.join(BUILD_DIR, 'CMakeCache.txt');
@@ -70,3 +127,7 @@ if (!built) {
   process.exit(1);
 }
 console.log(`[liveplay] built ${built}`);
+
+// A previous (now-stale) server may still be running and would be reattached
+// to instead of our fresh build — stop it so the new binary actually launches.
+if (rebuildingStale) stopStaleServer();
