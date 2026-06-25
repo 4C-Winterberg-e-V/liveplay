@@ -42,6 +42,11 @@ export const useX18Board = () => {
   const triggerButton = async (button: X18BoardButton) => {
     const a = button?.action;
     if (!a) return;
+    // No console configured yet — skip silently. The X18 view shows a banner
+    // prompting the user to set the IP in Project Settings, so there's no need
+    // to fire a request that the server would only reject with 400.
+    const ip = (currentProject.value as any)?.settings?.x18Ip;
+    if (typeof ip !== 'string' || ip.trim().length === 0) return;
     try {
       if (a.type === 'fader-toggle') {
         const toB = !toggleState.value[button.id];
