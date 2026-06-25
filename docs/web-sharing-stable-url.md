@@ -108,6 +108,16 @@ zufälligen Quick-Tunnel zurück.
 
 ---
 
+## Dev-Modus
+
+Beim Testen mit `pnpm dev` proxyt das Sharing auf den Vite-Dev-Server. Vite
+blockt fremde Host-Header; eigene Tunnel-Domains sind daher per Default über
+`vite.server.allowedHosts` erlaubt (alle Hosts, nur Dev-Server). Zum Einschränken
+`NUXT_DEV_ALLOWED_HOSTS="music.4cwt.de,.trycloudflare.com"` setzen. Production-
+Builds liefern statische Dateien aus – kein Dev-Server, kein `allowedHosts`.
+
+---
+
 ## Sicherheit
 
 - Der **Token** erlaubt nur das Betreiben **dieses einen** Tunnels – kein
