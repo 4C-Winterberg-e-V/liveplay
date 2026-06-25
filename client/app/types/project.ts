@@ -94,13 +94,47 @@ export interface HttpRequest {
   body?: Record<string, any>;
 }
 
-// Behringer X18 fader action. Fired by the server (OSC/UDP) when the item
-// starts or stops. The console IP lives in project settings (`x18Ip`).
+// Where an X18 fader/mute command applies.
+export type X18FaderTarget = 'master' | 'channel' | 'bus';
+
+// Behringer X18 action. Fired by the server (OSC/UDP) when the item starts or
+// stops. The console IP lives in project settings (`x18Ip`).
+//   kind 'fader'      → set target's fader to `level` %
+//   kind 'mute'       → mute/unmute the target channel/bus/master
+//   kind 'mute-group' → mute/unmute mute group `group` (1-4)
 export interface X18Action {
   trigger: 'start' | 'stop';   // when to send the command
-  target: 'master' | 'channel';
-  channel?: number;            // 1-16, required when target === 'channel'
-  level: number;               // 0-100 (%), 0 = fader fully down
+  kind?: 'fader' | 'mute' | 'mute-group'; // default 'fader' (back-compat)
+  target?: X18FaderTarget;     // fader & mute (default 'master')
+  channel?: number;            // channel 1-16, or bus 1-6
+  level?: number;              // fader: 0-100 (%), 0 = fader fully down
+  group?: number;              // mute-group: 1-4
+  muted?: boolean;             // mute & mute-group: true = mute, false = unmute
+}
+
+// One button on the X18 control board (a Playlist-like main view). Each button
+// can carry a keyboard binding and is also clickable. Editing is desktop-only;
+// triggering works anywhere. Persisted in the project as `x18Board`.
+export interface X18BoardButton {
+  id: string;
+  label: string;
+  color: string;
+  key?: CartSlotKeyBinding | null;  // optional keyboard shortcut
+  action: X18BoardAction;
+}
+
+// What a board button does on press.
+//   'fader-toggle' → alternate target's fader between levelA% and levelB%
+//   'mute-toggle'  → toggle/set mute on a channel/bus/master
+//   'mute-group'   → toggle/set a mute group (1-4)
+export interface X18BoardAction {
+  type: 'fader-toggle' | 'mute-toggle' | 'mute-group';
+  target?: X18FaderTarget;     // fader-toggle & mute-toggle (default 'master')
+  channel?: number;            // channel 1-16, or bus 1-6
+  levelA?: number;             // fader-toggle: first level 0-100 (default 0)
+  levelB?: number;             // fader-toggle: second level 0-100 (default 100)
+  group?: number;              // mute-group: 1-4
+  mode?: 'toggle' | 'mute' | 'unmute'; // mute-toggle & mute-group (default 'toggle')
 }
 
 // Ducking behavior
@@ -145,6 +179,7 @@ export interface Project {
   cartItems: CartItem[];
   cartSlotKeys?: Record<number, CartSlotKeyBinding>;
   playbackKeys?: Record<string, CartSlotKeyBinding | null>;
+  x18Board?: X18BoardButton[]; // Behringer X18 control board (key/click buttons)
   cartOnlyItems: AudioItem[]; // Items that exist only in cart (not in playlist)
   theme: Theme;
   createdAt: string;

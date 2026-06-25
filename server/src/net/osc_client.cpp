@@ -50,10 +50,10 @@ struct WsaGuard {
 };
 #endif
 
-} // namespace
-
-bool osc_send_float(const std::string& host, std::uint16_t port,
-                    const std::string& address, float value) {
+// Send a fully-built OSC packet to host:port over UDP. Shared by the float
+// and int senders. Returns true if the datagram was handed to the socket.
+bool osc_send_packet(const std::string& host, std::uint16_t port,
+                     const std::string& address, const std::vector<char>& pkt) {
     if (host.empty() || address.empty()) return false;
 
 #if defined(_WIN32)
@@ -61,20 +61,6 @@ bool osc_send_float(const std::string& host, std::uint16_t port,
     (void)g;
 #endif
 
-    // ---- Build the OSC packet: <address> <",f"> <float big-endian> --------
-    std::vector<char> pkt;
-    pkt.reserve(address.size() + 16);
-    osc_append_string(pkt, address);
-    osc_append_string(pkt, ",f");
-
-    // OSC floats are 32-bit IEEE-754, big-endian (network byte order).
-    std::uint32_t raw;
-    std::memcpy(&raw, &value, sizeof(raw));
-    const std::uint32_t be = htonl(raw);
-    const char* be_bytes = reinterpret_cast<const char*>(&be);
-    pkt.insert(pkt.end(), be_bytes, be_bytes + 4);
-
-    // ---- Resolve destination (numeric IPv4 only) -------------------------
     sockaddr_in dest{};
     dest.sin_family = AF_INET;
     dest.sin_port   = htons(port);
@@ -97,7 +83,45 @@ bool osc_send_float(const std::string& host, std::uint16_t port,
         Logger::warn("OSC: sendto({}:{}) failed for '{}'", host, port, address);
         return false;
     }
+    return true;
+}
+
+// Append a 32-bit big-endian (network byte order) word to the packet.
+void osc_append_be32(std::vector<char>& buf, std::uint32_t raw) {
+    const std::uint32_t be = htonl(raw);
+    const char* b = reinterpret_cast<const char*>(&be);
+    buf.insert(buf.end(), b, b + 4);
+}
+
+} // namespace
+
+bool osc_send_float(const std::string& host, std::uint16_t port,
+                    const std::string& address, float value) {
+    // OSC packet: <address> <",f"> <float big-endian>.
+    std::vector<char> pkt;
+    pkt.reserve(address.size() + 16);
+    osc_append_string(pkt, address);
+    osc_append_string(pkt, ",f");
+    std::uint32_t raw;
+    std::memcpy(&raw, &value, sizeof(raw));  // reinterpret float bits as uint32
+    osc_append_be32(pkt, raw);
+
+    if (!osc_send_packet(host, port, address, pkt)) return false;
     Logger::info("OSC -> {}:{}  {} {:.3f}", host, port, address, value);
+    return true;
+}
+
+bool osc_send_int(const std::string& host, std::uint16_t port,
+                  const std::string& address, std::int32_t value) {
+    // OSC packet: <address> <",i"> <int32 big-endian>.
+    std::vector<char> pkt;
+    pkt.reserve(address.size() + 16);
+    osc_append_string(pkt, address);
+    osc_append_string(pkt, ",i");
+    osc_append_be32(pkt, static_cast<std::uint32_t>(value));
+
+    if (!osc_send_packet(host, port, address, pkt)) return false;
+    Logger::info("OSC -> {}:{}  {} {}", host, port, address, value);
     return true;
 }
 

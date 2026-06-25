@@ -33,4 +33,10 @@ namespace liveplay::net {
 bool osc_send_float(const std::string& host, std::uint16_t port,
                     const std::string& address, float value);
 
+// As osc_send_float but sends a single 32-bit integer argument (OSC ",i").
+// The X-Air console expects ints (not floats) for on/off-style parameters
+// such as channel/bus mute (/…/mix/on) and mute groups (/config/mute/N).
+bool osc_send_int(const std::string& host, std::uint16_t port,
+                  const std::string& address, std::int32_t value);
+
 } // namespace liveplay::net

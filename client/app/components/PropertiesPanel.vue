@@ -298,27 +298,54 @@
               <option value="start">{{ t('x18.triggerStart') }}</option>
               <option value="stop">{{ t('x18.triggerStop') }}</option>
             </select>
-            <select v-model="action.target" @change="onX18TargetChange(action)">
-              <option value="master">{{ t('x18.targetMaster') }}</option>
-              <option value="channel">{{ t('x18.targetChannel') }}</option>
+            <select :value="action.kind || 'fader'" @change="onX18KindChange(action, $event)">
+              <option value="fader">{{ t('x18.kindFader') }}</option>
+              <option value="mute">{{ t('x18.kindMute') }}</option>
+              <option value="mute-group">{{ t('x18.kindMuteGroup') }}</option>
             </select>
             <button class="icon-btn x18-remove" :title="t('common.delete')" @click="removeX18Action(i)">
               <span class="material-symbols-rounded">delete</span>
             </button>
           </div>
           <div class="x18-action-row">
-            <label v-if="action.target === 'channel'" class="x18-inline">
-              {{ t('x18.channel') }}
+            <!-- Target (fader & mute) -->
+            <select
+              v-if="(action.kind || 'fader') !== 'mute-group'"
+              v-model="action.target"
+              @change="onX18TargetChange(action)"
+            >
+              <option value="master">{{ t('x18.targetMaster') }}</option>
+              <option value="channel">{{ t('x18.targetChannel') }}</option>
+              <option value="bus">{{ t('x18.targetBus') }}</option>
+            </select>
+            <label
+              v-if="(action.kind || 'fader') !== 'mute-group' && action.target && action.target !== 'master'"
+              class="x18-inline"
+            >
+              {{ action.target === 'bus' ? t('x18.busNumber') : t('x18.channel') }}
               <input
                 type="number"
                 min="1"
-                max="16"
+                :max="action.target === 'bus' ? 6 : 16"
                 step="1"
                 v-model.number="action.channel"
                 @change="onX18ChannelChange(action)"
               />
             </label>
-            <label class="x18-inline">
+            <!-- Mute group number -->
+            <label v-if="(action.kind || 'fader') === 'mute-group'" class="x18-inline">
+              {{ t('x18.muteGroup') }}
+              <input
+                type="number"
+                min="1"
+                max="4"
+                step="1"
+                v-model.number="action.group"
+                @change="onX18GroupChange(action)"
+              />
+            </label>
+            <!-- Fader level -->
+            <label v-if="(action.kind || 'fader') === 'fader'" class="x18-inline">
               {{ t('x18.level') }}
               <input
                 type="number"
@@ -330,6 +357,15 @@
               />
               %
             </label>
+            <!-- Mute state (mute & mute-group) -->
+            <select
+              v-if="(action.kind || 'fader') !== 'fader'"
+              :value="action.muted ? 'mute' : 'unmute'"
+              @change="onX18MutedChange(action, $event)"
+            >
+              <option value="mute">{{ t('x18.mute') }}</option>
+              <option value="unmute">{{ t('x18.unmute') }}</option>
+            </select>
           </div>
         </div>
 
@@ -606,7 +642,7 @@ const x18Actions = computed<X18Action[]>(() => {
 });
 
 const addX18Action = () => {
-  x18Actions.value.push({ trigger: 'start', target: 'master', level: 0 });
+  x18Actions.value.push({ trigger: 'start', kind: 'fader', target: 'master', level: 0 });
   handleSave();
 };
 
@@ -615,10 +651,36 @@ const removeX18Action = (i: number) => {
   handleSave();
 };
 
+// Switch an action's kind (fader / mute / mute-group), seeding sensible
+// defaults and dropping now-irrelevant fields.
+const onX18KindChange = (action: X18Action, e: Event) => {
+  const kind = (e.target as HTMLSelectElement).value as X18Action['kind'];
+  action.kind = kind;
+  if (kind === 'mute-group') {
+    if (!action.group || action.group < 1 || action.group > 4) action.group = 1;
+    if (action.muted === undefined) action.muted = true;
+    delete action.target;
+    delete action.channel;
+    delete action.level;
+  } else {
+    if (!action.target) action.target = 'master';
+    if (kind === 'mute') {
+      if (action.muted === undefined) action.muted = true;
+      delete action.level;
+    } else {
+      // fader
+      if (action.level === undefined) action.level = 0;
+      delete action.muted;
+    }
+  }
+  handleSave();
+};
+
 const onX18TargetChange = (action: X18Action) => {
-  // Channel target needs a valid channel number; default to 1.
-  if (action.target === 'channel') {
-    if (!action.channel || action.channel < 1 || action.channel > 16) action.channel = 1;
+  // channel/bus need a valid index; master needs none.
+  if (action.target && action.target !== 'master') {
+    const max = action.target === 'bus' ? 6 : 16;
+    if (!action.channel || action.channel < 1 || action.channel > max) action.channel = 1;
   } else {
     delete action.channel;
   }
@@ -626,8 +688,20 @@ const onX18TargetChange = (action: X18Action) => {
 };
 
 const onX18ChannelChange = (action: X18Action) => {
+  const max = action.target === 'bus' ? 6 : 16;
   const ch = Math.round(Number(action.channel) || 1);
-  action.channel = Math.min(16, Math.max(1, ch));
+  action.channel = Math.min(max, Math.max(1, ch));
+  handleSave();
+};
+
+const onX18GroupChange = (action: X18Action) => {
+  const g = Math.round(Number(action.group) || 1);
+  action.group = Math.min(4, Math.max(1, g));
+  handleSave();
+};
+
+const onX18MutedChange = (action: X18Action, e: Event) => {
+  action.muted = (e.target as HTMLSelectElement).value === 'mute';
   handleSave();
 };
 

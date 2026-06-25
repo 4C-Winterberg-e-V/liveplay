@@ -29,6 +29,7 @@
            active-cue list below gets the full width (icon-only to stay slim). -->
       <TransportButtons class="header-transport" />
 
+      <Btn class="header-action" :class="{ 'header-action--active': mainView === 'x18' }" icon="equalizer" :text="t('x18.title')" @click="toggleX18" />
       <Btn class="header-action" icon="tune" :text="t('settings.title')" @click="showProjectSettings = true" />
       <Btn class="header-action" icon="keyboard" :text="t('controls.shortcutBtn')" @click="showControlConfig = true" />
       <Btn v-if="hasElectron" class="header-action" icon="share" :text="t('webShare.button')" @click="showWebShare = true" />
@@ -47,6 +48,10 @@
         <template v-if="showHeaderMenu">
           <div class="header-overflow__backdrop" @click="showHeaderMenu = false"></div>
           <div class="header-overflow__menu">
+            <button type="button" @click="toggleX18(); showHeaderMenu = false">
+              <span class="material-symbols-rounded">equalizer</span>
+              <span>{{ t('x18.title') }}</span>
+            </button>
             <button type="button" @click="showProjectSettings = true; showHeaderMenu = false">
               <span class="material-symbols-rounded">tune</span>
               <span>{{ t('settings.title') }}</span>
@@ -127,6 +132,13 @@ const showWebShare = ref(false);
 const hasElectron = import.meta.client && !!(window as any).electronAPI;
 // Mobile-only ⋯ overflow menu (settings + shortcuts).
 const showHeaderMenu = ref(false);
+
+// Top-level view switch (workspace vs X18 control board). Shared with
+// MainWorkspace via useState.
+const mainView = useState<'workspace' | 'x18'>('mainView', () => 'workspace');
+const toggleX18 = () => {
+  mainView.value = mainView.value === 'x18' ? 'workspace' : 'x18';
+};
 
 const isDark = computed(() => currentProject.value?.theme.mode === 'dark');
 const currentTime = ref('00:00:00');
@@ -493,6 +505,12 @@ onMounted(() => {
   background-color: var(--color-surface);
   transition: color var(--transition-base), border-color var(--transition-base);
   min-width: 110px;
+}
+
+/* Active state for the X18 main-view nav button. */
+.header-action--active {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .clock--active {

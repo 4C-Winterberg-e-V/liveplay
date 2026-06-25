@@ -771,6 +771,7 @@ json ProjectState::default_empty_document() {
         {"cartItems",     json::array()},
         {"cartSlotKeys",  json::object()},
         {"playbackKeys",  json::object()},
+        {"x18Board",      json::array()},
         {"cartOnlyItems", json::array()},
         {"theme",         json{{"mode", "dark"}, {"accentColor", "#DA1E28"}}},
         {"settings",      json{
@@ -1442,6 +1443,7 @@ json ProjectState::header_document() const {
         {"cartItems",    document_.value("cartItems",     json::array())},
         {"cartSlotKeys", document_.value("cartSlotKeys",  json::object())},
         {"playbackKeys", document_.value("playbackKeys",  json::object())},
+        {"x18Board",     document_.value("x18Board",      json::array())},
         {"cartOnlyItems", std::move(cart_only)},
         {"itemCount",    item_count},
         // "Open" means a real project landed — either it has items or it
@@ -3248,19 +3250,94 @@ void ProjectState::set_external_action_handler(std::function<void(const json&)> 
 }
 
 // ---------------------------------------------------------------------------
-// Behringer X18 fader actions — fired on item start/stop. The console is
-// driven directly from the server over OSC/UDP (port 10024) so it reacts even
-// when no UI client is connected. An action's `level` is a percentage 0..100
-// mapping linearly to the X-Air fader value 0.0..1.0 (0 % = fader fully down).
-// Master uses /lr/mix/fader; a channel uses /ch/NN/mix/fader (NN = 01..16).
+// Behringer X18 OSC command dispatch. Performs a single console command
+// described by `cmd` against `ip` over OSC/UDP (port 10024). Shared by the
+// per-cue start/stop actions and the on-demand /api/x18/action endpoint.
+//
+//   cmd.kind   : "fader" (default) | "mute" | "mute-group"
+//   cmd.target : "master" (default) | "channel" | "bus"   (fader & mute)
+//   cmd.channel: 1..16 for channel, 1..6 for bus
+//   cmd.level  : 0..100 percent (fader) -> X-Air fader 0.0..1.0
+//   cmd.group  : 1..4 (mute-group)
+//   cmd.muted  : bool (mute & mute-group)
+//
+// X-Air value semantics (easy to get wrong):
+//   * /…/mix/on  : int 1 = channel ON / UNMUTED, 0 = MUTED
+//   * /config/mute/N : int 1 = group MUTED, 0 = UNMUTED   (inverted!)
+//   * faders are float 0.0..1.0
 // ---------------------------------------------------------------------------
+namespace {
+constexpr std::uint16_t kX18OscPort = 10024;
+
+// Build the strip base address ("/lr", "/ch/NN", "/bus/N") for the command's
+// target, then append `suffix`. Returns empty when the channel/bus index is
+// out of range so the caller can skip an invalid command.
+std::string x18_strip_address(const json& cmd, const char* suffix) {
+    const std::string target = cmd.value("target", std::string{"master"});
+    if (target == "channel") {
+        const int ch = cmd.value("channel", 0);
+        if (ch < 1 || ch > 16) return {};
+        char nn[3];
+        std::snprintf(nn, sizeof(nn), "%02d", ch);
+        return std::string{"/ch/"} + nn + suffix;
+    }
+    if (target == "bus") {
+        const int b = cmd.value("channel", 0);
+        if (b < 1 || b > 6) return {};
+        return std::string{"/bus/"} + std::to_string(b) + suffix;
+    }
+    return std::string{"/lr"} + suffix;  // master / LR
+}
+
+void x18_dispatch_command(const std::string& ip, const json& cmd) {
+    if (ip.empty() || !cmd.is_object()) return;
+    const std::string kind = cmd.value("kind", std::string{"fader"});
+
+    if (kind == "mute-group") {
+        const int g = cmd.value("group", 0);
+        if (g < 1 || g > 4) return;
+        const bool muted = cmd.value("muted", false);
+        net::osc_send_int(ip, kX18OscPort,
+                          std::string{"/config/mute/"} + std::to_string(g),
+                          muted ? 1 : 0);
+        return;
+    }
+    if (kind == "mute") {
+        const std::string addr = x18_strip_address(cmd, "/mix/on");
+        if (addr.empty()) return;
+        const bool muted = cmd.value("muted", false);
+        net::osc_send_int(ip, kX18OscPort, addr, muted ? 0 : 1);
+        return;
+    }
+    // Default: fader.
+    const std::string addr = x18_strip_address(cmd, "/mix/fader");
+    if (addr.empty()) return;
+    float pct = cmd.value("level", 0.0f);
+    pct = std::clamp(pct, 0.0f, 100.0f);
+    net::osc_send_float(ip, kX18OscPort, addr, pct / 100.0f);
+}
+} // namespace
+
+// Snapshot the console IP from settings under the lock; the network I/O runs
+// without mutex_ held.
+std::string ProjectState::x18_ip_locked_snapshot() {
+    std::lock_guard lock{mutex_};
+    if (document_.contains("settings") && document_["settings"].is_object()) {
+        const auto& s = document_["settings"];
+        if (s.contains("x18Ip") && s["x18Ip"].is_string())
+            return s["x18Ip"].get<std::string>();
+    }
+    return {};
+}
+
+// Per-cue X18 actions — fired on item start/stop so the console reacts even
+// when no UI client is connected.
 void ProjectState::fire_x18_actions(const std::string& uuid,
                                     const std::string& trigger) {
-    // Snapshot the console IP and the matching actions under the lock; do the
-    // network I/O afterwards without holding mutex_.
+    // Snapshot the console IP and matching commands under the lock; dispatch
+    // the network I/O afterwards without holding mutex_.
     std::string ip;
-    // Each entry: (osc_address, fader_value 0..1).
-    std::vector<std::pair<std::string, float>> sends;
+    std::vector<json> cmds;
     {
         std::lock_guard lock{mutex_};
         if (document_.contains("settings") && document_["settings"].is_object()) {
@@ -3292,29 +3369,20 @@ void ProjectState::fire_x18_actions(const std::string& uuid,
         for (const auto& a : (*found)["x18Actions"]) {
             if (!a.is_object()) continue;
             if (a.value("trigger", std::string{}) != trigger) continue;
-
-            const std::string target = a.value("target", std::string{"master"});
-            float pct = a.value("level", 0.0f);
-            pct = std::clamp(pct, 0.0f, 100.0f);
-            const float fader = pct / 100.0f;
-
-            std::string address;
-            if (target == "channel") {
-                int ch = a.value("channel", 0);
-                if (ch < 1 || ch > 16) continue;   // out of range — skip
-                char nn[3];
-                std::snprintf(nn, sizeof(nn), "%02d", ch);
-                address = std::string{"/ch/"} + nn + "/mix/fader";
-            } else {
-                address = "/lr/mix/fader";
-            }
-            sends.emplace_back(std::move(address), fader);
+            cmds.push_back(a);
         }
     }
 
-    constexpr std::uint16_t kX18OscPort = 10024;
-    for (const auto& [addr, val] : sends)
-        net::osc_send_float(ip, kX18OscPort, addr, val);
+    for (const auto& cmd : cmds) x18_dispatch_command(ip, cmd);
+}
+
+// On-demand single X18 command (from POST /api/x18/action). Returns false when
+// no console IP is configured so the route can surface a clear error.
+bool ProjectState::fire_x18_action(const json& action) {
+    const std::string ip = x18_ip_locked_snapshot();
+    if (ip.empty()) return false;
+    x18_dispatch_command(ip, action);
+    return true;
 }
 
 void ProjectState::handle_item_ended(const SequencedItem& item) {

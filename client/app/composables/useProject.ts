@@ -535,6 +535,7 @@ export const useProject = () => {
         items: [],
         cartItems: [],
         cartSlotKeys: { ...DEFAULT_CART_SLOT_KEYS },
+        x18Board: [],
         cartOnlyItems: [],
         theme: { ...DEFAULT_THEME },
         createdAt: new Date().toISOString(),
@@ -817,6 +818,7 @@ export const useProject = () => {
       cartItems:      header.cartItems ?? [],
       cartSlotKeys:   header.cartSlotKeys ?? { ...DEFAULT_CART_SLOT_KEYS },
       playbackKeys:   header.playbackKeys,
+      x18Board:       header.x18Board ?? [],
       cartOnlyItems:  header.cartOnlyItems ?? [],
       theme:          header.theme ?? { ...DEFAULT_THEME },
       createdAt:      header.createdAt ?? new Date().toISOString(),
@@ -907,6 +909,7 @@ export const useProject = () => {
         cartItems:     toJSON(currentProject.value.cartItems) ?? [],
         cartSlotKeys:  toJSON((currentProject.value as any).cartSlotKeys),
         playbackKeys:  toJSON((currentProject.value as any).playbackKeys),
+        x18Board:      toJSON((currentProject.value as any).x18Board) ?? [],
         cartOnlyItems: itemsToJSON(currentProject.value.cartOnlyItems) ?? [],
         theme:         toJSON(currentProject.value.theme),
         settings:      toJSON((currentProject.value as any).settings),
@@ -1747,6 +1750,7 @@ export const useProject = () => {
     watch([
       () => (currentProject.value as any)?.cartSlotKeys,
       () => (currentProject.value as any)?.playbackKeys,
+      () => (currentProject.value as any)?.x18Board,
       () => currentProject.value?.name,
     ], () => {
       if (isHydrating.value || !currentProject.value) return;

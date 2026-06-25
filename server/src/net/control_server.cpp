@@ -2330,6 +2330,25 @@ void ControlServer::install_routes() {
             }
         });
 
+    // On-demand Behringer X18 console command (fader / mute / mute-group).
+    // Fire-and-forget OSC; used by the X18 control board's buttons and keys.
+    CROW_ROUTE(app, "/api/x18/action").methods(crow::HTTPMethod::Post)
+        ([this](const crow::request& req){
+            try {
+                auto action = json::parse(req.body);
+                Logger::api_request("Client ({}) -> Server ({}) : POST /api/x18/action",
+                                    req.remote_ip_address, impl_->server_addr);
+                if (!state_.fire_x18_action(action))
+                    return json_err(400, "X18 console IP not configured");
+                Logger::api_response("Client ({}) <- Server ({}) : POST /api/x18/action OK",
+                                     req.remote_ip_address, impl_->server_addr);
+                return json_ok(json({{"ok", true}}));
+            } catch (const std::exception& e) {
+                Logger::error("POST /api/x18/action threw: {}", e.what());
+                return json_err(400, e.what());
+            }
+        });
+
     // ------------------------------------------------------------------
     // WebSocket
     // ------------------------------------------------------------------
