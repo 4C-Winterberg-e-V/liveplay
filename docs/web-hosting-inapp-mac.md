@@ -55,8 +55,11 @@ Der C++-Server hat **keine eigene Authentifizierung** und die API erlaubt
   **vertrauten Netz** nutzen (Event-VLAN, kein Gäste-WLAN).
 - **Tunnel-Modus:** internet-erreichbar → die App **erzwingt automatisch ein
   BasicAuth-Gate** für die *gesamte* geteilte Seite (HTTP **und**
-  WebSocket-Handshake). Benutzer `liveplay`, **zufälliges Passwort pro Sitzung**,
-  im Teilen-Dialog angezeigt. Der Tunnel-QR enthält die Zugangsdaten, damit der
+  WebSocket-Handshake). Benutzer `liveplay`, standardmäßig **zufälliges Passwort
+  pro Sitzung** – alternativ lässt sich im Teilen-Dialog eine **feste PIN**
+  vergeben (Feld „PIN", leer = zufällig; persistiert in `liveplay-webshare.json`,
+  Umschalten wirkt sofort). Das Passwort wird im Teilen-Dialog angezeigt; der
+  Tunnel-QR enthält die Zugangsdaten, damit der
   erste Aufruf am Handy automatisch authentifiziert (Safari merkt sie sich und
   sendet sie auch beim WS-Handshake mit).
 - Da LAN und Tunnel denselben Host-Server teilen, gilt das Auth-Gate bei aktivem

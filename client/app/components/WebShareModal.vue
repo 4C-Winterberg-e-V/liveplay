@@ -85,6 +85,19 @@
         </label>
         <p v-if="!status.authEnabled" class="ws-hint ws-hint--warn">{{ t('webShare.authOffWarn') }}</p>
 
+        <!-- Manual PIN (empty ⇒ random). -->
+        <div v-if="status.authEnabled" class="ws-pinrow">
+          <label class="ws-field">
+            <span>{{ t('webShare.pinLabel') }}</span>
+            <input v-model.trim="pinInput" type="text" inputmode="numeric" maxlength="32"
+                   :placeholder="t('webShare.pinRandom')" @keyup.enter="savePin" />
+          </label>
+          <button type="button" class="ws-toggle" :disabled="busy" @click="savePin">
+            {{ t('webShare.pinSave') }}
+          </button>
+        </div>
+        <p v-if="status.authEnabled && pinMsg" class="ws-hint ws-config__saved">{{ pinMsg }}</p>
+
         <div v-if="status.tunnel === 'up' && status.tunnelUrl" class="ws-share">
           <img v-if="status.tunnelQr" :src="status.tunnelQr" alt="Tunnel QR" class="ws-qr" />
           <div class="ws-share__info">
@@ -164,13 +177,14 @@ interface WebShareStatus {
   tunnelStable: boolean;
   tunnelHostname: string | null;
   authEnabled: boolean;
+  customPin: string;
   auth: { user: string; pass: string } | null;
 }
 
 const defaultStatus: WebShareStatus = {
   hosting: false, webPort: null, lanUrls: [], lanQr: null,
   tunnel: 'down', tunnelUrl: null, tunnelQr: null, tunnelError: null,
-  tunnelStable: false, tunnelHostname: null, authEnabled: true, auth: null,
+  tunnelStable: false, tunnelHostname: null, authEnabled: true, customPin: '', auth: null,
 };
 
 // Stable-URL (named-tunnel) config — fetched once on mount, refreshed on save.
@@ -189,6 +203,8 @@ const status = ref<WebShareStatus>({ ...defaultStatus });
 const tcfg = ref<TunnelConfig>({ ...defaultTcfg });
 const form = ref({ hostname: '', token: '' });
 const tcfgMsg = ref('');
+const pinInput = ref('');     // editable copy of the custom PIN ('' ⇒ random)
+const pinMsg = ref('');
 const busy = ref(false);
 const error = ref('');
 
@@ -223,6 +239,20 @@ const stopTunnel   = () => run(() => api()?.stopTunnel());
 
 const toggleAuth = (e: Event) =>
   run(() => api()?.setAuthEnabled?.((e.target as HTMLInputElement).checked));
+
+async function savePin() {
+  pinMsg.value = '';
+  await run(async () => {
+    const res = await api()?.setPin?.(pinInput.value);
+    if (res && res.ok) {
+      pinMsg.value = pinInput.value ? t('webShare.pinSaved') : t('webShare.pinClearedMsg');
+      if (res.tunnel !== undefined) status.value = { ...defaultStatus, ...res };
+      pinInput.value = res.customPin || '';
+    } else if (res && res.error) {
+      error.value = res.error;
+    }
+  });
+}
 
 async function loadTunnelConfig() {
   const res = await api()?.getTunnelConfig?.();
@@ -278,7 +308,7 @@ onMounted(async () => {
   // Live status pushes (tunnel coming up, cloudflared exiting, …).
   unsub = w.onStateChange((s: WebShareStatus) => { status.value = { ...defaultStatus, ...s }; });
   const s = await w.getStatus();
-  if (s) status.value = { ...defaultStatus, ...s };
+  if (s) { status.value = { ...defaultStatus, ...s }; pinInput.value = s.customPin || ''; }
   await loadTunnelConfig();
 });
 
@@ -437,6 +467,16 @@ onUnmounted(() => { if (unsub) unsub(); });
   color: var(--color-error, #dc2626);
   font-size: 13px;
   margin: var(--spacing-sm) 0 0;
+}
+
+/* Manual-PIN row. */
+.ws-pinrow {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+  .ws-field { flex: 1; margin-top: 0; }
+  .ws-toggle { flex-shrink: 0; }
 }
 
 /* Optional-auth toggle. */

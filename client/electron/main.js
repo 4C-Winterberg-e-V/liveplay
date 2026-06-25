@@ -181,9 +181,10 @@ function writeTunnelConfig(cfg) {
   }
 }
 
-// Web-Share preferences (separate from the tunnel config). Currently just the
-// auth toggle: when false the BasicAuth gate stays OFF even on an internet-
-// facing tunnel → the shared site is PUBLIC. Defaults to on (true) for safety.
+// Web-Share preferences (separate from the tunnel config):
+//   - authEnabled: when false the BasicAuth gate stays OFF even on an internet-
+//     facing tunnel → the shared site is PUBLIC. Defaults to on (true).
+//   - pin: operator-chosen BasicAuth password. '' ⇒ a random PIN per launch.
 const LIVEPLAY_WEBSHARE_FILENAME = 'liveplay-webshare.json';
 
 function webSharePrefsPath() {
@@ -193,18 +194,25 @@ function webSharePrefsPath() {
 function readWebSharePrefs() {
   try {
     const parsed = JSON.parse(fs.readFileSync(webSharePrefsPath(), 'utf-8'));
-    return { authEnabled: parsed && parsed.authEnabled === false ? false : true };
+    return {
+      authEnabled: parsed && parsed.authEnabled === false ? false : true,
+      pin: parsed && typeof parsed.pin === 'string' ? parsed.pin : '',
+    };
   } catch {
-    return { authEnabled: true };
+    return { authEnabled: true, pin: '' };
   }
 }
 
-function writeWebSharePrefs(prefs) {
+// Merge a patch into the persisted prefs so updating one field never drops the
+// others.
+function updateWebSharePrefs(patch) {
+  const prefs = { ...readWebSharePrefs(), ...patch };
   try {
     fs.writeFileSync(webSharePrefsPath(), JSON.stringify(prefs, null, 2));
   } catch (e) {
     console.error('[web-share] could not persist preferences:', e);
   }
+  return prefs;
 }
 
 // ---------------------------------------------------------------------------
@@ -730,6 +738,7 @@ function getWebShare() {
     serverPort: readLiveplayConfig().localPort,
     namedTunnel: readTunnelConfig(),     // null ⇒ random quick tunnel
     authEnabled: readWebSharePrefs().authEnabled,
+    pin: readWebSharePrefs().pin,        // '' ⇒ random PIN
   });
   return webShare;
 }
@@ -767,8 +776,21 @@ ipcMain.handle('web-share:stop-tunnel', async () => {
 ipcMain.handle('web-share:set-auth-enabled', async (_e, enabled) => {
   try {
     const on = !!enabled;
-    writeWebSharePrefs({ authEnabled: on });
+    updateWebSharePrefs({ authEnabled: on });
     return { ok: true, ...(await getWebShare().setAuthEnabled(on)) };
+  } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+});
+
+// Set (or clear) the operator-chosen PIN (persisted). Empty ⇒ random PIN.
+// 4–32 chars; restricted to a phone-keypad-friendly set but letters allowed.
+ipcMain.handle('web-share:set-pin', async (_e, pin) => {
+  try {
+    const clean = String(pin == null ? '' : pin).trim();
+    if (clean && !/^[A-Za-z0-9]{4,32}$/.test(clean)) {
+      return { ok: false, error: 'PIN: 4–32 Zeichen, nur Buchstaben/Ziffern (oder leer für zufällig).' };
+    }
+    updateWebSharePrefs({ pin: clean });
+    return { ok: true, ...(await getWebShare().setPin(clean)) };
   } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
 });
 

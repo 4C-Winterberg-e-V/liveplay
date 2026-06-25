@@ -73,6 +73,9 @@ class WebShare extends EventEmitter {
     this.authEnabled = true;    // when false the BasicAuth gate stays OFF even
                                 // while a tunnel is up — the shared site is then
                                 // PUBLIC. Opt-out only; default on for safety.
+    this.customPin = null;      // operator-chosen PIN; when set it's used as the
+                                // auth password instead of a random one (and it
+                                // persists across app launches). null ⇒ random.
 
     this.namedTunnel = null;    // optional per-machine config for a STABLE URL
                                 // (operator's own Cloudflare account). When set,
@@ -85,12 +88,13 @@ class WebShare extends EventEmitter {
   }
 
   /** Wire up paths/ports before first use. Safe to call repeatedly. */
-  configure({ staticRoot, serverPort, devServerUrl, namedTunnel, authEnabled }) {
+  configure({ staticRoot, serverPort, devServerUrl, namedTunnel, authEnabled, pin }) {
     if (staticRoot) this.staticRoot = staticRoot;
     if (Number.isInteger(serverPort)) this.serverPort = serverPort;
     if (devServerUrl !== undefined) this.devServerUrl = devServerUrl;
     if (namedTunnel !== undefined) this.namedTunnel = normaliseNamedTunnel(namedTunnel);
     if (authEnabled !== undefined) this.authEnabled = !!authEnabled;
+    if (pin !== undefined) this.customPin = (typeof pin === 'string' && pin.trim()) ? pin.trim() : null;
   }
 
   // ── status ────────────────────────────────────────────────────────────
@@ -114,6 +118,7 @@ class WebShare extends EventEmitter {
       tunnelStable: !!this.namedTunnel,
       tunnelHostname: this.namedTunnel ? this.namedTunnel.hostname : null,
       authEnabled: this.authEnabled,
+      customPin: this.customPin || '',   // '' ⇒ a random PIN is used
       auth: this.auth ? { user: this.auth.user, pass: this.auth.pass } : null,
     };
   }
@@ -348,9 +353,24 @@ class WebShare extends EventEmitter {
   }
 
   _armAuth() {
-    if (!this.pin) this.pin = makePin(4);
+    // An operator-chosen PIN wins; otherwise reuse this process's random PIN
+    // (generated once) or mint a fresh one.
+    if (this.customPin) this.pin = this.customPin;
+    else if (!this.pin) this.pin = makePin(4);
     this.auth = { user: 'liveplay', pass: this.pin };
     this.sessionToken = crypto.randomBytes(18).toString('base64url');
+  }
+
+  // Set (or clear) the operator-chosen PIN. Empty ⇒ back to a random PIN. When a
+  // tunnel is already up with auth armed, re-arm so the new PIN takes effect at
+  // once (existing logged-in devices are dropped — the password changed).
+  setPin(pin) {
+    const clean = String(pin || '').trim();
+    this.customPin = clean || null;
+    this.pin = this.customPin;   // null ⇒ a fresh random PIN on the next arm
+    if (this.tunnelUrl && this.authEnabled) this._armAuth();
+    this.emitStatus();
+    return this.status();
   }
 
   // Toggle the BasicAuth gate. When a tunnel is already up we (dis)arm it on the
