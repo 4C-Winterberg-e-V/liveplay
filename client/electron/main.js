@@ -2213,6 +2213,13 @@ const menuTranslations = Object.entries(localeFiles).reduce((acc, [code, data]) 
     closeProject: data.menu.closeProject,
     openProjectFolder: data.menu.openProjectFolder,
     exit: data.menu.exit,
+    edit: data.menu.edit || 'Edit',
+    undo: data.menu.undo || 'Undo',
+    redo: data.menu.redo || 'Redo',
+    cut: data.menu.cut || 'Cut',
+    copy: data.menu.copy || 'Copy',
+    paste: data.menu.paste || 'Paste',
+    selectAll: data.menu.selectAll || 'Select All',
     view: data.menu.view,
     toggleDarkMode: data.menu.toggleDarkMode,
     changeAccentColor: data.menu.changeAccentColor,
@@ -2323,6 +2330,21 @@ function createMenu(locale = 'en', isDev = false) {
             app.quit();
           }
         }
+      ]
+    },
+    {
+      // Standard edit menu — without it the OS clipboard shortcuts (Cmd/Ctrl+V
+      // etc.) don't reach input fields in a packaged Electron app. Using `role`
+      // items wires up the native cut/copy/paste behaviour and accelerators.
+      label: t.edit,
+      submenu: [
+        { role: 'undo',      label: t.undo },
+        { role: 'redo',      label: t.redo },
+        { type: 'separator' },
+        { role: 'cut',       label: t.cut },
+        { role: 'copy',      label: t.copy },
+        { role: 'paste',     label: t.paste },
+        { role: 'selectAll', label: t.selectAll },
       ]
     },
     {
