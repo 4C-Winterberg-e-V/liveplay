@@ -59,6 +59,31 @@ function run(cmd, args, opts = {}) {
   }
 }
 
+// Stop a server that is already listening on `port`. The desktop client runs
+// the C++ server *detached* (it survives app quit) and reattaches to it via a
+// lockfile on the next launch — so after a rebuild the freshly-built binary is
+// never spawned unless the stale process is stopped first. Best-effort: POSIX
+// uses lsof; on Windows we just print a hint (no portable one-liner).
+function stopStaleServer() {
+  const port = process.env.LIVEPLAY_PORT || '4480';
+  if (process.platform === 'win32') {
+    console.log(`[liveplay] rebuilt — if a server is still running on :${port}, ` +
+                'stop it (close its console window) so the new build is used.');
+    return;
+  }
+  let pids = [];
+  try {
+    const res = spawnSync('lsof', ['-ti', `tcp:${port}`], { encoding: 'utf8' });
+    pids = (res.stdout || '').split('\n').map(s => s.trim()).filter(Boolean);
+  } catch { /* lsof unavailable — nothing we can do */ }
+  for (const pid of pids) {
+    try {
+      process.kill(Number(pid), 'SIGTERM');
+      console.log(`[liveplay] stopped stale server (pid ${pid}, :${port}) so the rebuilt binary is used`);
+    } catch { /* already gone / not ours */ }
+  }
+}
+
 function configure() {
   // Pick a preset that matches the host. Falls through to 'default' (Ninja)
   // on Unix; vs2022 on Windows so users don't need Ninja on PATH.
@@ -76,6 +101,7 @@ function build() {
 }
 
 const existing = findBinary();
+let rebuildingStale = false;
 if (existing) {
   const binMtime = fs.statSync(existing).mtimeMs;
   if (newestSourceMtime() <= binMtime) {
@@ -84,6 +110,7 @@ if (existing) {
   }
   // Sources changed since the last build — fall through to an incremental
   // rebuild so the running app actually picks up the new server code.
+  rebuildingStale = true;
   console.log('[liveplay] server sources changed since last build — rebuilding (incremental).');
 } else {
   console.log('[liveplay] server binary not found — building once. Subsequent dev runs skip this step when unchanged.');
@@ -100,3 +127,7 @@ if (!built) {
   process.exit(1);
 }
 console.log(`[liveplay] built ${built}`);
+
+// A previous (now-stale) server may still be running and would be reattached
+// to instead of our fresh build — stop it so the new binary actually launches.
+if (rebuildingStale) stopStaleServer();
