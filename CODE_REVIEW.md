@@ -1,8 +1,32 @@
 # LivePlay — Code Review & Audit (Phase 1)
 
-> **Scope:** Read-only audit of the whole repository at branch `claude/repo-audit-modernization-0j5c42` (fork of `tdoukinitsas/liveplay`), commit `b47ea39`. No source code was changed; this report is the only artefact added.
+> **Scope:** Read-only audit of the whole repository at branch `claude/repo-audit-modernization-0j5c42` (fork of `tdoukinitsas/liveplay`), audit baseline commit `b47ea39`; **reconciled after merging `main` (PR #9, `0cf6ada` — removes the `deploy/` hosting kit).** No source code was changed by this review; this report is the only artefact added.
 > **Date:** 2026-06-26 · **Reviewer role:** Staff-level engineer.
 > **Method:** The codebase was partitioned into 19 areas/dimensions; each was read in full by a dedicated reviewer, and **every finding was then independently re-verified against the cited source** by a second, adversarial pass (3 findings were rejected as false positives — see Appendix B). 167 findings survived verification (155 from the 19-area pass + a 12-finding follow-up review of the server bootstrap/crash/discovery code). After consolidating cross-area duplicates, this report presents **152 distinct findings**.
+
+---
+
+## Aktualisierung: Merge von `main` (PR #9 — `deploy/` entfernt)
+
+Nach dem Audit wurde `main` in diesen Branch gemergt. **PR #9 (`df02972`/`0cf6ada`) entfernt den kompletten `deploy/`-Ordner** (Docker-/Caddy-/nginx-/Traefik-Hosting-Kit) und konsolidiert auf das in-App-Sharing (cloudflared). Damit sind folgende Befunde **hinfällig / erledigt** und unten entsprechend markiert (✅ **RESOLVED via PR #9**):
+
+| Erledigt | Befund | Grund |
+|---|---|---|
+| **C-03** | Deploy-Dockerfile `COPY` baut nicht | Dockerfiles gelöscht |
+| **M-37** | Kein `.dockerignore` | Deploy-Build entfällt |
+| **L-09** | Caddy/nginx ohne Security-Header | Dateien gelöscht |
+| **L-10** | nginx/Caddy-Container laufen als root | Dateien gelöscht |
+| **L-48** | Mode-A-Compose 443 ohne TLS | Dateien gelöscht |
+| **L-49** | Traefik hartkodiert LAN-IP | Dateien gelöscht |
+| **L-54** | Unpinnte Base-Images | Dateien gelöscht |
+| **L-61** | Kein `HEALTHCHECK` | Dateien gelöscht |
+
+**Noch offen / weiterhin gültig** (vom Merge **nicht** betroffen): alle C++-/Client-/Audio-/Test-/CI-Befunde, **M-31** (Crash-Dump liegt noch im Root), **M-47** (`docs/web-client-hosting-auftrag.md` enthält weiterhin CORS-/CSRF-Exploit-Details **und** den internen Branch-Namen `claude/beautiful-euler-bjk770`), sowie die Doku-Altlasten „Nuxt 3" und „20 Sprachen".
+
+**Neu durch den Merge (Doku-Inkonsistenz):**
+- **N-1 · [Documentation, Low]** — `README.md` (Z. 65, 180, 184) und `docs/web-hosting.md` beschreiben weiterhin die **Mode-A-Hosting-Variante mit Caddy/nginx/Traefik** und „BasicAuth-Gate", obwohl die zugehörigen Beispielkonfigurationen (`deploy/`) gerade entfernt wurden. *Fix:* README/docs an die Konsolidierung „nur in-App-Sharing" angleichen oder klarstellen, dass Mode A „bring-your-own-Reverse-Proxy" ohne mitgelieferte Configs bedeutet (und den Hinweis auf das gelöschte `deploy/`-Kit streichen).
+
+**Aktualisierte Zählung (offen, Betrieb-angepasst):** 🔴 0 · 🟠 11 · 🟡 **48** · ⚪ **85** = **144 offen** (+ 8 durch PR #9 erledigt; + N-1 neu). Die Tabellen unten zeigen weiterhin die ursprünglichen Nummern; erledigte Einträge sind markiert.
 
 ---
 
@@ -22,9 +46,9 @@ Diese Klarstellung ändert die Bewertung erheblich. Die ursprüngliche Einstufun
 |---|---:|---:|---|
 | 🔴 **Critical** | **0** | 3 | Unter dem Betriebsmodell verbleibt **kein** kritischer Befund. |
 | 🟠 **High** | **11** | 26 | **Fast nur noch Zuverlässigkeit/Korrektheit/Wartbarkeit:** Use-after-free, Endlos­rekursion-Crash, kaputtes LTC-Timecode, Sync-Desync/Datenverlust, Listener-Leaks, unsicherer Crash-Handler, God-Module, **keine Tests**, **keine CI-Gates** — plus der fehlgeleitete Auto-Updater (C-02). |
-| 🟡 **Medium** | **50** | 53 | Nicht-atomares `save()`, Dependency-Aktualität, Container/Deploy-Defekte, sowie herabgestufte Security-Härtung. |
-| ⚪ **Low** | **91** | 70 | Robustheit/Qualität/Accessibility + die als Defense-in-Depth herabgestuften Netz-/Angreifer-abhängigen Security-Punkte. |
-| **Summe** | **152** | 152 | (167 verifizierte Befunde, Duplikate konsolidiert.) |
+| 🟡 **Medium** | **50** (offen 48) | 53 | Nicht-atomares `save()`, Dependency-Aktualität, sowie herabgestufte Security-Härtung. (2 erledigt durch PR #9: C-03, M-37) |
+| ⚪ **Low** | **91** (offen 85) | 70 | Robustheit/Qualität/Accessibility + die als Defense-in-Depth herabgestuften Punkte. (6 erledigt durch PR #9) |
+| **Summe** | **152** (offen **144**) | 152 | (167 verifizierte Befunde, Duplikate konsolidiert; 8 durch PR #9 erledigt, + N-1 neu — siehe Abschnitt oben.) |
 
 ### Neubewertungs-Tabelle (welche IDs sich ändern und warum)
 
@@ -69,7 +93,7 @@ LivePlay is a genuinely capable, thoughtfully-commented live-audio cue system: a
 
 **Security is now secondary / defense-in-depth.** The unauthenticated `0.0.0.0` control plane and related items (C-01 and most former High security findings) are re-rated downward because both access paths are already authenticated by their perimeter — **Cloudflare Access** for the remote phone-control tunnel, and the **controlled network** for local/LAN use. Note that `0.0.0.0` binding is *required* for the server-only deployment (a remote client must be able to connect), so loopback-binding is not a valid fix there. **The one security item that remains worth attention regardless of network is C-02:** the auto-updater still points every install at the *upstream* maintainer's GitHub — independent of CF Access or network trust. As cheap defense-in-depth, an optional app-level token on the control API would mean the perimeter is not the *only* layer.
 
-**Quick wins (high value, low effort):** commit a `pnpm-lock.yaml` + switch CI to `--frozen-lockfile`; add a lint/type-check CI job; repoint the updater feed/publish metadata to the fork (C-02); fix the Dockerfile `COPY` if you use Docker hosting (C-03); `git rm` the committed 73 KB crash dump (M-31); rename `LICENCE.txt` → `LICENSE`; correct the stale README facts (Nuxt 3→4, 20→21 locales). *(Note: do **not** force the server to `127.0.0.1` — server-only mode needs `0.0.0.0`; if you want app-level defense-in-depth, add an optional token instead.)*
+**Quick wins (high value, low effort):** commit a `pnpm-lock.yaml` + switch CI to `--frozen-lockfile`; add a lint/type-check CI job; repoint the updater feed/publish metadata to the fork (C-02); `git rm` the committed 73 KB crash dump (M-31); rename `LICENCE.txt` → `LICENSE`; correct the stale README facts (Nuxt 3→4, 20→21 locales). *(Note: do **not** force the server to `127.0.0.1` — server-only mode needs `0.0.0.0`; if you want app-level defense-in-depth, add an optional token instead.)*
 
 **Overall assessment:** architecturally sound foundation that is **appropriate for your closed, small-event use**; the real exposure is **operational fragility** (no tests/CI) and **a few crash/data-loss bugs**, not network attack. None of this requires a rewrite — the fixes are well-scoped and mostly additive.
 
@@ -83,7 +107,7 @@ LivePlay is a genuinely capable, thoughtfully-commented live-audio cue system: a
 - **Client:** TypeScript + Vue 3 (SFCs), Nuxt 4 (`ssr: false`, SPA), packaged with **Electron 42** via `electron-builder`; pnpm 9 workspace; SCSS. 47 components, ~12 composables.
 - **Server:** **C++20**, built with **CMake + vcpkg** (manifest mode). Key deps: **Crow** (HTTP/WS), **nlohmann_json**, **miniaudio** (audio I/O + decode), **TagLib** (metadata), **miniz** (`.lpa` zip).
 - **Docs site:** separate Nuxt 4 app, deployed to GitHub Pages.
-- **Deploy:** Docker images (nginx / Caddy), Caddyfile, nginx.conf, Traefik dynamic config, docker-compose (two hosting modes).
+- **Deploy:** ~~Docker images (nginx / Caddy), Caddyfile, nginx.conf, Traefik, docker-compose~~ — **removed in PR #9**; remote phone access is now solely the in-app cloudflared share (gated by Cloudflare Access).
 - **Scripts:** Node build orchestration + a `version.js` bumper + locale tooling (one JS sync tool + seven redundant one-off Python/JS migration scripts).
 
 **Architecture (data flow)**
@@ -136,9 +160,9 @@ The server is the source of truth for the project document and audio; the client
 - **Impact:** Whoever controls `tdoukinitsas/liveplay` releases (or that GitHub Pages site) can push an executable to every fork user — a classic supply-chain takeover. Even absent malice, fork users silently receive *upstream* builds, diverging from the code they think they run. Combined with the fact that **all releases are unsigned/un-notarized** (M-35), there is no second line of defence.
 - **Recommendation:** Repoint `setFeedURL`, the manual-update URLs, `build.publish`, `repository`, `homepage`, and `author` to the fork before any release that ships auto-update; **or** disable auto-update until the feed is corrected. Add Authenticode/notarization (M-35) and publish SHA-256 checksums as defence-in-depth.
 
-### C-03 · [→ Betrieb: 🟡 Medium] Deploy Dockerfiles `COPY` a `package-lock.json` that does not exist — image build fails outright
+### C-03 · ✅ RESOLVED via PR #9 — ~~Deploy Dockerfiles `COPY` a `package-lock.json` that does not exist~~
 
-> **Neubewertung (Betrieb): 🟡 Medium.** Reiner Build-Defekt; betrifft **nur**, falls ihr das optionale Docker-/Web-Hosting tatsächlich einsetzt. Wenn ihr nur die Electron-App nutzt, irrelevant.
+> **✅ Erledigt durch PR #9:** der gesamte `deploy/`-Ordner (inkl. beider Dockerfiles) wurde entfernt. Befund hinfällig. *(Ursprünglich Critical; im Betrieb auf Medium herabgestuft, da nur den optionalen Docker-Pfad betreffend.)*
 - **Category:** CI/CD / Correctness · **Effort:** S
 - **Location:** `deploy/Dockerfile:17` · `deploy/Dockerfile.caddy:14`
 - **Description:** Both images run `COPY client/package.json client/package-lock.json ./`, but no `package-lock.json` is tracked or present anywhere in the repo (it is even gitignored; the project uses pnpm). When `COPY` names multiple explicit sources and one is missing, BuildKit fails the build.
@@ -455,7 +479,7 @@ SIGNING.md states (lines 8-14) Windows (SignPath applied-for, not active), macOS
 Confirmed all pins. build-release.yml: github-script@v7 (107), ilammy/msvc-dev-cmd@v1 (132), pnpm/action-setup@v4 (168), softprops/action-gh-release@v1 (429).  
 *Fix:* Pin all third-party actions to full commit SHAs with a version comment; add .github/dependabot.yml (github-actions ecosystem) to bump them; upgrade softprops/action-gh-release to a current pinned SHA.
 
-**M-37 · [CI/CD] No .dockerignore — entire repo (incl. node_modules, .git, server build artifacts) sent as build context**  
+**M-37 · ✅ RESOLVED via PR #9 — ~~No .dockerignore~~** *(deploy/ removed)*  
 `deploy/Dockerfile:20, deploy/Dockerfile.caddy:16; missing .dockerignore at repo root` · Aufwand **S**  
 Build context is the repository ROOT (compose files set `context: ..` / `context: ../..`; Dockerfile header lines 6-8 document this).  
 *Fix:* Add a .dockerignore (repo root and/or client/) excluding node_modules, .git, .output, .nuxt, dist, *.env, server/build. At minimum ignore node_modules.
@@ -556,8 +580,8 @@ Compact log of lower-impact robustness, quality, accessibility and minor-correct
 | L-06 | Security | Multipart /api/upload writes attacker-named files straight into the project media root… | `server/src/net/control_server.cpp:1338-1375` | Require the same loopback/same-origin gate suggested for project/load, or refuse to overwrite an existing media file (write to a unique name) so an… | S |
 | L-07 | Security | normalise() silently falls back to lexically_normal when weakly_canonical fails,… | `server/src/util/fs_sandbox.cpp:29-34` | On weakly_canonical failure, fail closed (return empty so authorize() returns nullopt → 403) rather than falling back to lexically_normal, or accept… | S |
 | L-08 | Security | path_within treats an empty base (or empty leading component) as matching everything | `server/src/util/fs_sandbox.cpp:56-68` | At the top of path_within, return false if base.empty(); also reject a base whose first iterated component is empty rather than treating it as a full… | S |
-| L-09 | Security | Caddy reverse proxy and nginx set no security headers and no upstream timeouts/health | `deploy/Caddyfile:18-30, deploy/nginx.conf:5-22` | Add a Caddy `header` directive (nosniff, frame-ancestors none/X-Frame-Options DENY, Referrer-Policy, HSTS on HTTPS) and reverse_proxy dial/read… | S |
-| L-10 | Security | nginx and Caddy containers run as root; no container hardening directives | `deploy/Dockerfile:29-32, deploy/Dockerfile.caddy:22-25,…` | Add a non-root USER (unprivileged nginx variant or chown + listen >1024) and in compose add `read_only: true` + tmpfs, `cap_drop: [ALL]`,… | M |
+| ✅ L-09 | Security | Caddy reverse proxy and nginx set no security headers and no upstream timeouts/health | `deploy/Caddyfile:18-30, deploy/nginx.conf:5-22` | Add a Caddy `header` directive (nosniff, frame-ancestors none/X-Frame-Options DENY, Referrer-Policy, HSTS on HTTPS) and reverse_proxy dial/read… | S |
+| ✅ L-10 | Security | nginx and Caddy containers run as root; no container hardening directives | `deploy/Dockerfile:29-32, deploy/Dockerfile.caddy:22-25,…` | Add a non-root USER (unprivileged nginx variant or chown + listen >1024) and in compose add `read_only: true` + tmpfs, `cap_drop: [ALL]`,… | M |
 | L-11 | Security | State-viewer window loads interpolated HTML via a data: URL and inserts state keys… | `client/electron/main.js:1933 (createStateViewerWindow),…` | Escape keys as well as values (or build the DOM with textContent), and prefer a packaged local file with a CSP over a data: URL. | S |
 | L-12 | Security | Named-tunnel ingress config written world-readable to a predictable temp path | `client/electron/web-share.js:432-445,447-452` | Write with mode 0o600 and/or use fs.mkdtemp for a private dir; consider O_EXCL creation to avoid pre-created-path attacks. | S |
 | L-13 | Correctness | ensure-server.js stale-server kill targets ANY process bound to the port, not just… | `scripts/ensure-server.js:67-85` | Before killing, confirm the PID's executable basename is liveplay-server (read /proc/<pid>/comm on Linux, ps -p <pid> -o comm= elsewhere) and skip… | S |
@@ -595,20 +619,20 @@ Compact log of lower-impact robustness, quality, accessibility and minor-correct
 | L-45 | Code Quality | prime() holds decoder_mutex_ and does blocking disk I/O; render_block try_lock emits… | `server/src/audio/playback_item.cpp:314-367, 418-419` | Early-return false from prime() when transport is Playing/FadingIn, or prime via a separate decoder handle that does not contend with the live… | S |
 | L-46 | Code Quality | Most preload ipcRenderer.on helpers expose no unsubscribe — listener leaks and possible… | `client/electron/preload.js:85-96 (onMenu*), 116-120…` | Make every onX helper wrap the listener and return a disposer (as the server/webShare/app/discovery ones do); have components dispose on unmount. | M |
 | L-47 | Input Validation | setServerUrl persists arbitrary user URL to localStorage and immediately connects without… | `client/app/composables/useLiveplayServer.ts:78-117` | Validate the URL is http(s) with a parseable host before storing/connecting; fall back to the loopback default and surface an error otherwise. | S |
-| L-48 | Config/Secrets | Mode A compose publishes 443 but the homelab default never serves TLS on it | `deploy/docker-compose.mode-a-caddy.yml:20,24-26,…` | Comment out `443:443` in the default file or gate it behind the hostname instructions, making clear it is only needed once LIVEPLAY_SITE_ADDR is a… | S |
-| L-49 | Config/Secrets | Traefik file-provider config hardcodes a LAN IP and proxies plaintext to the open server… | `deploy/traefik/liveplay-dynamic.yml:19,33,…` | Template the upstream URL and Host via env/generated dynamic file, add a loadBalancer healthCheck, and pair with the basicAuth middleware from… | M |
+| ✅ L-48 | Config/Secrets | Mode A compose publishes 443 but the homelab default never serves TLS on it | `deploy/docker-compose.mode-a-caddy.yml:20,24-26,…` | Comment out `443:443` in the default file or gate it behind the hostname instructions, making clear it is only needed once LIVEPLAY_SITE_ADDR is a… | S |
+| ✅ L-49 | Config/Secrets | Traefik file-provider config hardcodes a LAN IP and proxies plaintext to the open server… | `deploy/traefik/liveplay-dynamic.yml:19,33,…` | Template the upstream URL and Host via env/generated dynamic file, add a loadBalancer healthCheck, and pair with the basicAuth middleware from… | M |
 | L-50 | Dependencies | express@^4.18.2 — Express 4 EOL track; v5 is current/recommended | `client/package.json:51; client/electron/web-share.js:40…` | Plan a migration to express@5 (or the built-in node http server, which the app already uses elsewhere). Low urgency; track it. | M |
 | L-51 | Dependencies | fluent-ffmpeg@^2.1.3 — unmaintained wrapper used for audio processing | `client/package.json:53; client/electron/main.js:9 (require);…` | Invoke ffmpeg directly via child_process with a fixed argv array (no shell string interpolation), or move to a maintained wrapper. Audit that no… | M |
 | L-52 | Dependencies | uuid@^9.0.1 and archiver@^7.0.1 — minor currency / floating ranges | `client/package.json:47 (archiver ^7.0.1), :57 (uuid ^9.0.1);…` | Bump uuid when convenient. Higher-value action is committing the lockfile so archiver's transitive tree is pinned (see lockfile finding). | S |
 | L-53 | Dependencies | vcpkg uses a single builtin-baseline with version>= floors — server deps not exactly… | `server/vcpkg.json:8-30 (dependencies with version>=), :30…` | Keep the baseline and add explicit version overrides for the security-sensitive parsers (crow, taglib, miniz) so baseline bumps don't silently change… | S |
-| L-54 | Dependencies | Base images are unpinned floating tags — non-reproducible builds, silent base drift | `deploy/Dockerfile:12,29, deploy/Dockerfile.caddy:12,22` | Pin base images by digest or full patch tag, and pair with a committed lockfile + `npm ci`. Document pinned versions. | M |
+| ✅ L-54 | Dependencies | Base images are unpinned floating tags — non-reproducible builds, silent base drift | `deploy/Dockerfile:12,29, deploy/Dockerfile.caddy:12,22` | Pin base images by digest or full patch tag, and pair with a committed lockfile + `npm ci`. Document pinned versions. | M |
 | L-55 | CI/CD | Release job does not pin its build inputs to the released tag / version mismatch risk | `.github/workflows/build-release.yml:16-47,264-274,400-410,428-…` | Have the release job check out the exact SHA build ran against (pass github.sha as an output), fail fast if the tag already exists, and special-case… | M |
 | L-56 | CI/CD | deploy-docs deploy job lacks environment protection and installs with… | `.github/workflows/deploy-docs.yml:14-21,39-44,62-69` | Commit a lockfile and switch to --frozen-lockfile, add a github-pages environment to the deploy job, and SHA-pin actions/deploy-pages and… | S |
 | L-57 | CI/CD | electron:build retried up to 3x without cleaning partial output (non-idempotent retry) | `.github/workflows/build-release.yml:217-235,237-255` | rm -rf client/dist-electron at the start of each retry attempt so only the final successful build's output is ever collected. | S |
 | L-58 | Tests | build pipeline and locale scripts have no tests, no CI lint, and no schema/placeholder… | `scripts/ (whole directory)` | Add a lightweight CI check loading every client/locales/*.json: assert valid JSON, assert key-set parity with en.json (extend sync-locale-keys.js… | M |
 | L-59 | Tooling/DX | Four Python locale scripts write JSON without a trailing newline, fighting the newline… | `scripts/add_all_missing_locales.py:719,…` | Add f.write('\n') after each json.dump in the four scripts, or delete them per the consolidation finding. Better: route all locale writes through one… | S |
 | L-60 | Tooling/DX | setup-docs-site.ps1 runs 'npm install' inside docs-site, contradicting the documented… | `setup-docs-site.ps1:16; README.md:67,295-307` | Change the script to pnpm install (or pnpm --filter ./docs-site install), or delete it if docs-site is covered by root pnpm install; document it in… | S |
-| L-61 | Observability | No HEALTHCHECK or compose healthcheck — orchestrator cannot detect a wedged web container | `deploy/Dockerfile:1-33, deploy/Dockerfile.caddy:1-26,…` | Add a HEALTHCHECK (e.g. `wget -qO- http://localhost/ \|\| exit 1`) to each runtime stage or a compose `healthcheck` hitting /index.html. | S |
+| ✅ L-61 | Observability | No HEALTHCHECK or compose healthcheck — orchestrator cannot detect a wedged web container | `deploy/Dockerfile:1-33, deploy/Dockerfile.caddy:1-26,…` | Add a HEALTHCHECK (e.g. `wget -qO- http://localhost/ \|\| exit 1`) to each runtime stage or a compose `healthcheck` hitting /index.html. | S |
 | L-62 | Documentation | 10 print-resolution PDF icon masters committed as source assets across three trees | `client/assets/icons/PDF/ (6 files),…` | Keep one canonical copy of the design masters (or move to a design-assets branch/location), remove the duplicated public/ copies, and gitignore… | S |
 | L-63 | Documentation | License file named LICENCE.txt (British spelling) — GitHub/SPDX tooling will not… | `LICENCE.txt:1; README.md:277,526; client/package.json:30;…` | Rename to LICENSE (or add a LICENSE copy/symlink) and update the two README references (lines 277, 526). | S |
 | L-64 | Documentation | README locale-count says 20 but 21 locale files exist; no automated tests cover the… | `README.md:30,504; scripts/README.md:49; client/locales/` | Fix the count to 21 in README.md:30,504. Add smoke/integration tests for the fork-added security surface (PIN/BasicAuth gate, filesystem sandbox… | M |
@@ -682,7 +706,7 @@ These are absences rather than defects in existing code — the layers a state-o
 | Build & locale scripts | Node build/version + 5 Python + 2 `.mjs` locale scripts | M-10/25/41, L |
 | CI/CD | 3 workflows, `SIGNING.md`, `installer.nsh` | H-23, M-35/36/39, L |
 | Dependencies | all `package.json`, `.npmrc`, `vcpkg.json` | H-04(cross), M-07/32/33/34/38, L |
-| Deploy / containers | Dockerfiles, Caddy/nginx/Traefik, compose | C-03, M-37, L |
+| ~~Deploy / containers~~ | Dockerfiles, Caddy/nginx/Traefik, compose | ✅ all RESOLVED via PR #9 (C-03, M-37, L-09/10/48/49/54/61) |
 | Docs / hygiene / licensing | READMEs, `docs/*`, `LICENCE.txt`, crash file, fonts | M-29/30/31/34/45/46/47/48, L |
 | Tests (cross-cutting) | whole-repo test search | H-24, M-39/40/41 |
 
@@ -709,7 +733,7 @@ Nothing below has been changed yet. **Re-ordered for your operating model** — 
 - M-31 `git rm "liveplay crash.txt"` + add crash-dump globs to `.gitignore`.
 - M-48 / docs: Nuxt 3→4, 20→21 locales; L: rename `LICENCE.txt`→`LICENSE`.
 - C-01 optional defense-in-depth: add an app-level token to the control API (do **not** force loopback — server-only mode needs `0.0.0.0`). Low priority given CF Access + controlled network already gate both paths.
-- C-03 fix Dockerfile `COPY` **only if** you use the Docker/web-hosting path.
+- ~~C-03 fix Dockerfile `COPY`~~ — ✅ resolved by PR #9 (`deploy/` removed); instead, **N-1** align README/`docs/web-hosting.md` with the "in-app sharing only" consolidation (drop references to the removed Caddy/nginx/Traefik kit).
 
 **Wave 1 — Crash-safety & data integrity (this is what bites at an event)**
 - H-15 recursion/cycle guard (a looping/mis-configured cue chain currently crashes the server); H-14 `find_cue` returns `shared_ptr` (use-after-free); H-26 async-signal-safe crash handler; H-16 LTC timecode continuity.
