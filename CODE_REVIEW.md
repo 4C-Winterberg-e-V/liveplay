@@ -6,31 +6,74 @@
 
 ---
 
+## Betriebskontext & Neubewertung (Stand: nach Rücksprache mit dem Betreiber)
+
+> **Vom Betreiber präzisiertes Einsatzszenario:** LivePlay wird **nicht frei zugänglich** betrieben — der Zugriff ist auf **authentifizierte/vertrauenswürdige Personen** beschränkt (Zugangskontrolle auf Netzwerkebene), und das Programm läuft **nur bei kleinen Events**. Das öffentliche Web-Share / der cloudflared-Tunnel wird nicht als offener Internet-Dienst betrieben. **„Hacking" ist damit kein vorrangiges Risiko.**
+
+Diese Klarstellung ändert die Bewertung erheblich. Die ursprüngliche Einstufung ging vom „worst case" aus (feindlicher Akteur im selben Netz / öffentliches Internet). Unter dem realen Betriebsmodell werden alle Befunde, die **einen Angreifer mit Netzwerk- oder Dateizugriff voraussetzen, herabgestuft** und als *Defense-in-Depth* geführt. Befunde zu **Zuverlässigkeit, Korrektheit, Datenintegrität und Wartbarkeit** bleiben unverändert — denn das eigentliche Risiko bei einem kleinen Event ist **ein Absturz oder Datenverlust mitten in der Veranstaltung**, nicht ein Angriff.
+
+**Zwei Annahmen, die diese Entlastung tragen** (bitte gegenprüfen):
+1. **Das Netz ist tatsächlich geschlossen.** Bei einem Event auf gemeinsam genutztem/Venue-WLAN gilt „nur authentifizierte Personen" nur, wenn ein **eigener, abgeschotteter Access Point/Router** verwendet wird (kein Gast-/Fremdzugang im selben Subnetz). Da es **keine App-seitige Authentifizierung** gibt, ist die Netzgrenze die einzige Schutzschicht. Deshalb bleibt die *eine* fast kostenlose Maßnahme empfehlenswert: den Server auf `127.0.0.1` binden bzw. nur an das Crew-Interface (C-01) — damit die Annahme nicht allein trägt.
+2. **Das öffentliche Web-Share/Tunnel-Feature wird nicht genutzt.** Falls doch (Telefon-Steuerung über cloudflared ins Internet), springen **H-05, H-06, H-07 und C-01 wieder hoch** — sie betreffen genau diesen Pfad.
+
+### Befundübersicht — angepasst an euren Betrieb
+
+| Schweregrad | Betrieb (angepasst) | Absolut (ursprünglich) | Inhalt |
+|---|---:|---:|---|
+| 🔴 **Critical** | **0** | 3 | Unter dem Betriebsmodell verbleibt **kein** kritischer Befund. |
+| 🟠 **High** | **11** | 26 | **Fast nur noch Zuverlässigkeit/Korrektheit/Wartbarkeit:** Use-after-free, Endlos­rekursion-Crash, kaputtes LTC-Timecode, Sync-Desync/Datenverlust, Listener-Leaks, unsicherer Crash-Handler, God-Module, **keine Tests**, **keine CI-Gates** — plus der fehlgeleitete Auto-Updater (C-02). |
+| 🟡 **Medium** | **50** | 53 | Nicht-atomares `save()`, Dependency-Aktualität, Container/Deploy-Defekte, sowie herabgestufte Security-Härtung. |
+| ⚪ **Low** | **91** | 70 | Robustheit/Qualität/Accessibility + die als Defense-in-Depth herabgestuften Netz-/Angreifer-abhängigen Security-Punkte. |
+| **Summe** | **152** | 152 | (167 verifizierte Befunde, Duplikate konsolidiert.) |
+
+### Neubewertungs-Tabelle (welche IDs sich ändern und warum)
+
+Die detaillierten Einträge unten behalten ihre **ursprüngliche** (kontext-unabhängige) Einstufung und ID. Maßgeblich für euch ist die Spalte „→ Betrieb".
+
+| ID | Ursprünglich | → Betrieb | Begründung |
+|---|---|---|---|
+| **C-01** unauth. Control-Plane `0.0.0.0` | 🔴 Critical | 🟡 **Medium** | Kein Live-Risiko im geschlossenen Netz; bleibt empfohlen (Loopback-Bind, ~kostenlos) als Defense-in-Depth und weil das Tunnel-Feature es re-exponiert. |
+| **C-02** Auto-Updater zeigt auf Upstream | 🔴 Critical | 🟠 **High** | **Netz-unabhängig:** betrifft, woher Updates kommen (Upstream-GitHub), nicht wer im LAN ist. Fork-Installationen ziehen fremde Binaries → bleibt vorrangig. |
+| **C-03** Deploy-Dockerfile baut nicht | 🔴 Critical | 🟡 **Medium** | Reiner Build-Defekt; trifft **nur**, falls ihr das optionale Docker-/Web-Hosting nutzt. |
+| **H-01** `webSecurity:false`/kein CSP | 🟠 High | 🟡 **Medium** | Lokale Härtung; Ausnutzung erfordert erst einen Fuß in den Renderer. |
+| **H-02** keine Navigation/`open-external`-Guards | 🟠 High | 🟡 **Medium** | Lokale Härtung, Defense-in-Depth. |
+| **H-03** Pfad-IPC ohne Validierung | 🟠 High | 🟡 **Medium** | Setzt kompromittierten Renderer voraus. |
+| **H-04** Binär-Download (yt-dlp/deno) ohne Integritätsprüfung | 🟠 High | 🟡 **Medium** | **Netz-unabhängig** (MITM/Upstream-Kompromittierung beim Download übers Internet) — daher nicht ganz herunter; bleibt Medium. |
+| **H-10** Zip-Slip bei `.lpa`-Import | 🟠 High | 🟡 **Medium** | Angriff über bösartige Datei wird unwahrscheinlich; **Robustheit gegen fehlerhafte Dateien bleibt** relevant. |
+| **H-11** Zip-Bomb / unbegrenzte Body-Größe | 🟠 High | 🟡 **Medium** | DoS durch Angreifer entfällt; eine versehentlich riesige Datei → OOM bleibt möglich. |
+| **H-20** unbegrenzte Kanalzahl → Allokation (`compute_waveform`) | 🟠 High | 🟡 **Medium** | Braucht ungewöhnliche Datei; der `noexcept`→`terminate`-Absturz bleibt als Robustheits-Bug. |
+| **H-21** `compute_waveform` synchron im Request-Thread | 🟠 High | 🟡 **Medium** | Bei 1–2 Clients eher kurze Blockade als Ausfall; trotzdem fixen. |
+| **H-05** DNS-Rebinding (Proxy) | 🟠 High | ⚪ **Low** | Nur relevant bei Internet-Tunnel (siehe Annahme 2). |
+| **H-06** 4-stellige PIN ohne Rate-Limit | 🟠 High | ⚪ **Low** | Nur relevant, wenn der öffentliche Tunnel genutzt wird. |
+| **H-07** Auth-Gate abschaltbar | 🟠 High | ⚪ **Low** | Nur relevant beim öffentlichen Tunnel. |
+| **H-08** `GET` auf Play/Trigger → CSRF | 🟠 High | ⚪ **Low** | Erfordert, dass die Bedienperson eine bösartige Seite öffnet — im geschlossenen Betrieb marginal. |
+| **H-09** `project/load` umgeht Sandbox | 🟠 High | ⚪ **Low** | Setzt bösartige Anfrage voraus; bleibt als Hinweis (Root-Promotion). |
+| **H-12** SSRF via projektdefinierter `http-request`-Action | 🟠 High | ⚪ **Low** | Setzt bösartiges Projektdokument voraus; bei vertrauenswürdigen Projekten gering. |
+| **H-13** Mass-Assignment über HTTP-API | 🟠 High | ⚪ **Low** | Setzt bösartigen API-Client im Netz voraus. |
+| **H-25** UDP-Discovery Reflection/Amplification | 🟠 High | ⚪ **Low** | Setzt Angreifer im LAN voraus. |
+| **Security-Mediums** → Low | 🟡 Medium | ⚪ **Low** | Im geschlossenen Betrieb Defense-in-Depth: **M-01, M-02, M-03, M-05, M-06, M-07, M-08, M-09, M-49, M-50, M-51, M-52, M-53**. (M-04 bleibt Medium — Robustheit gegen fehlerhafte Mediendateien.) |
+
+**Unverändert 🟠 High (das, was bei einem Event wirklich zählt):** C-02 (Auto-Updater) · **H-14** Use-after-free im Meter-Broadcast (Crash) · **H-15** Endlosrekursion → Stack-Overflow-Crash (auch durch *versehentlich* zyklische Cue-Verkettung auslösbar) · **H-16** LTC-Timecode bricht ab · **H-17** Sync verschluckt Fehler → Client/Server-Desync · **H-18** `isHydrating`-Race · **H-19** Subscriber-Leaks (Degradation über lange Sessions) · **H-22** `useProject`-God-Composable · **H-23** keine CI-Gates · **H-24** null Tests · **H-26** Crash-Handler nicht signal-sicher.
+
+---
+
 ## Executive Summary
 
 LivePlay is a genuinely capable, thoughtfully-commented live-audio cue system: a Nuxt 4 / Vue 3 / Electron client driving an out-of-process C++20 audio engine over a localhost/LAN HTTP+WebSocket protocol, plus a phone-facing web-share mode and a docs site. The core engineering instincts are good — the real-time audio path is largely lock-free, the client↔server sync layer is carefully reasoned, and the documentation is unusually honest about its own limitations.
 
-**The dominant risk is security at the trust boundary.** The C++ control server binds to `0.0.0.0` by default with **no authentication, fully-open CORS, and filesystem read/write endpoints**, and the Electron app spawns it without restricting it to loopback. The result: anyone on the same network (Wi-Fi at a venue, a conference LAN) — and, when the web-share tunnel is enabled, anyone on the internet behind a brute-forceable 4-digit PIN — can drive playback, read and write files in the operator's Music/Documents/Desktop/Downloads folders, and trigger cues via a plain `GET` (so even a malicious web page the operator merely visits can fire cues). This single architectural decision spawns the bulk of the Critical/High findings.
+**Given your operating model (closed network, trusted/authenticated users, small events — see the section above), the dominant risk is reliability and data integrity, not security.** What threatens a small event is a crash or data loss *during* the show, and a codebase that has no way to catch regressions before they reach the stage. Specifically:
 
-**The second systemic risk is the absence of any safety net.** There are **zero automated tests** anywhere (≈10,500 lines of C++ + ≈4,700 lines of client composables), **no lint/type-check/static-analysis gate**, and **no committed lockfile**, so every release ships unverified and non-reproducibly. For a tool used live during shows, a regression in the sync engine, the `.lpa` parser, or the audio path would surface on stage. Two of the three Critical findings are not even exploits — they are a supply-chain hijack (the auto-updater still points every install at the *upstream* maintainer's GitHub) and a deploy config that simply does not build.
+**The leading risk is the complete absence of a safety net.** There are **zero automated tests** anywhere (≈10,500 lines of C++ + ≈4,700 lines of client composables), **no lint/type-check/static-analysis gate**, and **no committed lockfile**, so every release ships unverified and non-reproducibly. A regression in the sync engine, the `.lpa` parser, or the audio path would surface on stage with nothing to catch it.
 
-**Biggest risks (fix first):** the unauthenticated `0.0.0.0` control plane (C-01), the misdirected auto-updater (C-02), a stack-overflow crash reachable from a hostile/looping project (H-15), a use-after-free in the meter broadcast loop (H-14), and zip-slip/zip-bomb on `.lpa` import (H-10/H-11).
+**The second risk is a handful of latent crash/data-loss defects** that do not need an attacker: a use-after-free in the meter broadcast loop (H-14), a stack-overflow crash reachable from a *mis-configured or looping* cue chain (H-15), broken LTC timecode continuity (H-16), a sync path that silently swallows errors and desyncs client/server state (H-17), subscriber leaks that degrade a long session (H-19), a non-atomic `save()` that can corrupt a project and still report success (M-17), and a crash handler that can itself hang on the worst crashes (H-26).
 
-**Quick wins (high value, low effort):** bind the server to `127.0.0.1` and pass `--bind` from Electron (closes most of C-01 for the default desktop case); repoint the updater feed/publish metadata to the fork (C-02); fix the Dockerfile `COPY` (C-03); `git rm` the committed 73 KB crash dump (M-31); commit a `pnpm-lock.yaml` and switch CI to `--frozen-lockfile` (BUILD); add a lint/type-check CI job; rename `LICENCE.txt` → `LICENSE`; and correct the stale README facts.
+**Security is now secondary / defense-in-depth.** The unauthenticated `0.0.0.0` control plane and related items (C-01 and most former High security findings) are re-rated downward because they presume a hostile actor on the network, which your model excludes. **Two security items remain worth attention regardless:** the auto-updater still points every install at the *upstream* maintainer's GitHub (C-02 — independent of network trust), and the near-free hardening of binding the server to loopback (C-01) so the "closed network" assumption isn't the only thing standing between the app and a stray device.
 
-**Overall assessment:** architecturally sound foundation, **not currently safe to run on an untrusted network**, and operationally fragile due to the complete lack of tests/CI gates. None of this requires a rewrite — the fixes are well-scoped and mostly additive.
+**Quick wins (high value, low effort):** commit a `pnpm-lock.yaml` + switch CI to `--frozen-lockfile`; add a lint/type-check CI job; repoint the updater feed/publish metadata to the fork (C-02); bind the server to `127.0.0.1`/`--bind` (C-01, cheap hardening); fix the Dockerfile `COPY` if you use Docker hosting (C-03); `git rm` the committed 73 KB crash dump (M-31); rename `LICENCE.txt` → `LICENSE`; correct the stale README facts (Nuxt 3→4, 20→21 locales).
 
-### Findings at a glance
+**Overall assessment:** architecturally sound foundation that is **appropriate for your closed, small-event use**; the real exposure is **operational fragility** (no tests/CI) and **a few crash/data-loss bugs**, not network attack. None of this requires a rewrite — the fixes are well-scoped and mostly additive.
 
-| Severity | Count | Nature |
-|---|---:|---|
-| 🔴 **Critical** | 3 | Network-exploitable control plane; supply-chain hijack of the updater; broken deploy build. |
-| 🟠 **High** | 26 | Auth/CSRF/SSRF/path & zip handling; UDP reflection; a crash, a use-after-free, an unsafe crash-handler; god-modules; no tests; no CI gates. |
-| 🟡 **Medium** | 53 | TOCTOU/zip-slip refinements, non-atomic save, listener leaks, dependency currency, container hardening, info-leaks, docs/hygiene. |
-| ⚪ **Low** | 70 | Robustness/quality/accessibility nits, dead code, minor correctness. |
-| **Total** | **152 distinct** | (167 verified findings; cross-area duplicates consolidated — see note below.) |
-
-> **Consolidation note.** Several findings recur across areas because one root cause manifests in many files. They are merged here: the unauthenticated-`0.0.0.0` theme (6 raw findings → **C-01**), the upstream auto-updater (3 → **C-02**), the missing lockfile (2 → **BUILD/H**), the `project/load` sandbox bypass (3 → **H-09**), and the runtime binary downloads (3 → **H-04**). IDs are stable references for Phase 2.
+> **Consolidation note.** Several findings recur across areas because one root cause manifests in many files. They are merged here: the unauthenticated-`0.0.0.0` theme (6 raw findings → **C-01**), the upstream auto-updater (3 → **C-02**), the missing lockfile (2 → **BUILD/H**), the `project/load` sandbox bypass (3 → **H-09**), and the runtime binary downloads (3 → **H-04**). IDs are stable references for Phase 2; severities shown in the detailed sections below are the **original/absolute** ratings — see the re-rating table above for the values that apply to your operation.
 
 ---
 
@@ -73,21 +116,29 @@ The server is the source of truth for the project document and audio; the client
 
 ## 🔴 Critical Findings
 
-### C-01 · Unauthenticated control plane bound to `0.0.0.0` — full LAN/internet control of playback **and the filesystem**
+> **Betriebskontext:** Unter eurem Einsatzmodell (geschlossenes Netz, vertrauenswürdige Nutzer) verbleibt **kein** kritischer Befund. Die drei Einträge sind neu bewertet: **C-01 → 🟡 Medium**, **C-02 → 🟠 High**, **C-03 → 🟡 Medium**. Die ausführliche Beschreibung unten nennt den ursprünglichen „worst case"; die für euch maßgebliche Einstufung steht jeweils im Hinweis.
+
+### C-01 · [→ Betrieb: 🟡 Medium] Unauthenticated control plane bound to `0.0.0.0` — full LAN/internet control of playback **and the filesystem**
+
+> **Neubewertung (Betrieb): 🟡 Medium.** Im geschlossenen Netz mit vertrauenswürdigen Nutzern kein Live-Risiko. Trotzdem empfohlen, weil **fast kostenlos** (Loopback-Bind) und weil es die einzige Schutzschicht ergänzt sowie das Tunnel-Feature den Pfad re-exponiert. Beschreibung unten = ursprünglicher worst case.
 - **Category:** Security · **Effort:** M (default-bind fix is S; full auth model is L)
 - **Location:** `server/src/main.cpp:246,598` · `server/include/liveplay/net/control_server.hpp:53` · `server/src/net/control_server.cpp:359` (bind), `:888-895` (CORS `*`), `:1289-1374` (fs/list, upload), `:1705-1910` (export/download/import) · `client/electron/main.js:540-543` (spawn omits `--bind`), `:1472-1657` (Electron's *own* express API, also `0.0.0.0`, also no auth) · `client/electron/web-share.js:212` (LAN bind)
 - **Description:** `ControlServerConfig::bind_address` and `CliOptions::bind_addr` both default to `"0.0.0.0"`, and the Electron launcher spawns the server with only `--port`/`--pidfile`, **never `--bind`**, so even ordinary "Local" mode listens on every interface. Crow runs with no middleware, token, or password gate of any kind (verified: none exists), and emits `Access-Control-Allow-Origin: *`. The exposed surface includes playback control, full project disclosure (`GET /api/project/info`), directory listing, `mkdir`, file upload/copy, and `.lpa` export/import/download — scoped only by `FsSandbox`, whose default roots are the user's Music/Documents/Desktop/Downloads + a LivePlay library folder. Electron *additionally* stands up its own express control API on `0.0.0.0` with no auth (`main.js:1657`).
 - **Impact:** Any host on the same network — a venue's shared Wi-Fi, a hotel/conference LAN — can take over playback mid-show and read/write files in the operator's home folders **without any credential**. With web-share's tunnel enabled the same surface is reachable from the internet (behind only the weaknesses in H-06/H-07). This is the repository's central risk and the root of most other High findings.
 - **Recommendation:** (1) **Immediately:** default the bind to `127.0.0.1` and have Electron pass `--bind 127.0.0.1` for Local mode — this closes the LAN exposure for the common desktop case at near-zero cost. (2) Introduce a real auth layer for any non-loopback exposure: a per-session bearer token (the client already holds one channel to inject it) or a pairing/PIN handshake, checked in a Crow `before_handle` middleware on **all** routes incl. `/ws`; restrict CORS to the real client origin. (3) Treat web-share's LAN path with the same auth as its tunnel path (see H-05/06/07). (4) Apply the same bind/auth fix to Electron's express API or remove it.
 
-### C-02 · Auto-updater and manual-update fallback point at the **upstream** repo — supply-chain hijack of every fork install
+### C-02 · [→ Betrieb: 🟠 High] Auto-updater and manual-update fallback point at the **upstream** repo — supply-chain hijack of every fork install
+
+> **Neubewertung (Betrieb): 🟠 High — bleibt vorrangig.** Netz-unabhängig: betrifft, woher Updates geladen werden (Upstream-GitHub), nicht wer im LAN ist. Fork-Installationen ziehen/installieren fremde Binaries.
 - **Category:** Security / Supply chain · **Effort:** S
 - **Location:** `client/electron/main.js:1682-1687` (`autoUpdater.setFeedURL` hard-codes `owner:'tdoukinitsas', repo:'liveplay'`), `:1753` & `:1778` (manual fallback fetches `https://tdoukinitsas.github.io/liveplay/...`), `:2687` (`quitAndInstall`) · `client/package.json:94-98` (`build.publish.owner = tdoukinitsas`), `:5` (homepage), `:110` (signtool publisherName)
 - **Description:** The git remote is `4C-Winterberg-e-V/liveplay`, but the runtime update feed is hard-coded to the upstream maintainer's GitHub releases, and the manual-update path downloads from the upstream's GitHub Pages. `electron-builder`'s publish config agrees. So a fork build will pull, and offer to install, binaries it does not control.
 - **Impact:** Whoever controls `tdoukinitsas/liveplay` releases (or that GitHub Pages site) can push an executable to every fork user — a classic supply-chain takeover. Even absent malice, fork users silently receive *upstream* builds, diverging from the code they think they run. Combined with the fact that **all releases are unsigned/un-notarized** (M-35), there is no second line of defence.
 - **Recommendation:** Repoint `setFeedURL`, the manual-update URLs, `build.publish`, `repository`, `homepage`, and `author` to the fork before any release that ships auto-update; **or** disable auto-update until the feed is corrected. Add Authenticode/notarization (M-35) and publish SHA-256 checksums as defence-in-depth.
 
-### C-03 · Deploy Dockerfiles `COPY` a `package-lock.json` that does not exist — image build fails outright
+### C-03 · [→ Betrieb: 🟡 Medium] Deploy Dockerfiles `COPY` a `package-lock.json` that does not exist — image build fails outright
+
+> **Neubewertung (Betrieb): 🟡 Medium.** Reiner Build-Defekt; betrifft **nur**, falls ihr das optionale Docker-/Web-Hosting tatsächlich einsetzt. Wenn ihr nur die Electron-App nutzt, irrelevant.
 - **Category:** CI/CD / Correctness · **Effort:** S
 - **Location:** `deploy/Dockerfile:17` · `deploy/Dockerfile.caddy:14`
 - **Description:** Both images run `COPY client/package.json client/package-lock.json ./`, but no `package-lock.json` is tracked or present anywhere in the repo (it is even gitignored; the project uses pnpm). When `COPY` names multiple explicit sources and one is missing, BuildKit fails the build.
@@ -97,6 +148,8 @@ The server is the source of truth for the project document and audio; the client
 ---
 
 ## 🟠 High Findings
+
+> **Betriebskontext:** Die Überschriften unten tragen die **ursprüngliche** (worst-case) Einstufung. Angepasst an euren Betrieb bleiben nur **11** Befunde „High" — im Wesentlichen Zuverlässigkeit/Korrektheit/Wartbarkeit: **C-02, H-14, H-15, H-16, H-17, H-18, H-19, H-22, H-23, H-24, H-26**. Auf 🟡 Medium herabgestuft: **H-01, H-02, H-03, H-04, H-10, H-11, H-20, H-21**. Auf ⚪ Low (Defense-in-Depth / nur bei Internet-Tunnel relevant): **H-05, H-06, H-07, H-08, H-09, H-12, H-13, H-25**. Details in der Neubewertungs-Tabelle oben.
 
 ### Electron client & web-share
 
@@ -569,9 +622,9 @@ Compact log of lower-impact robustness, quality, accessibility and minor-correct
 
 ## Was fehlt? — Systemic gaps ("what's missing")
 
-These are absences rather than defects in existing code — the layers a state-of-the-art project of this shape would have, ordered by leverage.
+These are absences rather than defects in existing code — the layers a state-of-the-art project of this shape would have. The list is ordered by *absolute* leverage; **under your closed/small-event model, re-prioritise to: §2 Tests first, then §3 CI/CD and §4 Observability, then §5 Architecture. §1 (security/trust model) drops to "defense-in-depth / only essential if you ever open the network or use the public tunnel," and §6 licensing/hygiene stays (the auto-updater + fork identity are network-independent).**
 
-### 1. A security/trust model (the biggest gap)
+### 1. A security/trust model — *(for your model: defense-in-depth, not urgent — unless you expose the tunnel)*
 - **No authentication or pairing** on the control plane (REST + `/ws`), the Electron express API, or the UDP discovery handshake. The `FsSandbox` is the *only* access control and it is bypassed by one route (H-09). There is no token, no per-client identity, no "trusted local client vs arbitrary LAN peer" distinction.
 - **No transport security** for non-loopback use beyond an external reverse proxy; the discovery beacon advertises an unauthenticated endpoint in cleartext.
 - **No request limits**: no `max_payload`, no rate limiting, no connection cap, no body-size gate before buffering, no bound on `doc_patch`/meter broadcast fan-out (each new WS client triggers a snapshot under locks).
@@ -648,29 +701,28 @@ The discovery-area review likewise explicitly confirmed the `recvfrom` UDP parse
 
 ## Suggested Phase 2 prioritization (for your go-ahead)
 
-Nothing below has been changed yet. Recommended sequencing — I'd want your sign-off on scope before touching code, especially the auth model (behaviour change) and any history rewrite.
+Nothing below has been changed yet. **Re-ordered for your operating model** — reliability and the safety net come first; network-security work is demoted to optional hardening. I'd want your sign-off on scope before touching code, especially anything that changes behaviour or touches git history.
 
 **Wave 0 — Quick wins / safe, mostly non-behavioural (≈1 day)**
-- C-03 fix Dockerfile `COPY` (+ a build smoke job).
-- C-02 repoint updater feed/publish/homepage/author to the fork (or disable auto-update until correct).
+- M-38 commit `pnpm-lock.yaml`; switch CI to `--frozen-lockfile` (makes builds reproducible).
+- C-02 repoint updater feed/publish/homepage/author to the fork (or disable auto-update until correct) — the one security item that matters regardless of network.
 - M-31 `git rm "liveplay crash.txt"` + add crash-dump globs to `.gitignore`.
 - M-48 / docs: Nuxt 3→4, 20→21 locales; L: rename `LICENCE.txt`→`LICENSE`.
-- M-38 commit `pnpm-lock.yaml`; switch CI to `--frozen-lockfile`.
-- M-47 move the internal exploit work-order out of public `docs/`.
+- C-01 cheap hardening: default-bind `127.0.0.1` / pass `--bind` from Electron (no auth model needed — just so the closed-network assumption isn't load-bearing).
+- C-03 fix Dockerfile `COPY` **only if** you use the Docker/web-hosting path.
 
-**Wave 1 — Close the network exposure (the headline risk)**
-- **C-01**: default-bind `127.0.0.1` + pass `--bind 127.0.0.1` from Electron (small, closes the LAN hole for the default desktop case) — then design the opt-in auth/pairing model for LAN/tunnel use (H-05/06/07/08/13, M-08).
-- H-09 authorize the `project/load` path / restrict to loopback; H-25 rate-limit + on-link-filter discovery.
-- Add `app.max_payload` + body/zip caps (H-11), zip-slip containment check (H-10).
+**Wave 1 — Crash-safety & data integrity (this is what bites at an event)**
+- H-15 recursion/cycle guard (a looping/mis-configured cue chain currently crashes the server); H-14 `find_cue` returns `shared_ptr` (use-after-free); H-26 async-signal-safe crash handler; H-16 LTC timecode continuity.
+- M-17 atomic `save()` (no silent corruption / false "saved"); M-16 validate on `replace_full_document`.
+- H-17/H-18/H-19 client sync error-handling, `isHydrating` race, subscriber leaks.
 
-**Wave 2 — Crash-safety & data integrity (live-show reliability)**
-- H-15 recursion/cycle guard; H-14 `find_cue` returns `shared_ptr`; H-26 async-signal-safe crash handler; H-16 LTC continuity.
-- M-17 atomic `save()`; M-16 validate on `replace_full_document`; H-17/H-18/H-19 client sync error-handling, latch race, subscriber leaks.
+**Wave 2 — Establish the safety net (so the above stays fixed)**
+- H-23/H-24: stand up Vitest (client) + CTest/doctest (server) + ASan/UBSan/TSan builds + a happy-path integration test (spawn→load→play→stop) + a lint/type-check CI gate; start by extracting pure logic from the god-modules (H-22, M-40). Highest-value test targets: `.lpa`/`.liveplay` round-trip, the sync/diff engine, and the audio math.
 
-**Wave 3 — Establish the safety net (so the above stays fixed)**
-- H-23/H-24: stand up Vitest + CTest + ASan/UBSan/TSan + a happy-path integration test, lint/type-check gate; start by extracting pure logic from the god-modules (H-22, M-40).
+**Wave 3 — Quality / maintainability (opportunistic)**
+- God-module extraction (H-22, M-26/27), dependency currency (M-32/33; http-proxy/express/fluent-ffmpeg), accessibility (M-43/44), locale-script consolidation (M-25), ADRs (M-45), font/PDF de-duplication (M-34).
 
-**Wave 4 — Quality/maintainability (opportunistic)**
-- God-module extraction (H-22, M-26/27), dependency currency (M-32/33, http-proxy/express/fluent-ffmpeg), container hardening (L), accessibility (M-43/44), locale-script consolidation (M-25), ADRs (M-45).
+**Wave 4 — Security hardening (optional / only if the environment opens up)**
+- Defense-in-depth and required *if* you ever expose the web-share tunnel to the internet: an auth/pairing model + restricted CORS (C-01, H-05/06/07/08/13, M-08), `project/load` authorization (H-09), `app.max_payload` + zip caps + zip-slip containment (H-10/H-11), discovery rate-limit/on-link filter (H-25). Skip while the network stays closed.
 
-**My recommendation:** approve **Wave 0** immediately (low risk, high signal), then **Wave 1** as the priority — and tell me which auth model you prefer for LAN/tunnel (loopback-only by default vs. token vs. PIN-pairing). I will work on `chore/code-review-improvements`, one atomic commit per topic, running tests/linters as I add them, and I will check back before any larger refactor or anything touching git history.
+**My recommendation:** approve **Wave 0** immediately (low risk, high signal), then **Wave 1** (crash/data-loss bugs) as the priority — these are what threaten a live event under your model. **Wave 4 (security) can wait** unless you plan to use the public phone-sharing tunnel, in which case tell me and I'll pull it forward. I will work on `chore/code-review-improvements`, one atomic commit per topic, running tests/linters as I add them, and I will check back before any larger refactor or anything touching git history.
