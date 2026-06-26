@@ -2,7 +2,7 @@
   "name": "liveplay",
   "version": "2.1.2",
   "description": "Audio cue playback application for live events",
-  "homepage": "https://github.com/tdoukinitsas/liveplay",
+  "homepage": "https://github.com/4C-Winterberg-e-V/liveplay",
   "main": "electron/main.js",
   "type": "commonjs",
   "scripts": {
@@ -93,7 +93,7 @@
     ],
     "publish": {
       "provider": "github",
-      "owner": "tdoukinitsas",
+      "owner": "4C-Winterberg-e-V",
       "repo": "liveplay"
     },
     "win": {

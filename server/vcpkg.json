@@ -3,7 +3,7 @@
   "name": "liveplay-server",
   "version-string": "2.1.2",
   "description": "LivePlay headless audio engine and control server.",
-  "homepage": "https://github.com/tdoukinitsas/liveplay",
+  "homepage": "https://github.com/4C-Winterberg-e-V/liveplay",
   "license": "AGPL-3.0-only",
   "dependencies": [
     {
