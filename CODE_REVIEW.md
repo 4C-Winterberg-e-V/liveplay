@@ -142,8 +142,10 @@ The server is the source of truth for the project document and audio; the client
 
 > **Betriebskontext:** Unter eurem Einsatzmodell (geschlossenes Netz, vertrauenswürdige Nutzer) verbleibt **kein** kritischer Befund. Die drei Einträge sind neu bewertet: **C-01 → 🟡 Medium**, **C-02 → 🟠 High**, **C-03 → 🟡 Medium**. Die ausführliche Beschreibung unten nennt den ursprünglichen „worst case"; die für euch maßgebliche Einstufung steht jeweils im Hinweis.
 
-### C-01 · [→ Betrieb: 🟡 Medium] Unauthenticated control plane bound to `0.0.0.0` — full LAN/internet control of playback **and the filesystem**
+### C-01 · [→ Betrieb: 🟡 Medium · ⏸️ AUFGESCHOBEN (akzeptiert)] Unauthenticated control plane bound to `0.0.0.0` — full LAN/internet control of playback **and the filesystem**
 
+> **Status: ⏸️ Aufgeschoben — Entscheidung des Betreibers (2026-06-26).** Durch **Cloudflare Access** (remote) + **geschlossenes Netz** (lokal) abgedeckt; `0.0.0.0` ist betriebsnotwendig. Kein Code-Change. Falls sich das Einsatzszenario öffnet (z. B. weniger vertrauenswürdiges Netz), ist die empfohlene Maßnahme ein **optionales App-Token** auf der Control-API.
+>
 > **Neubewertung (Betrieb): 🟡 Medium.** Remote-Zugriff liegt hinter **Cloudflare Access**, lokaler Zugriff im **kontrollierten Netz** — also kein Live-Risiko. **Wichtig:** `0.0.0.0` ist in der Server-/Remote-Client-Betriebsart **erforderlich** (sonst kein Client-Connect) — der Loopback-Bind aus dem ursprünglichen Fix ist hier **nicht** anwendbar. Empfehlung stattdessen: optionales **App-Token/Pairing** als Defense-in-Depth. Beschreibung unten = ursprünglicher worst case.
 - **Category:** Security · **Effort:** M (default-bind fix is S; full auth model is L)
 - **Location:** `server/src/main.cpp:246,598` · `server/include/liveplay/net/control_server.hpp:53` · `server/src/net/control_server.cpp:359` (bind), `:888-895` (CORS `*`), `:1289-1374` (fs/list, upload), `:1705-1910` (export/download/import) · `client/electron/main.js:540-543` (spawn omits `--bind`), `:1472-1657` (Electron's *own* express API, also `0.0.0.0`, also no auth) · `client/electron/web-share.js:212` (LAN bind)
@@ -151,8 +153,10 @@ The server is the source of truth for the project document and audio; the client
 - **Impact:** Any host on the same network — a venue's shared Wi-Fi, a hotel/conference LAN — can take over playback mid-show and read/write files in the operator's home folders **without any credential**. With web-share's tunnel enabled the same surface is reachable from the internet (behind only the weaknesses in H-06/H-07). This is the repository's central risk and the root of most other High findings.
 - **Recommendation (revised for your deployment):** Loopback-binding is **only** valid in *integrated mode* (client+server on one machine); in **server-only / remote-client mode `0.0.0.0` is required** and is fine here because the perimeter authenticates (CF Access remote, controlled network local). The durable defense-in-depth is therefore an **app-level auth layer**, not a bind change: a per-session bearer token (the client already holds a channel to inject it) or a pairing handshake, checked in a Crow `before_handle` middleware on **all** routes incl. `/ws`, with CORS restricted to the real client origin. This also lets you drop reliance on CF Access being perfectly configured. (Apply the same optionally to Electron's own express API, or remove it if unused.)
 
-### C-02 · [→ Betrieb: 🟠 High] Auto-updater and manual-update fallback point at the **upstream** repo — supply-chain hijack of every fork install
+### C-02 · [→ Betrieb: 🟠 High · ✅ BEHOBEN] Auto-updater and manual-update fallback point at the **upstream** repo — supply-chain hijack of every fork install
 
+> **Status: ✅ Behoben (Commit `b33d577`).** `setFeedURL`-Owner, Manual-Update-URLs, `electron-builder` `publish.owner`, `repository`/`homepage` von `tdoukinitsas` auf `4C-Winterberg-e-V` umgestellt. Offen gelassen (M-29/M-30, Attribution/Doku): `author`/`signtool publisherName`, bewusste Upstream-Verweise im README, docs-site-SEO-URLs.
+>
 > **Neubewertung (Betrieb): 🟠 High — bleibt vorrangig.** Netz-unabhängig: betrifft, woher Updates geladen werden (Upstream-GitHub), nicht wer im LAN ist. Fork-Installationen ziehen/installieren fremde Binaries.
 - **Category:** Security / Supply chain · **Effort:** S
 - **Location:** `client/electron/main.js:1682-1687` (`autoUpdater.setFeedURL` hard-codes `owner:'tdoukinitsas', repo:'liveplay'`), `:1753` & `:1778` (manual fallback fetches `https://tdoukinitsas.github.io/liveplay/...`), `:2687` (`quitAndInstall`) · `client/package.json:94-98` (`build.publish.owner = tdoukinitsas`), `:5` (homepage), `:110` (signtool publisherName)
