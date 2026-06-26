@@ -444,10 +444,20 @@ std::size_t PlaybackItem::render_block(Sample* const* out_channel_buffers,
             static_cast<long long>(playhead_frames_.load(std::memory_order_relaxed));
         const auto playhead_ns = std::chrono::nanoseconds{
             playhead_frames * 1'000'000'000LL / static_cast<long long>(desc_.mix_sample_rate)};
-        // Refresh offset in case the control thread changed it.
-        ltc_->configure(desc_.mix_sample_rate, desc_.ltc_frame_rate,
-                        std::chrono::nanoseconds{ltc_offset_ns_.load(std::memory_order_acquire)},
-                        /*amplitude*/ 0.5f);
+        // Reconfigure ONLY when the control thread actually changed the offset.
+        // configure() resets the encoder (frame counter, polarity, bit position),
+        // so calling it every block — as this used to — restarted the biphase
+        // stream every block and the generated timecode never advanced coherently
+        // (H-16). With a stable offset we skip configure() and let render_block()
+        // carry encoder state across blocks; an offset change is a deliberate
+        // resync. (Frame-rate/sample-rate changes reconfigure via their setters.)
+        const long long off = ltc_offset_ns_.load(std::memory_order_acquire);
+        if (!ltc_applied_valid_ || off != ltc_applied_offset_ns_) {
+            ltc_->configure(desc_.mix_sample_rate, desc_.ltc_frame_rate,
+                            std::chrono::nanoseconds{off}, /*amplitude*/ 0.5f);
+            ltc_applied_offset_ns_ = off;
+            ltc_applied_valid_     = true;
+        }
         ltc_->render_block(out_channel_buffers[file_channels_], frame_count, playhead_ns);
     }
 
