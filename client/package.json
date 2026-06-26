@@ -15,7 +15,8 @@
     "generate": "cross-env NODE_ENV=production nuxt generate",
     "generate:web": "cross-env NODE_ENV=production BUILD_TARGET=web nuxt generate",
     "preview": "nuxt preview",
-    "typecheck": "nuxt typecheck"
+    "typecheck": "nuxt typecheck",
+    "test": "vitest run"
   },
   "keywords": [
     "electron",
@@ -41,7 +42,8 @@
     "vue": "^3.5.13",
     "vue-router": "^4.5.0",
     "vue-tsc": "^2.2.0",
-    "wait-on": "^7.2.0"
+    "wait-on": "^7.2.0",
+    "vitest": "^2.1.9"
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",

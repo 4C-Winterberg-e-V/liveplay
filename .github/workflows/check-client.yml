@@ -54,3 +54,6 @@ jobs:
 
       - name: Type-check client
         run: pnpm --filter ./client typecheck
+
+      - name: Unit tests (vitest)
+        run: pnpm --filter ./client test
