@@ -3,8 +3,8 @@
 // AGPL-3.0-only
 //
 // Lets the desktop app expose its bundled web UI to phones/tablets WITHOUT
-// any extra software on the operator's machine (no Docker, no nginx, no
-// WireGuard). Everything below ships inside LivePlay.app.
+// any extra software on the operator's machine (no Docker, no nginx).
+// Everything below ships inside LivePlay.app.
 //
 // Architecture (Same-Origin proxy, identical to the documented "Modus A",
 // but realised in-process instead of via a separate reverse proxy):

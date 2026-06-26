@@ -31,20 +31,10 @@ docker compose -f deploy/docker-compose.mode-b.yml up --build
 - `Dockerfile` – Build der SPA + Nginx (statisch).
 - `nginx.conf` – SPA-Fallback, kein Proxy.
 
-## Modus C – VPS + WireGuard (internet-facing, Cloudflare)
-Web-Client auf einem VPS hinter Traefik/Cloudflare; `/api`+`/ws` laufen über einen
-WireGuard-Tunnel zum Mac. Internet-erreichbar per HTTPS, **ohne Dev-Software auf
-dem Mac** und ohne Server-Änderung. Same-Origin → kein Mixed-Content/CORS.
-Schritt-für-Schritt: [`../docs/web-hosting-vps-wireguard.md`](../docs/web-hosting-vps-wireguard.md).
-- `vps-wireguard/docker-compose.yml` – SPA-Service mit Traefik-Labels.
-- `vps-wireguard/traefik-dynamic.yml` – File-Provider-Route `/api`+`/ws` → Mac über WireGuard.
-- `vps-wireguard/wg0.vps.conf`, `vps-wireguard/liveplay.mac.conf` – WireGuard-Configs (Vorlagen).
-
-
-## Modus D – In-App (Mac, ohne Zusatzsoftware)
+## Modus C – In-App (Mac, ohne Zusatzsoftware)
 Die Mac-App liefert die Mobile-UI **selbst** aus (Static + Reverse-Proxy auf den
 gebündelten C++-Server) und kann optional einen **gebündelten Cloudflare-Tunnel**
-starten – **ohne Docker/nginx/WireGuard/VPS**. Bedienung über Kopfzeile →
+starten – **ohne Docker/nginx**. Bedienung über Kopfzeile →
 **Teilen**. Keine Deploy-Artefakte hier nötig.
 Details: [`../docs/web-hosting-inapp-mac.md`](../docs/web-hosting-inapp-mac.md).
 
