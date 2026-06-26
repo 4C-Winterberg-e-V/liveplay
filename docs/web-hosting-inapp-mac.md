@@ -3,10 +3,10 @@
 Ziel: Die Mobile-/Web-Oberfläche **direkt aus LivePlay.app** an Handys/Tablets
 ausliefern – im LAN **oder** über einen Cloudflare-Tunnel ins Internet, **ohne
 dass irgendetwas außer LivePlay installiert sein muss** (kein Docker, kein
-nginx/Caddy, keine WireGuard-App, kein VPS).
+nginx/Caddy).
 
-Das ist der vierte Hosting-Weg neben den proxy-/VPS-basierten Varianten in
-[`web-hosting.md`](web-hosting.md) und [`web-hosting-vps-wireguard.md`](web-hosting-vps-wireguard.md).
+Das ist eine Alternative zu den proxy-basierten Varianten in
+[`web-hosting.md`](web-hosting.md).
 
 ```
                  LivePlay.app (Mac)

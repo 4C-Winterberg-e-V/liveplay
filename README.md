@@ -12,8 +12,8 @@
 > The headless C++ engine, the desktop UI and the core cue/routing model come
 > straight from upstream and carry all the credit. What this fork adds — a real
 > **browser client**, **one-click Web-Sharing to phones and tablets**, a
-> **mobile-first responsive UI**, **authentication for remote access**, a
-> **VPS + WireGuard hosting kit**, and a **filesystem-sandboxed server** — is
+> **mobile-first responsive UI**, **authentication for remote access**, and a
+> **filesystem-sandboxed server** — is
 > summarised in **[What this fork adds](#-what-this-fork-adds-vs-upstream)**.
 > Everything is AGPL-3.0 and intended to flow back upstream where it fits.
 
@@ -37,7 +37,7 @@ Made with some help from Claude Sonnet 4.5, Claude Sonnet 4.6 and Claude Opus 4.
 - [What this fork adds (vs upstream)](#-what-this-fork-adds-vs-upstream)
 - [What LivePlay does](#what-liveplay-does)
 - [Operating LivePlay from a phone or tablet](#operating-liveplay-from-a-phone-or-tablet)
-- [Hosting the web client (LAN, VPS, tunnel)](#hosting-the-web-client-lan-vps-tunnel)
+- [Hosting the web client (LAN, tunnel)](#hosting-the-web-client-lan-tunnel)
 - [Installing and using LivePlay](#installing-and-using-liveplay)
 - [Repository layout](#repository-layout)
 - [Building from source](#building-from-source)
@@ -62,12 +62,12 @@ a venue, safely.
 | **Sharing to mobile** | — | One-click **Share** in the app header: serve the UI on the **LAN** or via a bundled **Cloudflare quick-tunnel**, with QR code |
 | **Mobile UX** | Desktop layout only | Full **responsive pass**: collapsible playlist & cart, full-screen Properties panel, touch-optimised cart slots, transport in the title bar, iOS safe-area / PWA support |
 | **Authentication** | None on the API | Per-session **PIN / BasicAuth gate**, stable session cookie so the WebSocket survives login, **toggleable** auth, **manually settable PIN**, and an **optional fixed tunnel URL** (Named Tunnel) per machine |
-| **Remote hosting** | — | `deploy/` **hosting kit**: same-origin reverse proxy (Caddy / nginx / Traefik) and a **VPS + WireGuard**, internet-facing setup with a BasicAuth gate |
+| **Remote hosting** | — | `deploy/` **hosting kit**: same-origin reverse proxy (Caddy / nginx / Traefik) with a BasicAuth gate |
 | **Server security** | API can read/write arbitrary paths | Server filesystem access is **confined to a sandbox**; file dialogs no longer open at `/` |
 | **Tooling** | npm | Migrated to **pnpm** workspaces; CI on **Node 22 LTS**; server auto-rebuilds when its C++ sources change; optional **software rendering** for headless/VM Linux; Electron Edit menu (copy/paste) |
 
 The headings below ([Operating from mobile](#operating-liveplay-from-a-phone-or-tablet)
-and [Hosting the web client](#hosting-the-web-client-lan-vps-tunnel)) document the
+and [Hosting the web client](#hosting-the-web-client-lan-tunnel)) document the
 fork-specific features in detail. The rest of the README covers LivePlay as a
 whole.
 
@@ -169,7 +169,7 @@ troubleshooting, [`docs/debugging-mac.md`](docs/debugging-mac.md).
 
 ---
 
-## Hosting the web client (LAN, VPS, tunnel)
+## Hosting the web client (LAN, tunnel)
 
 *(This is a fork feature.)* Beyond the in-app Share button, the web client can be
 hosted standalone. The [`deploy/`](deploy/) directory ships ready-made artefacts;
@@ -179,11 +179,7 @@ the full guide is [`docs/web-hosting.md`](docs/web-hosting.md).
 |------|------------|------------|
 | **A — Same-origin proxy** (recommended) | A reverse proxy (Caddy / nginx / Traefik) serves the SPA on `/` and proxies `/api/*` + `/ws` to the C++ server. No Mixed-Content, no CORS. | Permanent installs, fixed infrastructure |
 | **B — Plain HTTP (event LAN)** | SPA over plain HTTP, server address typed manually (`http://<server-ip>:4480`). | Quick LAN setups at an event |
-| **C — VPS + WireGuard** (internet-facing) | SPA on a VPS behind Traefik/Cloudflare; `/api` + `/ws` reach the stage machine over a **WireGuard tunnel**, HTTPS end-to-end, no dev software on the host. | Remote/internet access with a stable public URL |
-| **D — In-app (Mac)** | The desktop app serves the mobile UI itself + optional bundled Cloudflare tunnel. **No Docker/VPS needed.** | The one-click Share button above |
-
-The WireGuard setup is documented step-by-step in
-[`docs/web-hosting-vps-wireguard.md`](docs/web-hosting-vps-wireguard.md).
+| **C — In-app (Mac)** | The desktop app serves the mobile UI itself + optional bundled Cloudflare tunnel. **No Docker needed.** | The one-click Share button above |
 
 > ⚠️ Always put an auth gate (Traefik `basicauth` / Caddy `basic_auth`, or the
 > in-app PIN) in front of an exposed server, and isolate the network. The C++
@@ -267,7 +263,7 @@ liveplay/
 │   ├── app/components/WebShareModal.vue      (fork) Share dialog: LAN / tunnel / PIN
 │   └── electron/web-share.js                 (fork) proxy + tunnel + auth gate
 ├── server/         C++20 audio engine + REST/WS control server — see server/README.md
-├── deploy/         (fork) Web-client hosting kit — Caddy / nginx / Traefik + VPS + WireGuard
+├── deploy/         (fork) Web-client hosting kit — Caddy / nginx / Traefik
 ├── docs/           (fork) Web-hosting, web-sharing, stable-URL & macOS debugging guides
 ├── docs-site/      Public-facing Nuxt 3 site (GitHub Pages) — see docs-site/README.md
 ├── scripts/        Cross-platform build orchestrator scripts — see scripts/README.md
@@ -352,7 +348,7 @@ BUILD_TARGET=web pnpm generate     # static SPA into client/.output/public
 ```
 
 The `deploy/` Dockerfiles do exactly this and serve the result behind a reverse
-proxy — see [Hosting the web client](#hosting-the-web-client-lan-vps-tunnel).
+proxy — see [Hosting the web client](#hosting-the-web-client-lan-tunnel).
 
 #### Platform-specific notes
 
