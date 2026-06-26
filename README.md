@@ -62,7 +62,7 @@ a venue, safely.
 | **Sharing to mobile** | — | One-click **Share** in the app header: serve the UI on the **LAN** or via a bundled **Cloudflare quick-tunnel**, with QR code |
 | **Mobile UX** | Desktop layout only | Full **responsive pass**: collapsible playlist & cart, full-screen Properties panel, touch-optimised cart slots, transport in the title bar, iOS safe-area / PWA support |
 | **Authentication** | None on the API | Per-session **PIN / BasicAuth gate**, stable session cookie so the WebSocket survives login, **toggleable** auth, **manually settable PIN**, and an **optional fixed tunnel URL** (Named Tunnel) per machine |
-| **Remote hosting** | — | `deploy/` **hosting kit**: same-origin reverse proxy (Caddy / nginx / Traefik) with a BasicAuth gate |
+| **Remote hosting** | — | Web client also builds as a **standalone SPA** that you can serve behind your own same-origin reverse proxy (Caddy / nginx / Traefik) with a BasicAuth gate |
 | **Server security** | API can read/write arbitrary paths | Server filesystem access is **confined to a sandbox**; file dialogs no longer open at `/` |
 | **Tooling** | npm | Migrated to **pnpm** workspaces; CI on **Node 22 LTS**; server auto-rebuilds when its C++ sources change; optional **software rendering** for headless/VM Linux; Electron Edit menu (copy/paste) |
 
@@ -72,8 +72,8 @@ fork-specific features in detail. The rest of the README covers LivePlay as a
 whole.
 
 > ⚠️ **Security in one line:** the underlying C++ server has **no built-in auth**
-> and its API exposes filesystem access. The fork's PIN/BasicAuth gate and
-> reverse-proxy kit exist to put a lock in front of it — but only use LAN sharing
+> and its API exposes filesystem access. The fork's PIN/BasicAuth gate exists to
+> put a lock in front of it — but only use LAN sharing
 > on a trusted network, keep the login private, and **stop the tunnel after the
 > event**.
 
@@ -172,8 +172,8 @@ troubleshooting, [`docs/debugging-mac.md`](docs/debugging-mac.md).
 ## Hosting the web client (LAN, tunnel)
 
 *(This is a fork feature.)* Beyond the in-app Share button, the web client can be
-hosted standalone. The [`deploy/`](deploy/) directory ships ready-made artefacts;
-the full guide is [`docs/web-hosting.md`](docs/web-hosting.md).
+built as a standalone SPA and hosted behind your own reverse proxy or static
+server. The full guide is [`docs/web-hosting.md`](docs/web-hosting.md).
 
 | Mode | What it is | Use it for |
 |------|------------|------------|
@@ -263,7 +263,6 @@ liveplay/
 │   ├── app/components/WebShareModal.vue      (fork) Share dialog: LAN / tunnel / PIN
 │   └── electron/web-share.js                 (fork) proxy + tunnel + auth gate
 ├── server/         C++20 audio engine + REST/WS control server — see server/README.md
-├── deploy/         (fork) Web-client hosting kit — Caddy / nginx / Traefik
 ├── docs/           (fork) Web-hosting, web-sharing, stable-URL & macOS debugging guides
 ├── docs-site/      Public-facing Nuxt 3 site (GitHub Pages) — see docs-site/README.md
 ├── scripts/        Cross-platform build orchestrator scripts — see scripts/README.md
@@ -347,8 +346,8 @@ cd client
 BUILD_TARGET=web pnpm generate     # static SPA into client/.output/public
 ```
 
-The `deploy/` Dockerfiles do exactly this and serve the result behind a reverse
-proxy — see [Hosting the web client](#hosting-the-web-client-lan-tunnel).
+Serve the resulting `.output/public` from any static web server, or front it with
+a reverse proxy — see [Hosting the web client](#hosting-the-web-client-lan-tunnel).
 
 #### Platform-specific notes
 
@@ -473,9 +472,8 @@ and aims to stay mergeable with it:
   are upstream's work, kept as close to upstream as practical.
 - The fork's additions ([summary table](#-what-this-fork-adds-vs-upstream)) are
   deliberately scoped so they can be contributed back: the web build is gated
-  behind `BUILD_TARGET`, the sharing/proxy code lives in dedicated files
-  (`client/electron/web-share.js`, `client/app/components/WebShareModal.vue`), and
-  the hosting kit is self-contained under `deploy/`.
+  behind `BUILD_TARGET`, and the sharing/proxy code lives in dedicated files
+  (`client/electron/web-share.js`, `client/app/components/WebShareModal.vue`).
 - All changes are AGPL-3.0-only, like upstream.
 
 If you want the stock desktop experience, use upstream. Use this fork if you need

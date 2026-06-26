@@ -218,18 +218,15 @@ adresse manuell `http://<mac-ip>:4480`. Bewusst kein HTTPS (Mixed-Content vermei
 
 - **Akzeptanz:** `docker compose up` liefert die SPA in beiden Modi; README beschreibt,
   wie die Serveradresse gesetzt wird bzw. dass sie im Proxy-Modus automatisch passt.
-- **Umsetzungsstand (Artefakte in `deploy/`):**
-  - ✅ Mode B: `Dockerfile` (Multi-Stage → Nginx), `nginx.conf` (SPA-Fallback),
-    `docker-compose.mode-b.yml` (:8080).
-  - ✅ Mode A Caddy: `Dockerfile.caddy`, `Caddyfile` (Serve + Proxy `/api`,`/ws`,
-    Auto-HTTPS bei Hostname), `docker-compose.mode-a-caddy.yml`.
-  - ✅ Mode A Traefik: `traefik/docker-compose.snippet.yml` (SPA-Service + Labels),
-    `traefik/liveplay-dynamic.yml` (File-Provider-Route `/api`+`/ws` → externer Server).
-  - ✅ `deploy/README.md`, Sub-Pfad via `--build-arg NUXT_APP_BASE_URL`.
-  - ⏳ **Nicht real gebaut:** Compose-Syntax validiert (`docker compose config`),
-    aber `docker build` lief in der Build-Umgebung nicht (kein Daemon). Der teure
-    Build-Schritt `generate:web` ist separat verifiziert. Image-Build + `up` →
-    Phase 5 / lokale Verifikation.
+- **Umsetzungsstand (historisch – Deploy-Artefakte inzwischen entfernt):** Die
+  ursprünglich umgesetzten Deploy-Artefakte (`deploy/`: Dockerfiles, `nginx.conf`,
+  `Caddyfile`, Compose-Dateien, Traefik-Snippets) wurden später zugunsten des
+  **In-App-Web-Sharings (Modus C, Mac)** wieder **entfernt**. Eigenständiges
+  Hosting (Modus A/B) wird seitdem nur noch dokumentiert – du stellst Proxy bzw.
+  statischen Webserver selbst bereit und lieferst den Web-Build (`.output/public`)
+  aus; LivePlay liefert kein fertiges Deploy-Kit mehr. Siehe
+  [`web-hosting.md`](web-hosting.md) und
+  [`web-hosting-inapp-mac.md`](web-hosting-inapp-mac.md).
 
 ### Phase 5 – Doku & Test
 1. `docs/web-hosting.md`: Build-Schritte, beide Hosting-Modi, Mixed-Content-Erklärung,
