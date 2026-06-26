@@ -133,6 +133,7 @@ jobs:
           cmake -S . -B build \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DLIVEPLAY_BUILD_TESTS=ON \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
             ${{ matrix.cmake_args }}
@@ -140,6 +141,15 @@ jobs:
       - name: CMake build
         working-directory: server
         run: cmake --build build --config Release -j
+
+      # ------------------------------------------------------------------
+      # Unit tests (doctest via CTest). The x64-on-arm64 macOS slice runs its
+      # x86_64 test binary under the Rosetta installed above.
+      # ------------------------------------------------------------------
+      - name: Unit tests (ctest)
+        working-directory: server
+        shell: bash
+        run: ctest --test-dir build --build-config Release --output-on-failure
 
       # ------------------------------------------------------------------
       # Smoke test — the banner should print without crashing.
