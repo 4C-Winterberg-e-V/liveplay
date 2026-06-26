@@ -30,6 +30,36 @@ Nach dem Audit wurde `main` in diesen Branch gemergt. **PR #9 (`df02972`/`0cf6ad
 
 ---
 
+## Umsetzungsstatus (Phase 2 — Stand 2026-06-26, Branch `claude/repo-audit-modernization-0j5c42`)
+
+In Phase 2 wurden die priorisierten Befunde behoben **und ein Testnetz aufgebaut**, damit künftige Änderungen abgesichert sind. Alle Commits sind auf dem o. g. Branch / PR #8; CI ist grün.
+
+**Testnetz (war vorher komplett abwesend — H-23/H-24):**
+- **C++**: doctest + CTest-Harness, in CI auf allen 4 Plattformen ausgeführt (`build-server.yml`). Seed-Tests: LTC-Encoder + Block-Kontinuität, FsSandbox-Containment.
+- **Client**: `vue-tsc`-Typecheck **+ Vitest** als CI-Gate (`check-client.yml`) bei jedem Client-Push. 12 Unit-Tests auf der extrahierten Sync-Diff-Logik (`app/utils/projectDiff.ts`).
+
+**Behoben & verifiziert:**
+
+| ID | Befund | Verifikation |
+|---|---|---|
+| **C-02** | Auto-Updater → Upstream umgebogen auf Fork | server CI grün |
+| **M-17** | Atomisches `save()` (kein stiller Datenverlust) | server CI grün |
+| **H-15** | Rekursions-/Zyklus-Guard (kein Stack-Overflow-Crash) | server CI grün |
+| **H-19** | useAudioEngine Subscriber-Leak (onScopeDispose) | typecheck grün |
+| **H-16** | LTC-Timecode-Kontinuität | server CI grün + Kontinuitätstest |
+| **H-14** | Use-after-free im Meter-Broadcast (`find_cue_shared`) | server CI grün |
+| **H-17** | Sync-Fehler werden nicht mehr verschluckt (Rollback+Retry; Diff extrahiert & getestet) | typecheck 0 Fehler, 12 Diff-Tests grün |
+| **M-38** | `pnpm-lock.yaml` committet (reproduzierbar) | — |
+| **N-2** | *(neu, via Typecheck gefunden)* `isLocalServer.value` auf reaktiv-entpacktem Boolean → echter Verhaltensbug, an 4 Stellen behoben | typecheck grün |
+| **N-3** | *(neu)* `PlaylistView`-Watch-Typing | typecheck grün |
+
+**Aufgeschoben (bewusst, mit Begründung):**
+- **H-18** (`isHydrating`-Race): Der Fix ist reaktives Timing-Wiring (Boolean → Zähler + konsistenter Flush) durch 5 asynchrone Flows. Das Unit-Testnetz kann das **Interleaving nicht** verifizieren, und ein fehlgepaarter Zähler (verpasstes Dekrement auf einem Fehlerpfad) würde die Sync **dauerhaft blockieren** — schlimmer als der Ist-Zustand. Daher zurückgestellt, **bis ein Integrationstest** (`@nuxt/test-utils`, der überlappende `doc_patch`/Stream-Flows treibt) existiert, gegen den der Fix abgesichert werden kann. Bis dahin bleibt das Verhalten unverändert.
+- **C-01** (unauth. Control-Plane): vom Betreiber aufgeschoben (CF Access + kontrolliertes Netz), siehe oben.
+- **Übrige Medium/Low-Befunde**: noch offen, gemäß Priorisierung unten.
+
+---
+
 ## Betriebskontext & Neubewertung (Stand: nach Rücksprache mit dem Betreiber)
 
 > **Vom Betreiber präzisiertes Einsatzszenario:** LivePlay wird **nicht frei zugänglich** betrieben — der Zugriff ist auf **authentifizierte Personen** beschränkt, und zwar auf **zwei** Wegen: (a) lokal über ein **kontrolliertes/abgeschottetes Netz** (kleine Events), und (b) remote über die **cloudflared-Telefonsteuerung, die hinter Cloudflare Access (CF-Auth) liegt** — also kein offener Internet-Dienst, sondern selbst authentifiziert. **„Hacking" ist damit kein vorrangiges Risiko.** Zudem: der C++-Server **muss** in der Server-/Remote-Client-Betriebsart auf `0.0.0.0` (bzw. ein routbares Interface) lauschen, **damit sich entfernte Clients überhaupt verbinden können** — das ist hier Anforderung, kein Fehler; die Schutzschicht ist das Perimeter (CF Access + kontrolliertes Netz), nicht die Bind-Adresse.
