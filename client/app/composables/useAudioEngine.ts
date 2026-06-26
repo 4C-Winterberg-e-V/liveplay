@@ -258,7 +258,7 @@ export const useAudioEngine = () => {
   // cue_state edges: Playing/FadingIn/Paused create or update; Stopped
   // removes. FadingOut keeps the entry so the bar continues to render
   // its trailing seconds.
-  server.onCueState(({ cue_id, transport, playhead_seconds, item_uuid }: any) => {
+  const stopOnCueState = server.onCueState(({ cue_id, transport, playhead_seconds, item_uuid }: any) => {
     if (transport === TRANSPORT_STOPPED) {
       // Remove by item_uuid first (activeCues is keyed by item uuid and the
       // server now includes it) — mirroring the upsert path below. Matching
@@ -291,7 +291,7 @@ export const useAudioEngine = () => {
   // On (re)connect the server pushes a snapshot of what's already
   // playing. useLiveplayServer fires this BEFORE synthesising per-cue
   // events; we use it to refresh master gain + next-item state too.
-  server.onPlaybackSnapshot((snap: any) => {
+  const stopOnPlaybackSnapshot = server.onPlaybackSnapshot((snap: any) => {
     if (snap && typeof snap.master_gain_db === 'number') {
       masterGainDb.value = snap.master_gain_db;
     }
@@ -299,7 +299,7 @@ export const useAudioEngine = () => {
   });
 
   // Doc_patch: server-driven state changes other clients might trigger.
-  server.onDocPatch((patch: any) => {
+  const stopOnDocPatch = server.onDocPatch((patch: any) => {
     if (!patch || typeof patch !== 'object') return;
     switch (patch.op) {
       case 'next_item_set':
@@ -320,7 +320,7 @@ export const useAudioEngine = () => {
   // Meter broadcast: master levels + per-cue playhead. Master level is
   // a derived L+R sum so the existing single-bar UI keeps working;
   // accurate per-channel meters use StereoMeter directly.
-  server.onMeters((m: any) => {
+  const stopOnMeters = server.onMeters((m: any) => {
     if (!m) return;
     if (Array.isArray(m.items)) {
       for (const meter of m.items) {
@@ -364,7 +364,7 @@ export const useAudioEngine = () => {
   // When the project items finish streaming (or items are added/removed
   // by another client), re-resolve any pending activeCues that we
   // received cue_state for before the items existed locally.
-  watch(() => currentProject.value?.items?.length, () => {
+  const stopItemsWatch = watch(() => currentProject.value?.items?.length, () => {
     // Sweep server.cues for anything Playing-like and ensure an entry.
     for (const sc of server.cues ?? []) {
       const t = (sc as any).transport;
@@ -380,6 +380,19 @@ export const useAudioEngine = () => {
       upsertActiveCue(item, t, (sc as any).playhead_seconds ?? 0, sc.id);
     }
     recomputeActiveGroups();
+  });
+
+  // Tear down this component instance's server subscriptions + watcher when
+  // its reactive scope is disposed. Previously none of the unsubscribe handles
+  // were captured and there was no onScopeDispose, so every PlaylistItem row /
+  // CartSlot that mounted added another permanent set of WS subscribers — they
+  // accumulated for the life of the app and degraded a long session (H-19).
+  onScopeDispose(() => {
+    stopOnCueState();
+    stopOnPlaybackSnapshot();
+    stopOnDocPatch();
+    stopOnMeters();
+    stopItemsWatch();
   });
 
   // ---- Transport intents (forward to server) -------------------------
