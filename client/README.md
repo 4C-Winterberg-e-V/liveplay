@@ -1,6 +1,6 @@
 # LivePlay Client — developer guide
 
-The LivePlay client is a Vue 3 + Nuxt 3 application wrapped in Electron. It is a **remote control** for the LivePlay audio server: it owns no audio decoding, no playback, no Web Audio nodes. Every user action turns into a REST call or WebSocket frame sent to `liveplay-server`, and every meter / waveform / state update comes back the same way.
+The LivePlay client is a Vue 3 + Nuxt 4 application wrapped in Electron. It is a **remote control** for the LivePlay audio server: it owns no audio decoding, no playback, no Web Audio nodes. Every user action turns into a REST call or WebSocket frame sent to `liveplay-server`, and every meter / waveform / state update comes back the same way.
 
 This document is the developer's guide to the client. For the audio engine, see [`server/README.md`](../server/README.md). For the overall project, see the [root README](../README.md).
 
@@ -30,7 +30,7 @@ This document is the developer's guide to the client. For the audio engine, see 
 | Layer            | Library                                                         |
 |------------------|-----------------------------------------------------------------|
 | Shell            | Electron 28                                                     |
-| Renderer         | Nuxt 3 (Vue 3 Composition API, TypeScript, SCSS)                |
+| Renderer         | Nuxt 4 (Vue 3 Composition API, TypeScript, SCSS)                |
 | UI primitives    | Material Symbols icons; in-house components — no UI framework   |
 | Local server     | C++ `liveplay-server` binary spawned as a child process         |
 | Media tooling    | `@ffmpeg-installer/ffmpeg`, `@ffprobe-installer/ffprobe`        |

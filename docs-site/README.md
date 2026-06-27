@@ -1,6 +1,6 @@
 # LivePlay Docs Site — developer guide
 
-This is the public-facing static site at **<https://tdoukinitsas.github.io/liveplay/>**. It's a Nuxt 3 SPA that advertises the project, links to the latest release, and renders the project README in a few languages.
+This is the public-facing static site at **<https://tdoukinitsas.github.io/liveplay/>**. It's a Nuxt 4 SPA that advertises the project, links to the latest release, and renders the project README in a few languages.
 
 This document is the developer's guide to the docs site. For end-user docs, see the [root README](../README.md).
 
@@ -8,7 +8,7 @@ This document is the developer's guide to the docs site. For end-user docs, see 
 
 ## Stack
 
-- **Nuxt 3** (`ssr: false`, `nitro.preset: 'static'`) → generates a fully static SPA.
+- **Nuxt 4** (`ssr: false`, `nitro.preset: 'static'`) → generates a fully static SPA.
 - **Vue 3** Composition API + `<script setup>`.
 - **SCSS** for styles ([`assets/styles/main.scss`](assets/styles/main.scss)).
 - **GitHub Pages** for hosting, with a base URL of `/liveplay/`.
@@ -24,7 +24,7 @@ The site is deliberately tiny — two components, one composable, one Nuxt page.
 docs-site/
 ├── app.vue                       The whole page lives here: header, downloads, features, README
 ├── nuxt.config.ts                Nuxt config — base URL `/liveplay/`, OG/Twitter metadata
-├── package.json                  Nuxt 3 + Vue 3 + sass
+├── package.json                  Nuxt 4 + Vue 3 + sass
 ├── tsconfig.json
 ├── components/
 │   ├── FeatureHighlight.vue      Reusable image-on-left/right feature card
