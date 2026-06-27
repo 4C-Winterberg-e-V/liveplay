@@ -52,6 +52,7 @@ In Phase 2 wurden die priorisierten Befunde behoben **und ein Testnetz aufgebaut
 | **M-38** | `pnpm-lock.yaml` committet (reproduzierbar) | — |
 | **N-2** | *(neu, via Typecheck gefunden)* `isLocalServer.value` auf reaktiv-entpacktem Boolean → echter Verhaltensbug, an 4 Stellen behoben | typecheck grün |
 | **N-3** | *(neu)* `PlaylistView`-Watch-Typing | typecheck grün |
+| **Deps** | `pnpm audit`-getriebene Sicherheits-Updates: electron 42.3.2→42.5.0 (kritisch), vitest 2→3 (kritisch), uuid 9→11 (moderat) | `pnpm audit`: **2 kritisch / 1 hoch / 4 moderat → 0**; typecheck + 12 Tests grün |
 
 **Aufgeschoben (bewusst, mit Begründung):**
 - **H-18** (`isHydrating`-Race): Der Fix ist reaktives Timing-Wiring (Boolean → Zähler + konsistenter Flush) durch 5 asynchrone Flows. Das Unit-Testnetz kann das **Interleaving nicht** verifizieren, und ein fehlgepaarter Zähler (verpasstes Dekrement auf einem Fehlerpfad) würde die Sync **dauerhaft blockieren** — schlimmer als der Ist-Zustand. Daher zurückgestellt, **bis ein Integrationstest** (`@nuxt/test-utils`, der überlappende `doc_patch`/Stream-Flows treibt) existiert, gegen den der Fix abgesichert werden kann. Bis dahin bleibt das Verhalten unverändert.
