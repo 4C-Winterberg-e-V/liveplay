@@ -94,7 +94,7 @@ At showtime, the operator triggers cues via the UI, the cart grid, configured ke
 ```
 +--------------------------------+   WebSocket (ws://host:4480/ws)   +-----------------------------------+
 |  client/                       | <----- meters @ ~60 Hz ---------> |  server/  (liveplay-server)       |
-|  Electron + Nuxt 3 + Vue 3     | <----- transport / route cmds --- |  C++20, miniaudio, Crow, TagLib   |
+|  Electron + Nuxt 4 + Vue 3     | <----- transport / route cmds --- |  C++20, miniaudio, Crow, TagLib   |
 |  (also builds as a web app —   |        REST  (http://host:4480)   |                                   |
 |   see "What this fork adds")   | <----- list / load / waveform --> |  - AudioEngine (mixer + limiter)  |
 |                                |                                   |  - ProjectState (.liveplay I/O)   |
@@ -173,11 +173,13 @@ troubleshooting, [`docs/debugging-mac.md`](docs/debugging-mac.md).
 
 *(This is a fork feature.)* Beyond the in-app Share button, the web client can be
 built as a standalone SPA and hosted behind your own reverse proxy or static
-server. The full guide is [`docs/web-hosting.md`](docs/web-hosting.md).
+server. The full guide — with copy-paste Caddy / nginx / Traefik examples — is
+[`docs/web-hosting.md`](docs/web-hosting.md). *(The repo no longer ships
+ready-made deploy configs; bring your own.)*
 
 | Mode | What it is | Use it for |
 |------|------------|------------|
-| **A — Same-origin proxy** (recommended) | A reverse proxy (Caddy / nginx / Traefik) serves the SPA on `/` and proxies `/api/*` + `/ws` to the C++ server. No Mixed-Content, no CORS. | Permanent installs, fixed infrastructure |
+| **A — Same-origin proxy** | A reverse proxy (Caddy / nginx / Traefik) serves the SPA on `/` and proxies `/api/*` + `/ws` to the C++ server. No Mixed-Content, no CORS. | Permanent installs, fixed infrastructure |
 | **B — Plain HTTP (event LAN)** | SPA over plain HTTP, server address typed manually (`http://<server-ip>:4480`). | Quick LAN setups at an event |
 | **C — In-app (Mac)** | The desktop app serves the mobile UI itself + optional bundled Cloudflare tunnel. **No Docker needed.** | The one-click Share button above |
 
@@ -259,12 +261,12 @@ For routing a stage-side server, open **Server Settings** and point the client a
 
 ```
 liveplay/
-├── client/         Electron + Nuxt 3 + Vue 3 desktop UI (also builds as a web app) — see client/README.md
+├── client/         Electron + Nuxt 4 + Vue 3 desktop UI (also builds as a web app) — see client/README.md
 │   ├── app/components/WebShareModal.vue      (fork) Share dialog: LAN / tunnel / PIN
 │   └── electron/web-share.js                 (fork) proxy + tunnel + auth gate
 ├── server/         C++20 audio engine + REST/WS control server — see server/README.md
 ├── docs/           (fork) Web-hosting, web-sharing, stable-URL & macOS debugging guides
-├── docs-site/      Public-facing Nuxt 3 site (GitHub Pages) — see docs-site/README.md
+├── docs-site/      Public-facing Nuxt 4 site (GitHub Pages) — see docs-site/README.md
 ├── scripts/        Cross-platform build orchestrator scripts — see scripts/README.md
 ├── build/          Collected installer artefacts after `pnpm build`
 ├── .github/workflows/

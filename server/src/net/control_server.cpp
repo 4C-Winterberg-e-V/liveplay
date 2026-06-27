@@ -406,7 +406,9 @@ void ControlServer::broadcast_loop() {
         // both project cues and the preview cue (which is engine-only, not in
         // state_.list_cues()).
         auto append_meter_for = [&](const audio::CueId& cue_id) {
-            auto* item = engine_.find_cue(cue_id);
+            // Shared ownership: this runs on the broadcast thread and must keep
+            // the item alive across the deref even if unload_cue() races (H-14).
+            auto item = engine_.find_cue_shared(cue_id);
             if (!item) return;
             const auto stats = item->stats();
             if (stats.transport == audio::TransportState::Stopped) return;
@@ -472,7 +474,8 @@ void ControlServer::broadcast_loop() {
         std::vector<std::string> cue_state_events;
         try {
             for (auto& cue : state_.list_cues()) {
-                auto* item = engine_.find_cue(cue.id);
+                // Shared ownership on the broadcast thread — see H-14 note above.
+                auto item = engine_.find_cue_shared(cue.id);
                 const auto current = item
                     ? item->stats().transport
                     : audio::TransportState::Stopped;

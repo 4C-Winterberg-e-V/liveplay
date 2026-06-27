@@ -198,8 +198,9 @@ watch(
     currentProject.value?.name ?? '',
     currentProject.value?.items?.length ?? 0,
   ],
-  ([folder, name], [prevFolder, prevName] = ['', '', 0]) => {
+  ([folder, name], oldVal) => {
     // Reset the "already requested" tracker when the project changes.
+    const [prevFolder, prevName] = oldVal ?? ['', ''];
     if (folder !== prevFolder || name !== prevName) requestedWaveformUuids.clear();
     if (waveformScanTimer) clearTimeout(waveformScanTimer);
     waveformScanTimer = setTimeout(scanForMissingWaveforms, 150);

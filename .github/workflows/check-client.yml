@@ -1,0 +1,59 @@
+name: Check Client (typecheck)
+
+# The Nuxt/Vue client is not compiled by build-server.yml and is only fully
+# built during a release, so without this job client type regressions ship
+# unnoticed. Type-check it on every push/PR that touches the client (or the
+# dependency manifests). vue-tsc also checks .vue templates, which plain tsc
+# does not.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'client/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'package.json'
+      - '.github/workflows/check-client.yml'
+  pull_request:
+    paths:
+      - 'client/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'package.json'
+      - '.github/workflows/check-client.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: check-client-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    name: Type-check (vue-tsc)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm version comes from the root package.json "packageManager" field.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # Lifecycle scripts only download the electron / ffmpeg / cloudflared
+      # binaries, which the typecheck does not need; skipping them keeps the job
+      # fast. esbuild ships its native binary as an optional platform package
+      # (no postinstall), so Nuxt's typecheck still works.
+      - name: Install client deps
+        run: pnpm install --filter ./client... --frozen-lockfile --ignore-scripts
+
+      - name: Type-check client
+        run: pnpm --filter ./client typecheck
+
+      - name: Unit tests (vitest)
+        run: pnpm --filter ./client test

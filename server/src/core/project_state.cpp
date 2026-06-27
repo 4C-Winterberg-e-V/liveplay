@@ -1338,12 +1338,6 @@ bool ProjectState::save(const std::filesystem::path& path) const {
     // engine state) live on the side and don't get written to disk here;
     // they're rebuilt from the document on next load.
     try {
-        std::ofstream f{path};
-        if (!f) {
-            Logger::error("ProjectState::save: cannot open '{}' for writing",
-                          util::path_to_utf8(path));
-            return false;
-        }
         json doc;
         {
             std::lock_guard lock{mutex_};
@@ -1354,7 +1348,44 @@ bool ProjectState::save(const std::filesystem::path& path) const {
         // folder, so the saved file stays portable across moves. Covers items
         // imported this session (which carry an absolute mediaServerPath).
         relativize_media_paths(doc);
-        f << doc.dump(2);
+        const std::string serialized = doc.dump(2);
+
+        // Atomic write: serialise into a sibling temp file, verify the write
+        // fully succeeded, then rename it over the target (an atomic replace on
+        // the same volume on POSIX and on modern Windows). This way a crash or a
+        // full disk mid-write leaves the *previous* project file intact instead
+        // of a truncated/corrupt one, and a failed write is reported as a real
+        // failure rather than a false "saved" (formerly the stream state was
+        // never checked and the target was truncated before serialising).
+        std::filesystem::path tmp = path;
+        tmp += ".tmp";
+        {
+            std::ofstream f{tmp, std::ios::binary | std::ios::trunc};
+            if (!f) {
+                Logger::error("ProjectState::save: cannot open temp '{}' for writing",
+                              util::path_to_utf8(tmp));
+                return false;
+            }
+            f << serialized;
+            f.flush();
+            if (!f) {
+                Logger::error("ProjectState::save: write to temp '{}' failed "
+                              "(disk full / I/O error)", util::path_to_utf8(tmp));
+                f.close();
+                std::error_code rmec;
+                std::filesystem::remove(tmp, rmec);
+                return false;
+            }
+        }  // close the stream before renaming
+
+        std::error_code ec;
+        std::filesystem::rename(tmp, path, ec);
+        if (ec) {
+            Logger::error("ProjectState::save: rename '{}' -> '{}' failed: {} "
+                          "(temp kept for recovery)", util::path_to_utf8(tmp),
+                          util::path_to_utf8(path), ec.message());
+            return false;
+        }
         return true;
     } catch (const std::exception& ex) {
         Logger::error("ProjectState::save failed: {}", ex.what());
@@ -1483,9 +1514,21 @@ json ProjectState::items_page(std::size_t offset, std::size_t limit) const {
 
 bool ProjectState::replace_full_document(const json& doc) {
     if (!doc.is_object()) return false;
+    // M-16: validate/repair the incoming document exactly as load_from_json does
+    // (normalise lastModified, drop duplicate UUIDs) instead of storing it
+    // verbatim. PUT /api/project/document must not be a back door around
+    // detect_and_repair — a corrupt or hostile full-document replace would
+    // otherwise poison project state (duplicate uuids break reorder/lookup).
+    json doc_repaired = doc;
+    RepairInfo repair = detect_and_repair(doc_repaired);
+    if (repair.repaired) {
+        Logger::warn("ProjectState::replace_full_document: project repaired ({} issue(s)).",
+                     repair.issues.size());
+        for (const auto& issue : repair.issues) Logger::warn("  - {}", issue);
+    }
     {
         std::lock_guard lock{mutex_};
-        document_ = doc;
+        document_ = std::move(doc_repaired);
         if (!document_.contains("settings")) {
             document_["settings"] = json{
                 {"defaultOutputDevice", nullptr},
@@ -1980,12 +2023,37 @@ std::string ProjectState::item_uuid_by_index(const std::vector<int>& path) const
     return resolve_index_path_locked(path);
 }
 
+namespace {
+// Guard against unbounded recursion through cyclic startBehavior / group
+// chains — e.g. cue A whose startBehavior plays cue B whose startBehavior
+// plays A, or a group that (transitively) contains itself. Without a bound this
+// recurses until the stack overflows and crashes the server mid-show. The
+// counter is thread_local because play_item/trigger_item run independently on
+// request-handler threads and on the sequencer thread; the two functions share
+// one counter because they call each other, and 64 is far beyond any legitimate
+// group-nesting / start-behavior chain depth.
+constexpr int kMaxTriggerRecursionDepth = 64;
+thread_local int g_trigger_recursion_depth = 0;
+struct TriggerRecursionGuard {
+    bool ok;
+    TriggerRecursionGuard() : ok(++g_trigger_recursion_depth <= kMaxTriggerRecursionDepth) {}
+    ~TriggerRecursionGuard() { --g_trigger_recursion_depth; }
+};
+}  // namespace
+
 // ---------------------------------------------------------------------------
 // Item-level transport with ducking + in/out point semantics.
 // ---------------------------------------------------------------------------
 bool ProjectState::play_item(const std::string& uuid,
                              double fade_in_override_sec,
                              const audio::CueId& exclude_from_ducking) {
+    TriggerRecursionGuard rec_guard;
+    if (!rec_guard.ok) {
+        Logger::warn("play_item: recursion depth limit ({}) exceeded for '{}' — "
+                     "aborting (likely a cyclic startBehavior chain)",
+                     kMaxTriggerRecursionDepth, uuid);
+        return false;
+    }
     // Snapshot everything we need under the lock, then release before
     // touching the engine (engine calls take their own locks).
     std::string  ducking_mode  = "stop-all";
@@ -2276,6 +2344,13 @@ std::string ProjectState::next_item_override() const {
 bool ProjectState::trigger_item(const std::string& uuid,
                                 double fade_in_override_sec,
                                 const audio::CueId& exclude_from_ducking) {
+    TriggerRecursionGuard rec_guard;
+    if (!rec_guard.ok) {
+        Logger::warn("trigger_item: recursion depth limit ({}) exceeded for '{}' — "
+                     "aborting (likely a cyclic group / start-behavior chain)",
+                     kMaxTriggerRecursionDepth, uuid);
+        return false;
+    }
     // Look up the item's type and (for groups) startBehavior + children.
     std::string type;
     std::string start_action;

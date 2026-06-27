@@ -1681,7 +1681,7 @@ autoUpdater.autoInstallOnAppQuit = true;
 // Configure update feed URL to point to GitHub releases
 autoUpdater.setFeedURL({
   provider: 'github',
-  owner: 'tdoukinitsas',
+  owner: '4C-Winterberg-e-V',
   repo: 'liveplay',
   private: false
 });
@@ -1750,7 +1750,7 @@ autoUpdater.on('update-downloaded', (info) => {
 async function checkForManualUpdate() {
   return new Promise((resolve, reject) => {
     const currentVersion = app.getVersion();
-    const packageJsonUrl = 'https://tdoukinitsas.github.io/liveplay/package.json';
+    const packageJsonUrl = 'https://4c-winterberg-e-v.github.io/liveplay/package.json';
     
     console.log('Checking for updates manually at:', packageJsonUrl);
     console.log('Current version:', currentVersion);
@@ -1775,7 +1775,7 @@ async function checkForManualUpdate() {
             resolve({
               currentVersion,
               newVersion: latestVersion,
-              downloadUrl: 'https://tdoukinitsas.github.io/liveplay/',
+              downloadUrl: 'https://4c-winterberg-e-v.github.io/liveplay/',
               isManualUpdate: true
             });
           } else {

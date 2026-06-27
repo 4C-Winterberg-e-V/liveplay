@@ -463,6 +463,12 @@ PlaybackItem* AudioEngine::find_cue(const CueId& id) const {
     return it != items_.end() ? it->second.get() : nullptr;
 }
 
+std::shared_ptr<PlaybackItem> AudioEngine::find_cue_shared(const CueId& id) const {
+    std::lock_guard lock{mutex_};
+    auto it = items_.find(id.value);
+    return it != items_.end() ? it->second : nullptr;
+}
+
 void AudioEngine::play(const CueId& id) {
     if (auto* item = find_cue(id)) {
         Logger::info("play() cue='{}'", id.value);

@@ -3,7 +3,7 @@
   "name": "liveplay-server",
   "version-string": "2.1.2",
   "description": "LivePlay headless audio engine and control server.",
-  "homepage": "https://github.com/tdoukinitsas/liveplay",
+  "homepage": "https://github.com/4C-Winterberg-e-V/liveplay",
   "license": "AGPL-3.0-only",
   "dependencies": [
     {
@@ -25,6 +25,10 @@
     {
       "name": "miniz",
       "version>=": "3.0.2"
+    },
+    {
+      "name": "doctest",
+      "version>=": "2.4.11"
     }
   ],
   "builtin-baseline": "22d9c655dc24ad24c6cac27607005e619ce46740"
