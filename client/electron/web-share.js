@@ -38,7 +38,9 @@ const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
 
 const express = require('express');
-const httpProxy = require('http-proxy');
+// http-proxy-3 is a maintained, API-compatible rewrite of the unmaintained
+// http-proxy@1 (M-32). Same createProxyServer / .web / .ws / 'error' surface.
+const httpProxy = require('http-proxy-3');
 const QRCode = require('qrcode');
 
 const DEFAULT_WEB_PORT = 8088;
