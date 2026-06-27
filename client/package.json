@@ -34,7 +34,7 @@
     "@types/node": "^20.10.5",
     "concurrently": "^8.2.2",
     "cross-env": "^10.1.0",
-    "electron": "42.3.2",
+    "electron": "42.5.0",
     "electron-builder": "^26.8.1",
     "nuxt": "^4.4.7",
     "sass": "^1.69.5",
@@ -43,7 +43,7 @@
     "vue-router": "^4.5.0",
     "vue-tsc": "^2.2.0",
     "wait-on": "^7.2.0",
-    "vitest": "^2.1.9"
+    "vitest": "^3.2.6"
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
@@ -58,7 +58,7 @@
     "http-proxy": "^1.18.1",
     "material-symbols": "^0.39.1",
     "qrcode": "^1.5.4",
-    "uuid": "^9.0.1",
+    "uuid": "^11.1.1",
     "youtube-search-api": "^2.0.1",
     "yt-dlp-wrap": "^2.3.12"
   },
