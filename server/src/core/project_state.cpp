@@ -1514,9 +1514,21 @@ json ProjectState::items_page(std::size_t offset, std::size_t limit) const {
 
 bool ProjectState::replace_full_document(const json& doc) {
     if (!doc.is_object()) return false;
+    // M-16: validate/repair the incoming document exactly as load_from_json does
+    // (normalise lastModified, drop duplicate UUIDs) instead of storing it
+    // verbatim. PUT /api/project/document must not be a back door around
+    // detect_and_repair — a corrupt or hostile full-document replace would
+    // otherwise poison project state (duplicate uuids break reorder/lookup).
+    json doc_repaired = doc;
+    RepairInfo repair = detect_and_repair(doc_repaired);
+    if (repair.repaired) {
+        Logger::warn("ProjectState::replace_full_document: project repaired ({} issue(s)).",
+                     repair.issues.size());
+        for (const auto& issue : repair.issues) Logger::warn("  - {}", issue);
+    }
     {
         std::lock_guard lock{mutex_};
-        document_ = doc;
+        document_ = std::move(doc_repaired);
         if (!document_.contains("settings")) {
             document_["settings"] = json{
                 {"defaultOutputDevice", nullptr},
