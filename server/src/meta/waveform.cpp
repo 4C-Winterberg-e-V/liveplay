@@ -2,6 +2,7 @@
 // waveform.cpp — see waveform.hpp.
 // ============================================================================
 #include "liveplay/meta/waveform.hpp"
+#include "liveplay/meta/media_limits.hpp"
 #include "liveplay/logger.hpp"
 #include "liveplay/util/unicode_path.hpp"
 
@@ -17,6 +18,9 @@ Waveform compute_waveform(const std::filesystem::path& path,
                           std::uint32_t bucket_count) noexcept {
     Waveform out;
     bucket_count = std::clamp<std::uint32_t>(bucket_count, 16, 16384);
+
+    // M-04: bail on pathologically-large files before decoding.
+    if (media_file_too_large(path, "compute_waveform")) return out;
 
     ma_decoder_config cfg = ma_decoder_config_init(ma_format_f32, 0, 0);
     ma_decoder decoder{};
@@ -38,6 +42,16 @@ Waveform compute_waveform(const std::filesystem::path& path,
     ma_uint32 sample_rate = 0;
     ma_decoder_get_data_format(&decoder, nullptr, &channels, &sample_rate, nullptr, 0);
     if (channels == 0) channels = 2;
+
+    // H-20: refuse an absurd channel count before allocating per-channel peak/
+    // rms buffers (channels * bucket_count floats). 64 is far beyond any real
+    // audio cue; this is a guard (not a clamp) so the decode buffer stride below
+    // always matches the decoder's actual channel count.
+    if (channels > 64) {
+        ma_decoder_uninit(&decoder);
+        Logger::warn("compute_waveform: refusing '{}' — {} channels exceeds 64", p, channels);
+        return out;
+    }
 
     ma_uint64 total_frames = 0;
     ma_decoder_get_length_in_pcm_frames(&decoder, &total_frames);
