@@ -141,6 +141,9 @@ add_executable(liveplay-server
     src/net/discovery.cpp
     src/net/osc_client.cpp
 
+    # Shared utilities
+    src/util/fs_sandbox.cpp
+
     # Milestone 4 — metadata + waveform
     src/meta/metadata.cpp
     src/meta/waveform.cpp
@@ -170,7 +173,9 @@ elseif(TARGET unofficial::taglib::tag)
 endif()
 
 if(WIN32)
-    target_link_libraries(liveplay-server PRIVATE ws2_32 mswsock dbghelp)
+    # shell32 + ole32: SHGetKnownFolderPath / CoTaskMemFree for the filesystem
+    # sandbox's default media-folder roots (src/util/fs_sandbox.cpp).
+    target_link_libraries(liveplay-server PRIVATE ws2_32 mswsock dbghelp shell32 ole32)
     # Modern Windows console: opt in to UTF-8 + VT for the banner.
     target_compile_definitions(liveplay-server PRIVATE UNICODE _UNICODE)
 endif()
@@ -186,3 +191,14 @@ target_compile_definitions(liveplay-server PRIVATE
 # ---------------------------------------------------------------------------
 include(GNUInstallDirs)
 install(TARGETS liveplay-server RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# ---------------------------------------------------------------------------
+# Unit tests (opt-in via -DLIVEPLAY_BUILD_TESTS=ON; enabled in CI). Off by
+# default so normal release builds — including the electron-builder server
+# build — are unaffected. Run with `ctest` from the build directory.
+# ---------------------------------------------------------------------------
+option(LIVEPLAY_BUILD_TESTS "Build the C++ unit tests (doctest)" OFF)
+if(LIVEPLAY_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

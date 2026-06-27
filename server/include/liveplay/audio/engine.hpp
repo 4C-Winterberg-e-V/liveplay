@@ -195,6 +195,14 @@ public:
 
     void unload_cue(const CueId& id);
     PlaybackItem* find_cue(const CueId& id) const;
+    // Like find_cue() but returns shared ownership. A caller on another thread
+    // (e.g. the meter / cue_state broadcast loop) must use this so it can safely
+    // dereference the item even if unload_cue() erases it concurrently — the
+    // returned shared_ptr keeps the PlaybackItem alive for the duration of use.
+    // The raw find_cue() pointer is only safe for synchronous same-thread use,
+    // because unload_cue() on another thread can drop the last reference and
+    // free it the instant the engine lock is released (H-14). Empty if not found.
+    std::shared_ptr<PlaybackItem> find_cue_shared(const CueId& id) const;
 
     void play(const CueId& id);
     void stop(const CueId& id);

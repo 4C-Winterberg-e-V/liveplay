@@ -141,9 +141,45 @@ liveplay-server [options]
 
 Environment:
   LIVEPLAY_PORT         Same as --port
+  LIVEPLAY_FS_ROOTS     Extra filesystem-sandbox roots (see below).
+                        OS-path-list separated (';' on Windows, ':' elsewhere)
   NO_COLOR=1            Disable ANSI colour in logs
   FORCE_COLOR=1         Force colour even when stdout isn't a tty
 ```
+
+### Filesystem sandbox
+
+The server exposes a filesystem surface over HTTP/WebSocket — the file browser
+(`GET /api/fs/list`), `POST /api/fs/mkdir`, `/api/copy_to_media`, `/api/metadata`,
+`/api/waveform_path`, and the project load/save/export/import handlers. Because the
+server binds to the LAN (and can be published over a tunnel), every one of those
+endpoints is confined to a **sandbox**: an allow-list of roots that each requested
+path is canonicalised against (resolving `..` and symlinks) and verified to live
+inside. Anything outside the sandbox is refused with HTTP **403**. This is what
+stops a client — or anyone who can reach the server — from browsing the machine
+from `/` and reading arbitrary files.
+
+The default roots are:
+
+* the user's standard media folders — **Music, Documents, Desktop, Downloads**
+  (resolved via the OS known-folder APIs on Windows, `$HOME` elsewhere);
+* a dedicated **`Documents/LivePlay`** projects library, created on first run;
+* any extra roots listed in **`LIVEPLAY_FS_ROOTS`** (e.g. a NAS mount or a samples
+  drive) — `LIVEPLAY_FS_ROOTS=/mnt/audio:/media/usb` on POSIX,
+  `LIVEPLAY_FS_ROOTS=D:\Audio;E:\Samples` on Windows;
+* the **currently-open project's folder**, added dynamically — opening a project by
+  its path (recent list, double-clicked `.liveplay`) is allowed from anywhere and
+  brings that folder into the sandbox so its media stays reachable and saves land
+  back in place.
+
+The active roots are printed at startup. Projects that live outside these folders
+aren't reachable through the in-app browser — keep them under `Documents/LivePlay`
+(or any media folder), or add their location via `LIVEPLAY_FS_ROOTS`.
+
+> **Note:** the sandbox confines *what* the server will read and write, not *who*
+> can reach it. The control surface still binds to `0.0.0.0` and has no
+> authentication of its own; restrict it with `--bind 127.0.0.1`, a firewall, or
+> the web-share PIN when exposing it beyond a trusted LAN.
 
 The control surface listens on **TCP 4480** (REST + WebSocket). Alongside it, the
 [discovery beacon](include/liveplay/net/discovery.hpp) announces the server on

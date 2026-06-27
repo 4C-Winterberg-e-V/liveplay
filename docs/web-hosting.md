@@ -34,8 +34,7 @@ Das Ergebnis (`.output/public`) ist auf jedem statischen Webserver auslieferbar.
 NUXT_APP_BASE_URL=/liveplay/ pnpm generate:web
 ```
 
-Die Docker-Artefakte nehmen den Pfad als Build-Arg:
-`--build-arg NUXT_APP_BASE_URL=/liveplay/`.
+Diese `baseURL` muss zum späteren Auslieferungspfad auf dem Webserver/Proxy passen.
 
 > Der Electron-Build (`pnpm generate` / `pnpm build:electron`) bleibt davon
 > unberührt und verwendet weiterhin relative Pfade für `file://`.
@@ -59,43 +58,57 @@ Nichterreichbarkeit erscheint eine klare Fehlermeldung.
 
 ## 3. Hosting-Modi
 
-### Modus A – Same-Origin-Proxy (empfohlen)
+> **Einfachster Weg (empfohlen):** Auf dem **Mac** liefert die App die Mobile-UI
+> **selbst** aus (Static + Reverse-Proxy auf den gebündelten C++-Server) und kann
+> optional einen **gebündelten Cloudflare-Tunnel** starten – **ohne Docker, nginx
+> oder Caddy**. Bedienung über Kopfzeile → **Teilen**. Details:
+> [`web-hosting-inapp-mac.md`](web-hosting-inapp-mac.md). Die folgenden Modi sind
+> nur für **eigenständiges Hosting** gedacht (dauerhafte Installation,
+> Nicht-Mac-Hosts). LivePlay liefert dafür **keine fertigen Deploy-Artefakte mehr** –
+> du stellst den Proxy bzw. statischen Webserver selbst bereit und lieferst den
+> Web-Build (`.output/public`) aus.
 
-Ein Reverse-Proxy liefert die SPA unter `/` und proxyt `/api/*` und `/ws` auf den
-C++-Server (`http://<server>:4480`). TLS terminiert am Proxy; die Strecke
-Proxy → Server bleibt Plain-HTTP im LAN.
+### Modus A – Same-Origin-Proxy (empfohlen für feste Installationen)
+
+Ein selbst bereitgestellter Reverse-Proxy liefert die SPA (`.output/public`) unter
+`/` und proxyt `/api/*` und `/ws` auf den C++-Server (`http://<server>:4480`). TLS
+terminiert am Proxy; die Strecke Proxy → Server bleibt Plain-HTTP im LAN.
 
 **Vorteile:** kein Mixed-Content, keine CORS-Abhängigkeit, keine manuelle
 Adresseingabe (Same-Origin).
 
-**Portabel (Caddy):**
-```bash
-# In deploy/docker-compose.mode-a-caddy.yml LIVEPLAY_SERVER_ADDR auf den
-# C++-Server setzen (host:port). LIVEPLAY_SITE_ADDR=':80' (HTTP) oder ein
-# echter Hostname für automatisches HTTPS.
-docker compose -f deploy/docker-compose.mode-a-caddy.yml up --build
+**Beispiel (Caddy):** Eine minimale `Caddyfile` – `:80` für reines HTTP oder ein
+echter Hostname für automatisches HTTPS:
+
+```caddy
+:80 {
+	# /api und /ws zuerst auf den C++-Server (höhere Priorität als die SPA)
+	@api path /api/* /ws
+	reverse_proxy @api <server-ip>:4480
+	# SPA statisch ausliefern, SPA-Fallback auf index.html
+	root * /srv/liveplay        # Inhalt von client/.output/public
+	try_files {path} /index.html
+	file_server
+	# optional: Auth-Gate vor den Server setzen
+	# basic_auth { liveplay <bcrypt-hash> }
+}
 ```
 
-**Bestehende Traefik-Instanz:**
-1. `deploy/traefik/docker-compose.snippet.yml` in den Traefik-Stack übernehmen
-   (Host-Regel, certresolver, Netzwerk anpassen).
-2. `deploy/traefik/liveplay-dynamic.yml` über den File-Provider einbinden und die
-   Upstream-URL (`http://<server-ip>:4480`) eintragen. Diese Route hat höhere
-   Priorität, damit `/api` und `/ws` vor der SPA greifen. Traefik leitet
-   WebSocket-Upgrades automatisch weiter.
+**Bestehende Traefik-Instanz:** Die SPA als statischen Service einhängen und eine
+File-Provider-Route für `/api` + `/ws` auf den **externen** C++-Server
+(`http://<server-ip>:4480`) anlegen. Diese Route muss höhere Priorität als die
+SPA-Route haben, damit `/api`/`/ws` zuerst greifen; Traefik leitet
+WebSocket-Upgrades automatisch weiter. Idle-/Read-Timeouts großzügig setzen
+(langlebige WS, hochfrequente Meter-Broadcasts).
 
 ### Modus B – Plain-HTTP direkt (Event-LAN)
 
 SPA über **reines HTTP** ausliefern; Serveradresse manuell `http://<server-ip>:4480`.
-Bewusst kein HTTPS, um Mixed-Content zu vermeiden.
+Bewusst kein HTTPS, um Mixed-Content zu vermeiden. Genügt jeder statische Server:
 
 ```bash
-docker compose -f deploy/docker-compose.mode-b.yml up --build
-# → http://<host-ip>:8080 im Browser öffnen
+pnpm dlx serve client/.output/public    # oder nginx, python3 -m http.server, …
 ```
-
-Alternativ ohne Docker: `.output/public` mit einem beliebigen statischen Server
-ausliefern (`pnpm dlx serve .output/public`, nginx, …).
 
 ---
 

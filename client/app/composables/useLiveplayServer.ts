@@ -972,6 +972,42 @@ function createClient() {
     }
   }
 
+  // Land a path into the project's media root, robust to the server's
+  // filesystem sandbox. The sandbox refuses paths outside the user's media
+  // folders / the open project, so:
+  //   1. Ask the server to copy it (copyToMedia) — the fast path, and the only
+  //      option for files that live on a *remote* server. Succeeds for the
+  //      common cases: project media, ~/Music, ~/Documents, … Server-browser
+  //      picks are themselves sandbox-confined now, so they always take this.
+  //   2. If that is refused/fails AND we're in Electron, the path must be a
+  //      *local* file the user picked via the native OS dialog (which can still
+  //      reach anywhere). Read its bytes locally and upload them into
+  //      media_root — landing the file inside the project without ever widening
+  //      the server's network-exposed filesystem access.
+  // Returns the absolute server-side media path, or null when nothing worked.
+  async function importPathToMedia(srcPath: string): Promise<string | null> {
+    try {
+      return await copyToMedia(srcPath);
+    } catch (e) {
+      dwarn('[import] copyToMedia denied/failed, attempting local byte upload:', e);
+    }
+    const api = (import.meta.client && (window as any).electronAPI) || null;
+    if (api?.readAudioFile) {
+      try {
+        const res = await api.readAudioFile(srcPath);
+        if (res?.success && res.data) {
+          const name = srcPath.split(/[\\/]/).pop() || 'audio';
+          const file = new File([new Uint8Array(res.data)], name);
+          const up = await uploadFile(file, name);
+          return up?.saved?.[0] ?? null;
+        }
+      } catch (e) {
+        derr('[import] local byte-upload fallback failed:', e);
+      }
+    }
+    return null;
+  }
+
   // Queue an async waveform generation on the server. Returns immediately;
   // the result arrives as a { op: 'waveform_ready', item_uuid, channels, ... }
   // doc_patch over WebSocket once computation finishes.
@@ -1047,6 +1083,7 @@ function createClient() {
     fetchWaveform,
     fetchWaveformByPath,
     copyToMedia,
+    importPathToMedia,
     resolveDroppedFileToMedia,
     requestWaveformGeneration,
     invalidateWaveformCache,

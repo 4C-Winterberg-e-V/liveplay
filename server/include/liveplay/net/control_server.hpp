@@ -40,6 +40,7 @@
 
 #include "liveplay/audio/engine.hpp"
 #include "liveplay/core/project_state.hpp"
+#include "liveplay/util/fs_sandbox.hpp"
 
 #include <atomic>
 #include <memory>
@@ -76,9 +77,17 @@ private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
 
+    // Confines every path-accepting REST handler to a curated allow-list of
+    // roots (the user's media folders + the open project). See fs_sandbox.hpp.
+    util::FsSandbox fs_sandbox_;
+
     void install_routes();
     void broadcast_loop();
     void waveform_worker();   // drains the async waveform-generation queue
+
+    // Re-point the sandbox at the open project's folder (read from ProjectState)
+    // so its media stays reachable. Cheap; called at the head of FS handlers.
+    void sync_sandbox_project_root();
 
     // Fan-out helper for multi-client mutation sync. Mutating REST routes
     // call this with a doc_patch payload so every connected client mirrors

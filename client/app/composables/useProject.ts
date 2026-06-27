@@ -27,6 +27,7 @@ import type {
   CartItem
 } from '~/types/project';
 import { DEFAULT_THEME, DEFAULT_CART_SLOT_KEYS } from '~/types/project';
+import { computeItemDiff, flattenItems } from '~/utils/projectDiff';
 import { applyAutoProcessing } from '~/utils/audio';
 
 // ---------------------------------------------------------------------------
@@ -1638,24 +1639,6 @@ export const useProject = () => {
     _installItemsWatcherFn   = installItemsWatcher;
     _uninstallItemsWatcherFn = uninstallItemsWatcher;
 
-    const flatten = (items: any[] | null | undefined,
-                     cartOnly: any[] | null | undefined) => {
-      const m = new Map<string, { item: any; parentUuid: string; cartOnly: boolean }>();
-      const walk = (arr: any[] | null | undefined, parentUuid: string, isCartOnly: boolean) => {
-        if (!Array.isArray(arr)) return;
-        for (const it of arr) {
-          if (!it || typeof it !== 'object') continue;
-          const u = it.uuid;
-          if (!u) continue;
-          m.set(u, { item: it, parentUuid, cartOnly: isCartOnly });
-          if (it.type === 'group' && Array.isArray(it.children)) walk(it.children, u, isCartOnly);
-        }
-      };
-      walk(items, '', false);
-      walk(cartOnly, '', true);
-      return m;
-    };
-
     async function syncItemsDiff() {
       const srv = server();
       if (!srv.connected) return;
@@ -1668,77 +1651,62 @@ export const useProject = () => {
       const cartonly_changed = stableJson(nextCartOnly) !== stableJson(lastCartOnly);
       if (!items_changed && !cartonly_changed) return;
 
-      const prev = flatten(lastItems, lastCartOnly);
-      const curr = flatten(nextItems, nextCartOnly);
+      // Pure diff (extracted + unit-tested in ~/utils/projectDiff).
+      const prev = flattenItems(lastItems, lastCartOnly);
+      const curr = flattenItems(nextItems, nextCartOnly);
+      const ops  = computeItemDiff(prev, curr);
 
-      // Rotate baselines BEFORE awaiting any API calls so a subsequent
-      // watcher fire while we're mid-sync sees the new baseline.
+      // Snapshot the pre-rotation baseline so a failed sync can be rolled back.
+      const prevItemsBaseline   = lastItems;
+      const prevCartOnlyBaseline = lastCartOnly;
+
+      // Rotate baselines BEFORE awaiting any API calls so a subsequent watcher
+      // fire while we're mid-sync diffs incrementally against the new baseline.
       lastItems    = nextItems;
       lastCartOnly = nextCartOnly;
 
-      // 1. Cross-parent moves: same uuid but its location changed — either a
-      //    new parent group, or a transition between the playlist and the
-      //    cart-only list. Must remove-then-add so the server re-files it in
-      //    the right array/parent. (updateProjectItem only patches content.)
-      for (const [uuid, { item, parentUuid, cartOnly }] of curr) {
-        const before = prev.get(uuid);
-        if (!before) continue;
-        if (before.parentUuid === parentUuid && before.cartOnly === cartOnly) continue;
-        try { await srv.removeProjectItem(uuid); } catch {}
-        try { await srv.addProjectItem(item, parentUuid, cartOnly); } catch {}
+      // H-17: previously each srv call was wrapped in an empty `catch {}` and the
+      // baseline was advanced unconditionally — a failed call (transient 5xx, a
+      // reconnect window) silently desynced client and server until something
+      // else forced a full re-hydrate. Now failures are logged and, on any
+      // failure, the baseline is rolled back so the next change re-diffs and
+      // retries. The server's add/remove are idempotent (add_item ignores a
+      // duplicate uuid and returns OK; removing an absent uuid is a no-op), so
+      // re-sending an op that already landed is a safe no-op — no retry storm.
+      let failed = false;
+      const fail = (op: string, id: string, e: unknown) => {
+        failed = true;
+        console.warn(`[useProject] item sync ${op} failed for ${id}:`, e);
+      };
+
+      // 1. Cross-parent moves (remove then re-add so the server re-files it).
+      for (const { uuid, item, parentUuid, cartOnly } of ops.moves) {
+        try { await srv.removeProjectItem(uuid); }              catch (e) { fail('move/remove', uuid, e); }
+        try { await srv.addProjectItem(item, parentUuid, cartOnly); } catch (e) { fail('move/add', uuid, e); }
+      }
+      // 2. Removes.
+      for (const uuid of ops.removes) {
+        try { await srv.removeProjectItem(uuid); } catch (e) { fail('remove', uuid, e); }
+      }
+      // 3. Adds.
+      for (const { uuid, item, parentUuid, cartOnly } of ops.adds) {
+        try { await srv.addProjectItem(item, parentUuid, cartOnly); } catch (e) { fail('add', uuid, e); }
+      }
+      // 4. Updates.
+      for (const { uuid, item } of ops.updates) {
+        try { await srv.updateProjectItem(uuid, item); } catch (e) { fail('update', uuid, e); }
+      }
+      // 5. Reorders (full current order per playlist parent; server ignores unknown uuids).
+      for (const { parentUuid, order } of ops.reorders) {
+        try { await srv.reorderProjectItems(order, parentUuid); } catch (e) { fail('reorder', parentUuid || '(root)', e); }
       }
 
-      // 2. Removes: items present in prev but gone from curr.
-      for (const [uuid] of prev) {
-        if (!curr.has(uuid)) { try { await srv.removeProjectItem(uuid); } catch {} }
-      }
-
-      // 3. Adds: items in curr that weren't in prev (and aren't cross-parent moves).
-      for (const [uuid, { item, parentUuid, cartOnly }] of curr) {
-        if (prev.has(uuid)) continue;
-        try { await srv.addProjectItem(item, parentUuid, cartOnly); } catch {}
-      }
-
-      // 4. Updates: items whose content changed (not cross-parent, not new).
-      for (const [uuid, { item, parentUuid, cartOnly }] of curr) {
-        const before = prev.get(uuid);
-        if (!before) continue;
-        if (before.parentUuid !== parentUuid || before.cartOnly !== cartOnly) continue; // handled in step 1
-        if (stableJson(before.item) === stableJson(item)) continue;
-        try { await srv.updateProjectItem(uuid, item); } catch {}
-      }
-
-      // 5. Reorder: for each parent level, if the item order changed call
-      //    reorderProjectItems so other clients see the correct list order.
-      //    The JavaScript Map preserves insertion order (= walk/array order),
-      //    so [...map.entries()] gives items in their array position order.
-      //    Cart-only items are addressed by slot, not list order, and the
-      //    server reorder endpoint only touches the playlist — so exclude them
-      //    here (they share parentUuid '' with playlist roots but must not be
-      //    folded into the playlist's order).
-      const parentUuidsInCurr = new Set<string>();
-      for (const [, { parentUuid, cartOnly }] of curr) {
-        if (!cartOnly) parentUuidsInCurr.add(parentUuid);
-      }
-
-      for (const parentUuid of parentUuidsInCurr) {
-        const prevOrder = [...prev.entries()]
-          .filter(([, v]) => !v.cartOnly && v.parentUuid === parentUuid)
-          .map(([u]) => u);
-        const currOrder = [...curr.entries()]
-          .filter(([, v]) => !v.cartOnly && v.parentUuid === parentUuid)
-          .map(([u]) => u);
-
-        // Restrict comparison to items that exist in both snapshots so that
-        // add/remove operations (already handled above) don't falsely look
-        // like a reorder.
-        const prevCommon = prevOrder.filter(u => curr.has(u));
-        const currCommon = currOrder.filter(u => prev.has(u));
-
-        if (stableJson(prevCommon) !== stableJson(currCommon)) {
-          // Send the full current order for this parent (server ignores unknown uuids).
-          try { await srv.reorderProjectItems(currOrder, parentUuid); } catch {}
-        }
+      if (failed) {
+        // Roll the baseline back so the next watcher fire re-diffs and retries
+        // the ops that didn't land (idempotent → already-applied ops no-op).
+        lastItems    = prevItemsBaseline;
+        lastCartOnly = prevCartOnlyBaseline;
+        console.warn('[useProject] item sync incomplete — baseline rolled back; will retry on next change.');
       }
     }
 

@@ -227,6 +227,12 @@ private:
     // Atomic offset so set_ltc_offset() can be called while playing without
     // touching the LTCGenerator from the control thread.
     std::atomic<long long>        ltc_offset_ns_{0};
+    // Render-thread cache of the LTC offset last applied to ltc_. render_block()
+    // reconfigures the generator (which resets the encoder) ONLY when the offset
+    // actually changed, not every block — reconfiguring every block reset the
+    // encoder and destroyed biphase/timecode continuity (H-16). Audio-thread-owned.
+    long long                     ltc_applied_offset_ns_ = 0;
+    bool                          ltc_applied_valid_      = false;
 
     // Per-source-channel meters (including LTC if enabled). Sized at load().
     std::vector<std::unique_ptr<Meter>> source_meters_;

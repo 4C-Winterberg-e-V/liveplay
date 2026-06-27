@@ -198,8 +198,9 @@ watch(
     currentProject.value?.name ?? '',
     currentProject.value?.items?.length ?? 0,
   ],
-  ([folder, name], [prevFolder, prevName] = ['', '', 0]) => {
+  ([folder, name], oldVal) => {
     // Reset the "already requested" tracker when the project changes.
+    const [prevFolder, prevName] = oldVal ?? ['', ''];
     if (folder !== prevFolder || name !== prevName) requestedWaveformUuids.clear();
     if (waveformScanTimer) clearTimeout(waveformScanTimer);
     waveformScanTimer = setTimeout(scanForMissingWaveforms, 150);
@@ -243,12 +244,15 @@ const importFromServerPath = async (serverPath: string) => {
   try {
     const server = (await import('~/composables/useLiveplayServer')).useLiveplayServer();
 
-    // Copy file to the project's media root (no-op if already there).
-    let destPath = serverPath;
-    try {
-      destPath = await server.copyToMedia(serverPath);
-    } catch (e) {
-      console.warn('[import] copyToMedia failed, using original path:', e);
+    // Land the file in the project's media root (no-op if already there).
+    // importPathToMedia is sandbox-aware: it copies server-side when possible
+    // and falls back to a local byte-upload for native picks outside the
+    // server's allowed folders. Skip the item entirely if it can't be landed —
+    // better than adding an item whose media the server can never reach.
+    const destPath = await server.importPathToMedia(serverPath);
+    if (!destPath) {
+      console.error('[import] could not land file in project media:', serverPath);
+      return;
     }
 
     const fileName = destPath.split(/[\\/]/).pop() || 'audio';

@@ -3,6 +3,7 @@
 // duration. See metadata.hpp for the contract.
 // ============================================================================
 #include "liveplay/meta/metadata.hpp"
+#include "liveplay/meta/media_limits.hpp"
 #include "liveplay/logger.hpp"
 #include "liveplay/util/unicode_path.hpp"
 
@@ -23,6 +24,8 @@ std::string tstring_to_utf8(const TagLib::String& s) {
 
 // Best-effort duration via miniaudio when TagLib's AudioProperties is missing.
 std::chrono::milliseconds duration_via_miniaudio(const std::filesystem::path& path) noexcept {
+    // M-04: don't hand a pathologically-large file to the decoder.
+    if (media_file_too_large(path, "read_metadata")) return {};
     ma_decoder_config cfg = ma_decoder_config_init(ma_format_f32, 0, 0);
     ma_decoder decoder{};
 #if defined(_WIN32)

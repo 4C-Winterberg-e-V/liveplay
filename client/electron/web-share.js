@@ -3,8 +3,8 @@
 // AGPL-3.0-only
 //
 // Lets the desktop app expose its bundled web UI to phones/tablets WITHOUT
-// any extra software on the operator's machine (no Docker, no nginx, no
-// WireGuard). Everything below ships inside LivePlay.app.
+// any extra software on the operator's machine (no Docker, no nginx).
+// Everything below ships inside LivePlay.app.
 //
 // Architecture (Same-Origin proxy, identical to the documented "Modus A",
 // but realised in-process instead of via a separate reverse proxy):
@@ -38,7 +38,9 @@ const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
 
 const express = require('express');
-const httpProxy = require('http-proxy');
+// http-proxy-3 is a maintained, API-compatible rewrite of the unmaintained
+// http-proxy@1 (M-32). Same createProxyServer / .web / .ws / 'error' surface.
+const httpProxy = require('http-proxy-3');
 const QRCode = require('qrcode');
 
 const DEFAULT_WEB_PORT = 8088;
