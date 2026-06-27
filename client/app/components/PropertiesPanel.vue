@@ -273,19 +273,113 @@
         
         <div class="property-field" v-if="startBehaviorAction === 'play-index'">
           <label>{{ t('properties.targetIndex') }}</label>
-          <input 
+          <input
             :value="startBehaviorTargetIndex?.join(',') || ''"
             @change="handleStartBehaviorIndexChange"
             type="text"
           />
         </div>
       </div>
+
+      <!-- X18 Mixer Tab -->
+      <div v-if="activeTab === 'x18' && selectedItem.type === 'audio'" class="tab-panel">
+        <p v-if="!x18Configured" class="property-help property-help--error">
+          {{ t('properties.x18RequiresIp') }}
+        </p>
+        <p class="property-help">{{ t('properties.x18Help') }}</p>
+
+        <div
+          v-for="(action, i) in x18Actions"
+          :key="i"
+          class="x18-action"
+        >
+          <div class="x18-action-row">
+            <select v-model="action.trigger" @change="handleSave">
+              <option value="start">{{ t('x18.triggerStart') }}</option>
+              <option value="stop">{{ t('x18.triggerStop') }}</option>
+            </select>
+            <select :value="action.kind || 'fader'" @change="onX18KindChange(action, $event)">
+              <option value="fader">{{ t('x18.kindFader') }}</option>
+              <option value="mute">{{ t('x18.kindMute') }}</option>
+              <option value="mute-group">{{ t('x18.kindMuteGroup') }}</option>
+            </select>
+            <button class="icon-btn x18-remove" :title="t('common.delete')" @click="removeX18Action(i)">
+              <span class="material-symbols-rounded">delete</span>
+            </button>
+          </div>
+          <div class="x18-action-row">
+            <!-- Target (fader & mute) -->
+            <select
+              v-if="(action.kind || 'fader') !== 'mute-group'"
+              v-model="action.target"
+              @change="onX18TargetChange(action)"
+            >
+              <option value="master">{{ t('x18.targetMaster') }}</option>
+              <option value="channel">{{ t('x18.targetChannel') }}</option>
+              <option value="bus">{{ t('x18.targetBus') }}</option>
+            </select>
+            <label
+              v-if="(action.kind || 'fader') !== 'mute-group' && action.target && action.target !== 'master'"
+              class="x18-inline"
+            >
+              {{ action.target === 'bus' ? t('x18.busNumber') : t('x18.channel') }}
+              <input
+                type="number"
+                min="1"
+                :max="action.target === 'bus' ? 6 : 16"
+                step="1"
+                v-model.number="action.channel"
+                @change="onX18ChannelChange(action)"
+              />
+            </label>
+            <!-- Mute group number -->
+            <label v-if="(action.kind || 'fader') === 'mute-group'" class="x18-inline">
+              {{ t('x18.muteGroup') }}
+              <input
+                type="number"
+                min="1"
+                max="4"
+                step="1"
+                v-model.number="action.group"
+                @change="onX18GroupChange(action)"
+              />
+            </label>
+            <!-- Fader level -->
+            <label v-if="(action.kind || 'fader') === 'fader'" class="x18-inline">
+              {{ t('x18.level') }}
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                v-model.number="action.level"
+                @change="onX18LevelChange(action)"
+              />
+              %
+            </label>
+            <!-- Mute state (mute & mute-group) -->
+            <select
+              v-if="(action.kind || 'fader') !== 'fader'"
+              :value="action.muted ? 'mute' : 'unmute'"
+              @change="onX18MutedChange(action, $event)"
+            >
+              <option value="mute">{{ t('x18.mute') }}</option>
+              <option value="unmute">{{ t('x18.unmute') }}</option>
+            </select>
+          </div>
+        </div>
+
+        <button class="x18-add" @click="addX18Action">
+          <span class="material-symbols-rounded">add</span>
+          {{ t('x18.addAction') }}
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { AudioItem, GroupItem } from '~/types/project';
+import type { AudioItem, GroupItem, X18Action } from '~/types/project';
 import { PRESET_COLORS } from '~/types/project';
 import { calculatePerceivedLoudness } from '~/utils/audio';
 import { useOutputTarget } from '~/composables/useOutputTarget';
@@ -400,7 +494,8 @@ const allTabs = computed<Tab[]>(() => [
   { id: 'output', label: t('properties.output'), icon: 'speaker', audioOnly: true },
   { id: 'ducking', label: t('properties.ducking'), icon: 'volume_down', audioOnly: true },
   { id: 'startBehavior', label: t('properties.startBehavior'), icon: 'play_arrow' },
-  { id: 'endBehavior', label: t('properties.endBehavior'), icon: 'stop_circle' }
+  { id: 'endBehavior', label: t('properties.endBehavior'), icon: 'stop_circle' },
+  { id: 'x18', label: t('properties.x18'), icon: 'tune', audioOnly: true }
 ]);
 
 const availableTabs = computed(() => {
@@ -529,6 +624,94 @@ const handleStartBehaviorIndexChange = (e: Event) => {
   handleSave();
 };
 
+// ---- X18 mixer actions ----------------------------------------------------
+// A console IP must be set in Project Settings for these to do anything; the
+// editor stays usable regardless so actions can be prepared ahead of time.
+const x18Configured = computed(() => {
+  const ip = (currentProject.value as any)?.settings?.x18Ip;
+  return typeof ip === 'string' && ip.trim().length > 0;
+});
+
+// Live reference to the selected item's x18Actions array (created lazily so
+// older items without the field still get an editable list).
+const x18Actions = computed<X18Action[]>(() => {
+  const it = selectedItem.value as any;
+  if (!it) return [];
+  if (!Array.isArray(it.x18Actions)) it.x18Actions = [];
+  return it.x18Actions as X18Action[];
+});
+
+const addX18Action = () => {
+  x18Actions.value.push({ trigger: 'start', kind: 'fader', target: 'master', level: 0 });
+  handleSave();
+};
+
+const removeX18Action = (i: number) => {
+  x18Actions.value.splice(i, 1);
+  handleSave();
+};
+
+// Switch an action's kind (fader / mute / mute-group), seeding sensible
+// defaults and dropping now-irrelevant fields.
+const onX18KindChange = (action: X18Action, e: Event) => {
+  const kind = (e.target as HTMLSelectElement).value as X18Action['kind'];
+  action.kind = kind;
+  if (kind === 'mute-group') {
+    if (!action.group || action.group < 1 || action.group > 4) action.group = 1;
+    if (action.muted === undefined) action.muted = true;
+    delete action.target;
+    delete action.channel;
+    delete action.level;
+  } else {
+    if (!action.target) action.target = 'master';
+    if (kind === 'mute') {
+      if (action.muted === undefined) action.muted = true;
+      delete action.level;
+    } else {
+      // fader
+      if (action.level === undefined) action.level = 0;
+      delete action.muted;
+    }
+  }
+  handleSave();
+};
+
+const onX18TargetChange = (action: X18Action) => {
+  // channel/bus need a valid index; master needs none.
+  if (action.target && action.target !== 'master') {
+    const max = action.target === 'bus' ? 6 : 16;
+    if (!action.channel || action.channel < 1 || action.channel > max) action.channel = 1;
+  } else {
+    delete action.channel;
+  }
+  handleSave();
+};
+
+const onX18ChannelChange = (action: X18Action) => {
+  const max = action.target === 'bus' ? 6 : 16;
+  const ch = Math.round(Number(action.channel) || 1);
+  action.channel = Math.min(max, Math.max(1, ch));
+  handleSave();
+};
+
+const onX18GroupChange = (action: X18Action) => {
+  const g = Math.round(Number(action.group) || 1);
+  action.group = Math.min(4, Math.max(1, g));
+  handleSave();
+};
+
+const onX18MutedChange = (action: X18Action, e: Event) => {
+  action.muted = (e.target as HTMLSelectElement).value === 'mute';
+  handleSave();
+};
+
+const onX18LevelChange = (action: X18Action) => {
+  let lvl = Number(action.level);
+  if (!Number.isFinite(lvl)) lvl = 0;
+  action.level = Math.min(100, Math.max(0, lvl));
+  handleSave();
+};
+
 // Duck level in dB
 const duckLevelDB = computed({
   get: () => {
@@ -621,6 +804,9 @@ const handleSave = async () => {
         if (JSON.stringify(sourceAudio.startBehavior) !== JSON.stringify(originalAudio.startBehavior)) {
           targetAudio.startBehavior = { ...sourceAudio.startBehavior };
         }
+        if (JSON.stringify(sourceAudio.x18Actions) !== JSON.stringify(originalAudio.x18Actions)) {
+          targetAudio.x18Actions = JSON.parse(JSON.stringify(sourceAudio.x18Actions ?? []));
+        }
       } else if (item.type === 'group' && current.type === 'group') {
         const sourceGroup = current as GroupItem;
         const originalGroup = original as GroupItem;
@@ -631,6 +817,9 @@ const handleSave = async () => {
         }
         if (JSON.stringify(sourceGroup.endBehavior) !== JSON.stringify(originalGroup.endBehavior)) {
           targetGroup.endBehavior = { ...sourceGroup.endBehavior };
+        }
+        if (JSON.stringify((sourceGroup as any).x18Actions) !== JSON.stringify((originalGroup as any).x18Actions)) {
+          (targetGroup as any).x18Actions = JSON.parse(JSON.stringify((sourceGroup as any).x18Actions ?? []));
         }
       }
     });
@@ -1144,6 +1333,64 @@ const formatTime = (seconds: number): string => {
 
 .property-help--error {
   color: #e53e3e;
+}
+
+/* ---- X18 mixer actions ------------------------------------------------- */
+.x18-action {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.x18-action-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.x18-action-row select {
+  flex: 1;
+  min-width: 90px;
+}
+
+.x18-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.x18-inline input {
+  width: 70px;
+}
+
+.x18-remove {
+  margin-left: auto;
+}
+
+.x18-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: var(--spacing-sm);
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.x18-add:hover {
+  background: var(--color-surface-hover);
 }
 
 .loading-message {

@@ -26,6 +26,7 @@ export interface AudioItem extends BaseItem {
   endBehavior: EndBehavior;
   startBehavior: StartBehavior;
   customActions: CustomAction[];
+  x18Actions?: X18Action[]; // Behringer X18 fader commands on start/stop
   duckingBehavior: DuckingBehavior;
   duration: number; // total duration in seconds
   fadeOutDuration: number; // fade out duration in seconds when stopping (default: 1)
@@ -51,6 +52,7 @@ export interface GroupItem extends BaseItem {
   children: (AudioItem | GroupItem)[];
   startBehavior: GroupStartBehavior;
   endBehavior: EndBehavior;
+  x18Actions?: X18Action[]; // Behringer X18 fader commands on start/stop
   isExpanded: boolean; // UI state
 }
 
@@ -90,6 +92,49 @@ export interface HttpRequest {
   url: string;
   contentType: 'form' | 'json';
   body?: Record<string, any>;
+}
+
+// Where an X18 fader/mute command applies.
+export type X18FaderTarget = 'master' | 'channel' | 'bus';
+
+// Behringer X18 action. Fired by the server (OSC/UDP) when the item starts or
+// stops. The console IP lives in project settings (`x18Ip`).
+//   kind 'fader'      → set target's fader to `level` %
+//   kind 'mute'       → mute/unmute the target channel/bus/master
+//   kind 'mute-group' → mute/unmute mute group `group` (1-4)
+export interface X18Action {
+  trigger: 'start' | 'stop';   // when to send the command
+  kind?: 'fader' | 'mute' | 'mute-group'; // default 'fader' (back-compat)
+  target?: X18FaderTarget;     // fader & mute (default 'master')
+  channel?: number;            // channel 1-16, or bus 1-6
+  level?: number;              // fader: 0-100 (%), 0 = fader fully down
+  group?: number;              // mute-group: 1-4
+  muted?: boolean;             // mute & mute-group: true = mute, false = unmute
+}
+
+// One button on the X18 control board (a Playlist-like main view). Each button
+// can carry a keyboard binding and is also clickable. Editing is desktop-only;
+// triggering works anywhere. Persisted in the project as `x18Board`.
+export interface X18BoardButton {
+  id: string;
+  label: string;
+  color: string;
+  key?: CartSlotKeyBinding | null;  // optional keyboard shortcut
+  action: X18BoardAction;
+}
+
+// What a board button does on press.
+//   'fader-toggle' → alternate target's fader between levelA% and levelB%
+//   'mute-toggle'  → toggle/set mute on a channel/bus/master
+//   'mute-group'   → toggle/set a mute group (1-4)
+export interface X18BoardAction {
+  type: 'fader-toggle' | 'mute-toggle' | 'mute-group';
+  target?: X18FaderTarget;     // fader-toggle & mute-toggle (default 'master')
+  channel?: number;            // channel 1-16, or bus 1-6
+  levelA?: number;             // fader-toggle: first level 0-100 (default 0)
+  levelB?: number;             // fader-toggle: second level 0-100 (default 100)
+  group?: number;              // mute-group: 1-4
+  mode?: 'toggle' | 'mute' | 'unmute'; // mute-toggle & mute-group (default 'toggle')
 }
 
 // Ducking behavior
@@ -134,6 +179,7 @@ export interface Project {
   cartItems: CartItem[];
   cartSlotKeys?: Record<number, CartSlotKeyBinding>;
   playbackKeys?: Record<string, CartSlotKeyBinding | null>;
+  x18Board?: X18BoardButton[]; // Behringer X18 control board (key/click buttons)
   cartOnlyItems: AudioItem[]; // Items that exist only in cart (not in playlist)
   theme: Theme;
   createdAt: string;
@@ -194,6 +240,7 @@ export const DEFAULT_AUDIO_ITEM: Partial<AudioItem> = {
   endBehavior: { action: 'next' }, // Default: play next item
   startBehavior: { action: 'nothing' },
   customActions: [],
+  x18Actions: [],
   duckingBehavior: {
     mode: 'stop-all', // Default for playlist items: stop all other cues
     duckFadeIn: 0.25,
@@ -216,6 +263,7 @@ export const DEFAULT_CART_AUDIO_ITEM: Partial<AudioItem> = {
   endBehavior: { action: 'nothing' },
   startBehavior: { action: 'nothing' },
   customActions: [],
+  x18Actions: [],
   duckingBehavior: {
     mode: 'duck-others', // Default for cart items: duck to -20dB
     duckLevel: 0.1,
@@ -232,6 +280,7 @@ export const DEFAULT_GROUP_ITEM: Partial<GroupItem> = {
   color: PRESET_COLORS[8],
   startBehavior: { action: 'play-first' },
   endBehavior: { action: 'nothing' },
+  x18Actions: [],
   isExpanded: true,
   children: []
 };

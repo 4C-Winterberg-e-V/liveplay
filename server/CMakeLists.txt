@@ -139,6 +139,7 @@ add_executable(liveplay-server
     src/core/backup_manager.cpp
     src/net/control_server.cpp
     src/net/discovery.cpp
+    src/net/osc_client.cpp
 
     # Shared utilities
     src/util/fs_sandbox.cpp

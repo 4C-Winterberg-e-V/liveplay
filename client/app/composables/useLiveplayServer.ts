@@ -471,6 +471,7 @@ function createClient() {
       cartItems: any[];
       cartSlotKeys: any;
       playbackKeys: any;
+      x18Board: any[];
       cartOnlyItems: any[];
       itemCount: number;
       hasOpenProject: boolean;
@@ -748,6 +749,17 @@ function createClient() {
     return rest<any>('/api/project/settings', {
       method: 'PATCH',
       body: JSON.stringify(patch),
+    });
+  }
+  // Fire a single on-demand Behringer X18 console command (fader / mute /
+  // mute-group). The payload mirrors the server's x18 dispatch:
+  //   { kind:'fader',      target, channel?, level }      level 0-100
+  //   { kind:'mute',       target, channel?, muted }
+  //   { kind:'mute-group', group, muted }
+  async function x18Action(action: any) {
+    return rest<any>('/api/x18/action', {
+      method: 'POST',
+      body: JSON.stringify(action),
     });
   }
   async function addCueFromPath(filePath: string, displayName?: string) {
@@ -1122,6 +1134,9 @@ function createClient() {
     // theme + settings
     patchTheme,
     patchSettings,
+
+    // x18 console
+    x18Action,
 
     // preview
     startPreview,

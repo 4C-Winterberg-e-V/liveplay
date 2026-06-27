@@ -78,6 +78,23 @@
             <p class="settings-help">{{ t('settings.ltcDeviceHelp') }}</p>
           </section>
 
+          <!-- Behringer X18 mixer IP (OSC control) -->
+          <section class="settings-field">
+            <label class="settings-label">
+              <span class="material-symbols-rounded">tune</span>
+              {{ t('settings.x18Ip') }}
+            </label>
+            <input
+              class="settings-select"
+              type="text"
+              inputmode="decimal"
+              placeholder="192.168.1.50"
+              :value="x18Ip"
+              @change="onX18IpChange"
+            />
+            <p class="settings-help">{{ t('settings.x18IpHelp') }}</p>
+          </section>
+
           <!-- Output Target (loudness platform standard) -->
           <section class="settings-field">
             <label class="settings-label">
@@ -180,6 +197,7 @@ const devices = computed(() => server.devices ?? []);
 const audioDeviceId          = computed(() => (currentProject.value as any)?.settings?.defaultOutputDevice || '');
 const previewDeviceId        = computed(() => (currentProject.value as any)?.settings?.previewDevice || '');
 const ltcDeviceId            = computed(() => (currentProject.value as any)?.settings?.ltcDevice || '');
+const x18Ip                  = computed(() => (currentProject.value as any)?.settings?.x18Ip || '');
 const outputTarget           = computed(() => (currentProject.value as any)?.settings?.outputTarget || 'ebu-r128');
 const disableAutoVolumeAndTrim = computed(() => !!(currentProject.value as any)?.settings?.disableAutoVolumeAndTrim);
 const disableLimiter           = computed(() => !!(currentProject.value as any)?.settings?.disableLimiter);
@@ -221,6 +239,10 @@ function onPreviewDeviceChange(e: Event) {
 function onLtcDeviceChange(e: Event) {
   const v = (e.target as HTMLSelectElement).value;
   applyPatch({ ltcDevice: v || null });
+}
+function onX18IpChange(e: Event) {
+  const v = (e.target as HTMLInputElement).value.trim();
+  applyPatch({ x18Ip: v || null });
 }
 function onOutputTargetChange(e: Event) {
   const v = (e.target as HTMLSelectElement).value;
