@@ -53,9 +53,16 @@ In Phase 2 wurden die priorisierten Befunde behoben **und ein Testnetz aufgebaut
 | **N-2** | *(neu, via Typecheck gefunden)* `isLocalServer.value` auf reaktiv-entpacktem Boolean → echter Verhaltensbug, an 4 Stellen behoben | typecheck grün |
 | **N-3** | *(neu)* `PlaylistView`-Watch-Typing | typecheck grün |
 | **Deps** | `pnpm audit`-getriebene Sicherheits-Updates: electron 42.3.2→42.5.0 (kritisch), vitest 2→3 (kritisch), uuid 9→11 (moderat) | `pnpm audit`: **2 kritisch / 1 hoch / 4 moderat → 0**; typecheck + 12 Tests grün |
+| **M-16** | `replace_full_document` läuft jetzt durch `detect_and_repair` (PUT-API kein Bypass der Dedup/Repair-Validierung) | server CI grün |
+| **M-04** | Mediendecode-Guard (Größenlimit 4 GiB, `LIVEPLAY_MAX_MEDIA_BYTES`, fail-open) vor TagLib/miniaudio | server CI grün |
+| **H-20** | `compute_waveform` weist absurde Kanalzahl (>64) ab, bevor Puffer alloziert werden | server CI grün |
+| **M-32** | `http-proxy@1` → `http-proxy-3` (gewartet, API-kompatibel) im Web-Share-Proxy | API geladen/verifiziert; ⚠️ Tunnel ist Electron-only → vor Event smoke-testen |
+| **M-48 / N-1** | Doku-Korrekturen: „Nuxt 3"→„Nuxt 4" (8 Stellen); Hosting-Abschnitt (entfernte deploy-Configs, veraltetes „recommended") | Doku |
 
 **Aufgeschoben (bewusst, mit Begründung):**
 - **H-18** (`isHydrating`-Race): Der Fix ist reaktives Timing-Wiring (Boolean → Zähler + konsistenter Flush) durch 5 asynchrone Flows. Das Unit-Testnetz kann das **Interleaving nicht** verifizieren, und ein fehlgepaarter Zähler (verpasstes Dekrement auf einem Fehlerpfad) würde die Sync **dauerhaft blockieren** — schlimmer als der Ist-Zustand. Daher zurückgestellt, **bis ein Integrationstest** (`@nuxt/test-utils`, der überlappende `doc_patch`/Stream-Flows treibt) existiert, gegen den der Fix abgesichert werden kann. Bis dahin bleibt das Verhalten unverändert.
+- **M-26 / M-27** (God-Module entflechten — `useProject` reaktiv, `project_state`/`control_server` inkl. Sequencer): **bewusst zurückgestellt als Wartbarkeits-Schuld.** Reine Tidy-Refactorings ohne funktionalen Gewinn an *Live*-Code (Audio-Sequencer, reaktive Sync), die hier nur compile-/typecheck-, aber **nicht laufzeit-verifizierbar** sind. Die sichere *pure* Extraktion ist bereits erfolgt (`projectDiff`); der verbleibende Kern ist dieselbe Risikoklasse wie H-18. Vor einem Umbau zuerst Test-Gerüst (C++-Sequencer-Test + `@nuxt/test-utils`) aufbauen.
+- **M-33** (YouTube-Import gaten): defensive Fehlerbehandlung ist bereits vorhanden; das **Off-by-default-Gate + Rechtshinweis** ist eine UX-Verhaltensänderung in Electron-only-Code (nicht hier testbar) und wartet auf Betreiber-Entscheidung (off-by-default / unverändert lassen / ganz entfernen).
 - **C-01** (unauth. Control-Plane): vom Betreiber aufgeschoben (CF Access + kontrolliertes Netz), siehe oben.
 - **Übrige Medium/Low-Befunde**: noch offen, gemäß Priorisierung unten.
 
