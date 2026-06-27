@@ -32,14 +32,6 @@ namespace liveplay::net {
 
 namespace {
 
-// Append an OSC string: the raw bytes, then at least one NUL terminator, then
-// padding NULs so the total length is a multiple of 4 bytes (OSC spec 1.0).
-void osc_append_string(std::vector<char>& buf, const std::string& s) {
-    buf.insert(buf.end(), s.begin(), s.end());
-    // Always at least one NUL, then pad to the next 4-byte boundary.
-    do { buf.push_back('\0'); } while (buf.size() % 4 != 0);
-}
-
 #if defined(_WIN32)
 // Process-lifetime Winsock init. DiscoveryBeacon owns the same guard pattern;
 // WSAStartup is refcounted so initialising twice is harmless.
@@ -86,41 +78,21 @@ bool osc_send_packet(const std::string& host, std::uint16_t port,
     return true;
 }
 
-// Append a 32-bit big-endian (network byte order) word to the packet.
-void osc_append_be32(std::vector<char>& buf, std::uint32_t raw) {
-    const std::uint32_t be = htonl(raw);
-    const char* b = reinterpret_cast<const char*>(&be);
-    buf.insert(buf.end(), b, b + 4);
-}
-
 } // namespace
 
 bool osc_send_float(const std::string& host, std::uint16_t port,
                     const std::string& address, float value) {
-    // OSC packet: <address> <",f"> <float big-endian>.
-    std::vector<char> pkt;
-    pkt.reserve(address.size() + 16);
-    osc_append_string(pkt, address);
-    osc_append_string(pkt, ",f");
-    std::uint32_t raw;
-    std::memcpy(&raw, &value, sizeof(raw));  // reinterpret float bits as uint32
-    osc_append_be32(pkt, raw);
-
-    if (!osc_send_packet(host, port, address, pkt)) return false;
+    // Encoding (osc_build_float) is header-only + unit-tested; here we just send.
+    if (!osc_send_packet(host, port, address, osc_build_float(address, value)))
+        return false;
     Logger::info("OSC -> {}:{}  {} {:.3f}", host, port, address, value);
     return true;
 }
 
 bool osc_send_int(const std::string& host, std::uint16_t port,
                   const std::string& address, std::int32_t value) {
-    // OSC packet: <address> <",i"> <int32 big-endian>.
-    std::vector<char> pkt;
-    pkt.reserve(address.size() + 16);
-    osc_append_string(pkt, address);
-    osc_append_string(pkt, ",i");
-    osc_append_be32(pkt, static_cast<std::uint32_t>(value));
-
-    if (!osc_send_packet(host, port, address, pkt)) return false;
+    if (!osc_send_packet(host, port, address, osc_build_int(address, value)))
+        return false;
     Logger::info("OSC -> {}:{}  {} {}", host, port, address, value);
     return true;
 }
