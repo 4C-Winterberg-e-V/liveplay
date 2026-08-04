@@ -253,6 +253,10 @@ On Windows the NSIS installer adds the necessary inbound firewall rules at insta
 5. Press a cart slot or hit the Play button to fire the cue. Live meters show signal at every stage.
 6. *(fork)* To drive the show from a phone, hit **Share** in the header and scan the QR code.
 
+**Choosing the output.** **Project Settings** picks the audio device for playback, pre-listen and LTC — and, for each of them, *which hardware channels of that device* the signal lands on. On a multi-output interface (Behringer X18/XR18 over USB, an X32 card, Dante) that's how you send the show to USB return 5/6 instead of 1/2. Channels are numbered as they are on the box; picking the same channel for left and right sends a mono sum to it. Individual cues can override both the device and its channels in the **Output** tab of the Properties panel.
+
+> On Windows the engine uses WASAPI, so you can only select channels the X-AIR WDM driver actually exposes — usually a single stereo pair. Multi-channel USB output there needs ASIO, which the engine does not support. macOS and Linux see the full channel count.
+
 For routing a stage-side server, open **Server Settings** and point the client at `http://<server-host>:4480`.
 
 ---

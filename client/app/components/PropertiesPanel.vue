@@ -140,6 +140,38 @@
           <p class="property-help">{{ t('properties.deviceOverrideHelp') }}</p>
         </div>
 
+        <!-- Hardware channels on the overridden device. Hidden while the cue
+             follows the project default — those channels are chosen in the
+             project settings instead. -->
+        <div v-if="deviceOverrideName" class="property-field">
+          <label>{{ t('properties.outputChannels') }}</label>
+          <div class="channel-pair">
+            <label class="channel-pair__side">
+              <span>{{ t('settings.outputChannelLeft') }}</span>
+              <select
+                :value="overrideChannels[0]"
+                @change="onOverrideChannelChange(0, $event)"
+              >
+                <option v-for="c in overrideChannelOptions" :key="c.value" :value="c.value">
+                  {{ c.label }}
+                </option>
+              </select>
+            </label>
+            <label class="channel-pair__side">
+              <span>{{ t('settings.outputChannelRight') }}</span>
+              <select
+                :value="overrideChannels[1]"
+                @change="onOverrideChannelChange(1, $event)"
+              >
+                <option v-for="c in overrideChannelOptions" :key="c.value" :value="c.value">
+                  {{ c.label }}
+                </option>
+              </select>
+            </label>
+          </div>
+          <p class="property-help">{{ t('settings.outputChannelsHelp') }}</p>
+        </div>
+
         <!-- LTC Output Section -->
         <div class="property-field" :class="{ 'field-disabled': !ltcDeviceConfigured }">
           <label class="ltc-checkbox-label">
@@ -382,6 +414,7 @@
 import type { AudioItem, GroupItem, X18Action } from '~/types/project';
 import { PRESET_COLORS } from '~/types/project';
 import { calculatePerceivedLoudness } from '~/utils/audio';
+import { useOutputChannels } from '~/composables/useOutputChannels';
 import { useOutputTarget } from '~/composables/useOutputTarget';
 
 const { selectedItem, selectedItems, propertiesPanelOpen, getSelectedItems, saveProject, currentProject, beginItemBatch, endItemBatch } = useProject();
@@ -415,10 +448,33 @@ const onDeviceOverrideChange = (e: Event) => {
   const v = (e.target as HTMLSelectElement).value;
   const it = audioItem.value as any;
   if (!v) {
+    // Back to the project default — the channel pair belonged to the override,
+    // so it goes with it rather than lingering as dead state in the document.
     delete it.deviceOverride;
+    delete it.deviceOverrideChannels;
   } else {
     it.deviceOverride = v;
   }
+  handleSave();
+};
+
+// Hardware output channels for the per-cue device override. Stored 0-based on
+// the item; the option labels are 1-based like the sockets on the interface.
+// Absent means the first stereo pair, which is where overrides always landed
+// before this was selectable.
+const { options: channelOptions, pair: channelPair, withChannel } = useOutputChannels();
+
+const deviceOverrideName = computed(
+  () => (audioItem.value as any)?.deviceOverride ?? '');
+const overrideChannels = computed(
+  () => channelPair((audioItem.value as any)?.deviceOverrideChannels));
+const overrideChannelOptions = computed(
+  () => channelOptions(deviceOverrideName.value, ...overrideChannels.value));
+
+const onOverrideChannelChange = (side: 0 | 1, e: Event) => {
+  const channel = Number((e.target as HTMLSelectElement).value);
+  const it = audioItem.value as any;
+  it.deviceOverrideChannels = withChannel(overrideChannels.value, side, channel);
   handleSave();
 };
 
@@ -1170,6 +1226,21 @@ const formatTime = (seconds: number): string => {
 .property-field label {
   font-size: 13px;
   font-weight: 500;
+}
+
+/* Left/right hardware channel pickers for the per-cue device override. */
+.channel-pair {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.channel-pair__side {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .property-field input,

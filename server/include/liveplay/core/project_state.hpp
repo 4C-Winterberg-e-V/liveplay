@@ -22,6 +22,7 @@
 
 #include "liveplay/audio/engine.hpp"
 #include "liveplay/audio/types.hpp"
+#include "liveplay/core/output_channels.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -30,9 +31,11 @@
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <set>
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace liveplay::core {
@@ -233,10 +236,18 @@ public:
 
     // ---- Per-device routing ---------------------------------------------
     // Ensure a "device mixer" exists for `device_name` (the user-visible
-    // name from /api/devices). Opens the audio device if needed, creates a
-    // dedicated mixer + two master channels routed to it. Returns the
-    // mixer id, or empty on failure (device not found).
-    audio::MixerChannelId ensure_device_routing(const std::string& device_name);
+    // name from /api/devices), landing on the hardware channels named by
+    // `channels`. Opens the audio device if needed, creates a dedicated mixer
+    // plus the master channel(s) routed to it. Returns the mixer id, or empty
+    // on failure (device not found, or the master bus is exhausted).
+    //
+    // One routing exists per (device, channel pair): two cues that both target
+    // channels 5/6 of the same interface share a mixer, while a third on 7/8
+    // of that interface gets its own. A mono `channels` (left == right) is
+    // wired through a single master so it isn't summed twice.
+    audio::MixerChannelId ensure_device_routing(
+        const std::string& device_name,
+        OutputChannelPair  channels = kDefaultOutputChannels);
 
     // Route a cue's first two source channels to the given mixer, removing
     // any prior item-to-mixer routes for this cue (so the cue plays through
@@ -357,22 +368,41 @@ private:
     std::atomic<std::size_t> load_progress_total_{0};
     std::thread              load_thread_;
 
-    // Per-device routing infrastructure: each unique output device name
-    // referenced by any item's deviceOverride gets its own mixer + a pair
-    // of master channels wired to that device. Indexed by device display
-    // name. The default device's entry is the "Main" mixer + masters 0/1
-    // that the engine sets up automatically.
+    // Per-device routing infrastructure: each unique (output device, hardware
+    // channel pair) referenced by the project — settings.defaultOutputDevice,
+    // settings.ltcDevice, any item's deviceOverride — gets its own mixer plus
+    // the master channel(s) wired to those hardware channels. Indexed by
+    // device_routing_key(name, channels). The engine additionally maintains a
+    // "Main" mixer on masters 0/1 for cues with no device selection at all.
     struct DeviceRouting {
         audio::DeviceId            device;
         audio::MixerChannelId      mixer;
         audio::MasterChannelIndex  master_l;
-        audio::MasterChannelIndex  master_r;
+        audio::MasterChannelIndex  master_r;   // == master_l when mono
+        std::string                device_name;
+        OutputChannelPair          channels;
     };
     std::unordered_map<std::string, DeviceRouting> device_routings_;
-    // Next free master channel pair when allocating new device routings.
-    // Default device occupies 0/1; preview occupies 30/31; overrides start
-    // at 2 and increment by 2.
-    audio::MasterChannelIndex next_override_master_ = 2;
+
+    // Hardware devices opened on behalf of a routing, keyed by device name.
+    // One handle per physical device, opened with as many output channels as
+    // the device reports, so several routings can address different hardware
+    // channels of the same interface. Never closed while the process lives —
+    // a routing that stops referencing a device can't know whether another
+    // one still does.
+    struct OpenDevice {
+        audio::DeviceId     id;
+        audio::ChannelCount channels = 0;   // what the device was opened with
+    };
+    std::unordered_map<std::string, OpenDevice> open_devices_;
+
+    // Master channels allocated to device routings, identified by the left
+    // index of each claimed pair. Masters 0/1 belong to the engine's "Main"
+    // routing and 30/31 to the preview bus, so pairs are handed out from
+    // [kFirstDeviceMaster, kDeviceMasterLimit). Pruning a stale routing
+    // returns its pair here, so re-picking channels in the UI reuses master
+    // slots instead of leaking them.
+    std::set<audio::MasterChannelIndex> claimed_master_pairs_;
 
     // Preview state. The preview infrastructure is opened lazily on first
     // preview request, then re-used (cheaper than reopening the audio
@@ -382,6 +412,7 @@ private:
     audio::MixerChannelId  preview_mixer_;
     audio::DeviceId        preview_device_;
     std::string            preview_device_name_;   // last opened, for cleanup on change
+    OutputChannelPair      preview_channels_{};    // last wired hardware channels
 
     // ---- Sequencer: server-side auto-advance, crossfade, ducking restore ----
     struct DuckedEntry {
@@ -483,6 +514,39 @@ private:
 
     // Re-apply the in-memory state to the AudioEngine (post-load or reset).
     void apply_to_engine_locked();
+
+    // ---- Device routing internals ----------------------------------------
+    // Open `device_name` once and reuse the handle for every routing that
+    // targets it. Opened with the device's full reported channel count (never
+    // fewer than 2) so any hardware channel the operator picks is addressable;
+    // falls back to stereo if the driver refuses that count. Returns an empty
+    // id when the device can't be opened. Must NOT be called with mutex_ held.
+    OpenDevice ensure_device_open(const std::string& device_name);
+
+    // Hardware output channel count reported for `device_name`, matched the
+    // same way AudioEngine::open_device_by_name() matches (case-insensitive
+    // substring). 0 when nothing matches. Enumerating devices is slow — call
+    // without mutex_ held.
+    audio::ChannelCount device_channel_count(const std::string& device_name) const;
+
+    // Claim / release a master channel pair for a device routing. `mono` pairs
+    // still consume a whole slot so releasing stays symmetric. Returns false
+    // when the master bus has no free pair left. Caller must hold mutex_.
+    bool claim_master_pair_locked(audio::MasterChannelIndex& left,
+                                  audio::MasterChannelIndex& right);
+    void release_master_pair_locked(audio::MasterChannelIndex left);
+
+    // Every (device, channel pair) the current document asks for: the default
+    // output, the LTC output, and each item's device override. Caller must
+    // hold mutex_.
+    std::unordered_set<std::string> desired_routing_keys_locked();
+
+    // Drop device routings the document no longer references — removing their
+    // mixer, clearing their master assignments and returning their master pair
+    // to the pool. Called whenever a device selection is re-applied, so
+    // changing a channel in the UI doesn't strand the previous routing. Must
+    // NOT be called with mutex_ held.
+    void prune_device_routings();
 
     // Point media_root_ at the current project's "media" subfolder, derived
     // from document_["folderPath"]. This keeps every uploaded / copied media

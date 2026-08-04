@@ -30,6 +30,39 @@
               </option>
             </select>
             <p class="settings-help">{{ t('settings.audioDeviceHelp') }}</p>
+
+            <!-- Hardware channels on that device. Only meaningful once a
+                 device is picked; multi-output interfaces (X18, X32, Dante)
+                 are the reason this exists. -->
+            <div v-if="audioDeviceId" class="settings-channels">
+              <label class="settings-channel">
+                <span>{{ t('settings.outputChannelLeft') }}</span>
+                <select
+                  class="settings-select"
+                  :value="audioChannels[0]"
+                  @change="onAudioChannelChange(0, $event)"
+                >
+                  <option v-for="c in audioChannelOptions" :key="c.value" :value="c.value">
+                    {{ c.label }}
+                  </option>
+                </select>
+              </label>
+              <label class="settings-channel">
+                <span>{{ t('settings.outputChannelRight') }}</span>
+                <select
+                  class="settings-select"
+                  :value="audioChannels[1]"
+                  @change="onAudioChannelChange(1, $event)"
+                >
+                  <option v-for="c in audioChannelOptions" :key="c.value" :value="c.value">
+                    {{ c.label }}
+                  </option>
+                </select>
+              </label>
+            </div>
+            <p v-if="audioDeviceId" class="settings-help">
+              {{ t('settings.outputChannelsHelp') }}
+            </p>
           </section>
 
           <!-- Preview device (used by headphones button) -->
@@ -53,6 +86,33 @@
               </option>
             </select>
             <p class="settings-help">{{ t('settings.previewDeviceHelp') }}</p>
+
+            <div v-if="previewDeviceId" class="settings-channels">
+              <label class="settings-channel">
+                <span>{{ t('settings.outputChannelLeft') }}</span>
+                <select
+                  class="settings-select"
+                  :value="previewChannels[0]"
+                  @change="onPreviewChannelChange(0, $event)"
+                >
+                  <option v-for="c in previewChannelOptions" :key="c.value" :value="c.value">
+                    {{ c.label }}
+                  </option>
+                </select>
+              </label>
+              <label class="settings-channel">
+                <span>{{ t('settings.outputChannelRight') }}</span>
+                <select
+                  class="settings-select"
+                  :value="previewChannels[1]"
+                  @change="onPreviewChannelChange(1, $event)"
+                >
+                  <option v-for="c in previewChannelOptions" :key="c.value" :value="c.value">
+                    {{ c.label }}
+                  </option>
+                </select>
+              </label>
+            </div>
           </section>
 
           <!-- LTC device (timecode output) -->
@@ -76,6 +136,26 @@
               </option>
             </select>
             <p class="settings-help">{{ t('settings.ltcDeviceHelp') }}</p>
+
+            <!-- Timecode is mono, so it gets a single channel rather than a
+                 pair. Left unset it stays on channels 1+2 like it always was. -->
+            <div v-if="ltcDeviceId" class="settings-channels">
+              <label class="settings-channel">
+                <span>{{ t('settings.outputChannel') }}</span>
+                <select
+                  class="settings-select"
+                  :value="ltcChannel"
+                  @change="onLtcChannelChange"
+                >
+                  <option v-for="c in ltcChannelOptions" :key="c.value" :value="c.value">
+                    {{ c.label }}
+                  </option>
+                </select>
+              </label>
+            </div>
+            <p v-if="ltcDeviceId" class="settings-help">
+              {{ t('settings.ltcChannelHelp') }}
+            </p>
           </section>
 
           <!-- Behringer X18 mixer IP (OSC control) -->
@@ -181,6 +261,7 @@
 </template>
 
 <script setup lang="ts">
+import { useOutputChannels } from '~/composables/useOutputChannels';
 import { useOutputTarget } from '~/composables/useOutputTarget';
 
 const props = defineProps<{ open: boolean }>();
@@ -198,6 +279,30 @@ const audioDeviceId          = computed(() => (currentProject.value as any)?.set
 const previewDeviceId        = computed(() => (currentProject.value as any)?.settings?.previewDevice || '');
 const ltcDeviceId            = computed(() => (currentProject.value as any)?.settings?.ltcDevice || '');
 const x18Ip                  = computed(() => (currentProject.value as any)?.settings?.x18Ip || '');
+
+// Hardware output channels for each of the three device selections. Stored
+// 0-based; rendered 1-based by the option lists. Nothing stored means the
+// historical first stereo pair, so old projects are unaffected.
+const { options: channelOptions, pair: channelPair, single: channelSingle, withChannel } =
+  useOutputChannels();
+
+const audioChannels   = computed(() =>
+  channelPair((currentProject.value as any)?.settings?.defaultOutputChannels));
+const previewChannels = computed(() =>
+  channelPair((currentProject.value as any)?.settings?.previewChannels));
+// LTC is mono. `undefined` (never chosen) keeps the legacy behaviour on the
+// server, but the dropdown has to show something — channel 1 is what you get.
+const ltcChannel      = computed(() =>
+  channelSingle((currentProject.value as any)?.settings?.ltcChannel, 0));
+
+// Keep the stored selection in the list even if the device currently reports
+// fewer channels than when the project was saved.
+const audioChannelOptions   = computed(() =>
+  channelOptions(audioDeviceId.value, ...audioChannels.value));
+const previewChannelOptions = computed(() =>
+  channelOptions(previewDeviceId.value, ...previewChannels.value));
+const ltcChannelOptions     = computed(() =>
+  channelOptions(ltcDeviceId.value, ltcChannel.value));
 const outputTarget           = computed(() => (currentProject.value as any)?.settings?.outputTarget || 'ebu-r128');
 const disableAutoVolumeAndTrim = computed(() => !!(currentProject.value as any)?.settings?.disableAutoVolumeAndTrim);
 const disableLimiter           = computed(() => !!(currentProject.value as any)?.settings?.disableLimiter);
@@ -239,6 +344,24 @@ function onPreviewDeviceChange(e: Event) {
 function onLtcDeviceChange(e: Event) {
   const v = (e.target as HTMLSelectElement).value;
   applyPatch({ ltcDevice: v || null });
+}
+
+// A <select> hands back a string even when the options carry numeric values.
+function selectedChannel(e: Event): number {
+  return Number((e.target as HTMLSelectElement).value);
+}
+function onAudioChannelChange(side: 0 | 1, e: Event) {
+  applyPatch({
+    defaultOutputChannels: withChannel(audioChannels.value, side, selectedChannel(e)),
+  });
+}
+function onPreviewChannelChange(side: 0 | 1, e: Event) {
+  applyPatch({
+    previewChannels: withChannel(previewChannels.value, side, selectedChannel(e)),
+  });
+}
+function onLtcChannelChange(e: Event) {
+  applyPatch({ ltcChannel: selectedChannel(e) });
 }
 function onX18IpChange(e: Event) {
   const v = (e.target as HTMLInputElement).value.trim();
@@ -350,6 +473,24 @@ function close() {
   margin: 0;
   font-size: 12px;
   color: var(--color-text-secondary);
+}
+/* Hardware channel pickers sitting under a device select. Two side by side for
+   a stereo pair; the LTC row has a single one and stays half-width. */
+.settings-channels {
+  display: flex;
+  gap: 8px;
+}
+.settings-channel {
+  display: flex;
+  flex: 0 1 calc(50% - 4px);
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.settings-channels .settings-select {
+  padding: 6px 10px;
+  font-size: 13px;
 }
 .settings-label--checkbox {
   flex-direction: row;

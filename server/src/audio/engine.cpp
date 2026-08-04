@@ -519,21 +519,49 @@ void AudioEngine::ensure_default_routing() {
         if (!devices_.empty()) chosen_device = devices_.front()->id;
     }
     if (chosen_device.empty()) {
-        chosen_device = open_default_device(2);
+        // Open the default device with every channel it has, not just a stereo
+        // pair. Asking for 2 channels on a multi-output interface makes
+        // miniaudio insert a channel converter that *upmixes* the pair across
+        // the device's speaker positions — on an 18-out USB mixer a stereo cue
+        // then leaks onto outputs 1, 2, 3, 5, 6, 7 and 8 at assorted gains, and
+        // nothing on the console can undo it. With the counts matched the path
+        // is a passthrough, so master 0/1 land on hardware outputs 1/2 only.
+        ChannelCount default_channels = 2;
+        for (const auto& d : enumerate_devices()) {
+            if (!d.is_default) continue;
+            default_channels = std::max<ChannelCount>(d.channel_count, 2);
+            break;
+        }
+        chosen_device = open_default_device(default_channels);
+        if (chosen_device.empty() && default_channels != 2) {
+            Logger::warn("ensure_default_routing: default device refused {} output "
+                         "channels — retrying in stereo", default_channels);
+            chosen_device = open_default_device(2);
+        }
         if (chosen_device.empty()) {
             Logger::warn("ensure_default_routing: could not open default device — playback will be silent.");
             return;
         }
     }
 
-    // Step 2: ensure a "Main" mixer exists. create_mixer_channel locks too.
+    // Step 2: ensure the "Main" mixer exists. Track it by id rather than
+    // adopting whatever happens to be first in mixers_ — once callers have
+    // created their own mixers (ProjectState makes one per output device and
+    // hardware channel pair) picking an arbitrary one would wire *that* mixer
+    // to masters 0/1 as well, so a cue routed to hardware channels 5/6 would
+    // also come out of 1/2.
     MixerChannelId main_mixer{};
     {
         std::lock_guard lock{mutex_};
-        if (!mixers_.empty()) main_mixer = mixers_.begin()->second->id();
+        if (!default_mixer_.empty() && mixers_.count(default_mixer_.value) != 0)
+            main_mixer = default_mixer_;
     }
     if (main_mixer.empty()) {
         main_mixer = create_mixer_channel("Main");
+        {
+            std::lock_guard lock{mutex_};
+            default_mixer_ = main_mixer;
+        }
         Logger::info("ensure_default_routing: created Main mixer '{}'", main_mixer.value);
     }
 
@@ -601,6 +629,12 @@ void AudioEngine::ensure_default_routing() {
 // ---------------------------------------------------------------------------
 // Mixer channels
 // ---------------------------------------------------------------------------
+MixerChannelId AudioEngine::default_mixer() const {
+    std::lock_guard lock{mutex_};
+    if (default_mixer_.empty() || mixers_.count(default_mixer_.value) == 0) return {};
+    return default_mixer_;
+}
+
 MixerChannelId AudioEngine::create_mixer_channel(std::string display_name) {
     auto id = MixerChannelId{gen_uuid_like()};
     auto ch = std::make_shared<MixerChannel>(id, std::move(display_name));

@@ -5,12 +5,14 @@
 # miniaudio, TagLib). Keep this list to genuinely self-contained TUs.
 # ---------------------------------------------------------------------------
 find_package(doctest CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 
 add_executable(liveplay-tests
     test_main.cpp
     test_ltc_generator.cpp
     test_fs_sandbox.cpp
     test_osc_client.cpp   # header-only OSC encoder — no extra TU / socket libs needed
+    test_output_channels.cpp  # header-only channel-selection parsing — json only
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/audio/ltc_generator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/util/fs_sandbox.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/logger.cpp   # fs_sandbox.cpp logs via Logger
@@ -23,6 +25,7 @@ target_include_directories(liveplay-tests
 target_link_libraries(liveplay-tests
     PRIVATE
         doctest::doctest
+        nlohmann_json::nlohmann_json   # output_channels.hpp parses the project document
         Threads::Threads
 )
 
