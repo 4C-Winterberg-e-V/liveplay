@@ -351,6 +351,51 @@ const formatTime = (seconds: number): string => {
     min-width: 0;
     max-width: 100%;
     width: 100%;
+    padding: var(--spacing-sm);
+    gap: var(--spacing-xs);
+  }
+
+  /* The transport must never give up room to the name or the meter. Both of
+     those sit next to it in a card that can get very narrow, and because the
+     actions could shrink they ended up overflowing the content column with the
+     Stop button half-covered by the meter — unhittable exactly when you need
+     it. Pinning them keeps the squeeze on the name, which has an ellipsis. */
+  .cue-actions {
+    flex-shrink: 0;
+    gap: var(--spacing-sm);
+  }
+
+  .action-btn {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    font-size: 28px;
+  }
+
+  .cue-header {
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-xs);
+  }
+
+  /* Fatter seek bar with a permanently visible handle. The desktop handle only
+     appears on :hover, which touch devices never fire — so on a phone there was
+     no playhead marker at all and the 8px bar was a hard target to hit. */
+  .progress-bar {
+    height: 14px;
+  }
+
+  .progress-handle {
+    opacity: 1;
+  }
+}
+
+/* Narrow phones in portrait: name + finger-sized transport + a 68px meter do
+   not all fit, and the meter is the one the operator needs least here — the
+   per-output meters sit right beside this card. Dropping it takes the cue name
+   from ~11px (nothing readable) to ~92px on a 393px-wide screen. */
+@media (max-width: 480px) {
+  .cue-meter {
+    display: none;
   }
 }
 </style>

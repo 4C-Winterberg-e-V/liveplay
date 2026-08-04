@@ -478,8 +478,27 @@ const handlePlayNext = () => {
   .playback-controls .controls-left {
     display: none;
   }
+  /* Split the row in the cue card's favour. Both sides used to compete for the
+     same space with the meters refusing to shrink (flex-shrink: 0), so every
+     extra output pair — and a device-routed project now shows one per output —
+     ate into the card until its transport buttons were squeezed under the
+     meter. The card holds the controls you have to hit during a show; the
+     meters are glanceable and can scroll instead. */
   .active-cues {
+    /* Zero basis plus a hard floor. The meters keep their natural width for as
+       long as the cue card still clears 55% of the row; past that the floor
+       wins and the meters shrink into their own scroll strip. Splitting by
+       fixed percentages instead left the meters a few pixels short of their
+       content and showed a scrollbar even when nothing was clipped. */
+    flex: 1 1 0;
+    min-width: 55%;
+  }
+  .output-meters {
+    flex: 0 1 auto;
     min-width: 0;
+    overflow-x: auto;
+    padding-left: var(--spacing-sm);
+    gap: var(--spacing-xs);
   }
   /* Let a running cue fit the available width instead of the fixed 400px. */
   .cue-list {
@@ -490,6 +509,25 @@ const handlePlayNext = () => {
     min-width: 0;
     max-width: 100%;
     width: 100%;
+    padding: var(--spacing-sm);
+    gap: var(--spacing-xs);
+  }
+  /* Same finger-sized transport as ActiveCueItem — the preview card is the
+     other place a cue gets stopped from. */
+  .preview-cue-actions {
+    gap: var(--spacing-sm);
+  }
+  .preview-stop-btn {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    font-size: 28px;
+  }
+  .preview-progress-bar {
+    height: 14px;
+  }
+  .preview-progress-handle {
+    opacity: 1;
   }
 }
 </style>

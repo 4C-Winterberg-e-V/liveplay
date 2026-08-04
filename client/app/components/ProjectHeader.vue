@@ -29,7 +29,10 @@
            active-cue list below gets the full width (icon-only to stay slim). -->
       <TransportButtons class="header-transport" />
 
-      <Btn class="header-action" :class="{ 'header-action--active': mainView === 'x18' }" icon="equalizer" :text="t('x18.title')" @click="toggleX18" />
+      <!-- The X18 board is a live-operation control, not a settings screen, so
+           it keeps its own button on phones instead of folding into the ⋯ menu
+           with Settings and Shortcuts. -->
+      <Btn class="header-action header-action--x18" :class="{ 'header-action--active': mainView === 'x18' }" icon="equalizer" :text="t('x18.title')" :aria-label="t('x18.title')" @click="toggleX18" />
       <Btn class="header-action" icon="tune" :text="t('settings.title')" @click="showProjectSettings = true" />
       <Btn class="header-action" icon="keyboard" :text="t('controls.shortcutBtn')" @click="showControlConfig = true" />
       <Btn v-if="hasElectron" class="header-action" icon="share" :text="t('webShare.button')" @click="showWebShare = true" />
@@ -48,10 +51,7 @@
         <template v-if="showHeaderMenu">
           <div class="header-overflow__backdrop" @click="showHeaderMenu = false"></div>
           <div class="header-overflow__menu">
-            <button type="button" @click="toggleX18(); showHeaderMenu = false">
-              <span class="material-symbols-rounded">equalizer</span>
-              <span>{{ t('x18.title') }}</span>
-            </button>
+            <!-- No X18 entry here: it has its own button in the bar. -->
             <button type="button" @click="showProjectSettings = true; showHeaderMenu = false">
               <span class="material-symbols-rounded">tune</span>
               <span>{{ t('settings.title') }}</span>
@@ -645,6 +645,25 @@ onMounted(() => {
   .header-overflow { display: block; }
   .clock-pair { display: none; }
 
+  // X18 stays in the bar as an icon-only button, sized like the transport it
+  // sits next to. Its label is dropped for width; the aria-label carries it.
+  .header-action--x18 {
+    display: flex;
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    justify-content: center;
+  }
+  .header-action--x18 :deep(.material-symbols-rounded) { font-size: 26px; }
+  .header-action--x18 :deep(span:not(.material-symbols-rounded)) { display: none; }
+
+  // Match the overflow button to the rest of the row: 40px was both visually
+  // odd next to the 46px buttons and under the 44px touch-target minimum.
+  .header-overflow__btn {
+    width: 46px;
+    height: 46px;
+  }
+
   .project-header {
     gap: var(--spacing-sm);
     padding:
@@ -654,8 +673,11 @@ onMounted(() => {
       calc(var(--spacing-md) + env(safe-area-inset-left));
     min-height: 52px;
   }
+  // The title yields before the buttons do — it already ellipsises, whereas a
+  // fourth action in the bar would otherwise push the ⋯ menu off-screen on a
+  // narrow phone.
   .header-left {
-    flex-shrink: 0;
+    flex-shrink: 1;
     min-width: 0;
   }
   .project-name {
