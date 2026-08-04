@@ -536,6 +536,7 @@ export const useProject = () => {
         items: [],
         cartItems: [],
         cartSlotKeys: { ...DEFAULT_CART_SLOT_KEYS },
+        x18Board: [],
         cartOnlyItems: [],
         theme: { ...DEFAULT_THEME },
         createdAt: new Date().toISOString(),
@@ -818,6 +819,7 @@ export const useProject = () => {
       cartItems:      header.cartItems ?? [],
       cartSlotKeys:   header.cartSlotKeys ?? { ...DEFAULT_CART_SLOT_KEYS },
       playbackKeys:   header.playbackKeys,
+      x18Board:       header.x18Board ?? [],
       cartOnlyItems:  header.cartOnlyItems ?? [],
       theme:          header.theme ?? { ...DEFAULT_THEME },
       createdAt:      header.createdAt ?? new Date().toISOString(),
@@ -908,6 +910,7 @@ export const useProject = () => {
         cartItems:     toJSON(currentProject.value.cartItems) ?? [],
         cartSlotKeys:  toJSON((currentProject.value as any).cartSlotKeys),
         playbackKeys:  toJSON((currentProject.value as any).playbackKeys),
+        x18Board:      toJSON((currentProject.value as any).x18Board) ?? [],
         cartOnlyItems: itemsToJSON(currentProject.value.cartOnlyItems) ?? [],
         theme:         toJSON(currentProject.value.theme),
         settings:      toJSON((currentProject.value as any).settings),
@@ -1712,6 +1715,12 @@ export const useProject = () => {
     // (hotkey bindings, project name). Critically does NOT fire on items
     // / settings / theme — those have targeted watchers above.
     let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    // NB: x18Board is intentionally NOT synced here. The fallback PUTs the whole
+    // document, which makes the server broadcast project_changed and the client
+    // rebuild currentProject (re-streaming items) — that tears down the X18
+    // board editor mid-edit. x18Board persists via saveProject()'s docSnapshot
+    // (called on every board edit), which uses /api/project/save and does not
+    // trigger a project_changed rebuild.
     watch([
       () => (currentProject.value as any)?.cartSlotKeys,
       () => (currentProject.value as any)?.playbackKeys,

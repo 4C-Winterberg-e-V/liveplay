@@ -49,6 +49,7 @@ export const useCartHotkeys = () => {
   const { currentProject, selectedItem, selectedItems, saveProject, getAllItemsFlat, toggleItemSelection, findItemByUuid } = useProject();
   const { getCartItem } = useCartItems();
   const { playCue, stopCue, pauseCue, resumeCue, stopAllCues, activeCues, nextItemOverrideUuid, autoNextItemUuid, setNextItem, triggerGroup } = useAudioEngine();
+  const x18Board = useX18Board();
 
   const keyMappings = computed(() =>
     currentProject.value?.cartSlotKeys ?? { ...DEFAULT_CART_SLOT_KEYS }
@@ -222,6 +223,15 @@ export const useCartHotkeys = () => {
       e.preventDefault();
       e.stopPropagation();
       triggerSlot(slotIndex);
+      return;
+    }
+
+    // X18 control-board buttons
+    const x18Btn = x18Board.findButtonForEvent(e);
+    if (x18Btn) {
+      e.preventDefault();
+      e.stopPropagation();
+      x18Board.triggerButton(x18Btn);
     }
   };
 

@@ -10,6 +10,7 @@ add_executable(liveplay-tests
     test_main.cpp
     test_ltc_generator.cpp
     test_fs_sandbox.cpp
+    test_osc_client.cpp   # header-only OSC encoder — no extra TU / socket libs needed
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/audio/ltc_generator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/util/fs_sandbox.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/logger.cpp   # fs_sandbox.cpp logs via Logger

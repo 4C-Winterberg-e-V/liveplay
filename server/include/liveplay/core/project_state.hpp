@@ -282,6 +282,14 @@ public:
     bool patch_theme(const json& patch);
     bool patch_settings(const json& patch);
 
+    // Perform a single on-demand Behringer X18 console command over OSC/UDP
+    // (used by POST /api/x18/action and the client's X18 control board). The
+    // action object carries: kind ("fader"|"mute"|"mute-group"), target
+    // ("master"|"channel"|"bus"), channel (1-16 / bus 1-6), level (0-100 %),
+    // group (1-4), muted (bool). Returns false when no console IP is
+    // configured (settings.x18Ip) so the caller can report it.
+    bool fire_x18_action(const json& action);
+
     // ---- Introspection ---------------------------------------------------
     std::vector<CueMeta> list_cues() const;
     std::optional<CueMeta> find_cue(const audio::CueId& id) const;
@@ -409,6 +417,18 @@ private:
     void sequencer_loop();
     void handle_item_ended(const SequencedItem& item);
     void execute_custom_action(const json& action);
+
+    // Fire an item's configured Behringer X18 fader actions for the given
+    // trigger ("start" or "stop"). Reads the console IP from project settings
+    // (`x18Ip`) and the per-item `x18Actions` array, then sends one OSC/UDP
+    // fader command per matching action. No-op when no IP is configured or the
+    // item has no matching actions. Acquires mutex_ internally to snapshot the
+    // actions, then does the network I/O without the lock held.
+    void fire_x18_actions(const std::string& uuid, const std::string& trigger);
+
+    // Read settings.x18Ip under mutex_ and return it (empty if unset). The
+    // caller performs the OSC network I/O without the lock held.
+    std::string x18_ip_locked_snapshot();
 
 public:
     // Subscribe to "external" custom actions the server can't perform on its

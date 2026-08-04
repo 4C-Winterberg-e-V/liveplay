@@ -3,7 +3,9 @@
     <ProjectHeader />
     <PlaybackControls />
     
-    <div class="workspace-content">
+    <!-- v-show (not v-if) so CartPlayer stays mounted across view switches —
+         it owns the global keyboard-hotkey listener lifecycle. -->
+    <div v-show="mainView === 'workspace'" class="workspace-content">
       <div v-if="!cartFullscreen" class="playlist-section" :class="{ 'playlist-collapsed': playlistCollapsed }" :style="{ width: (cartClosed || cartDetached) ? '100%' : `calc(100% - ${cartWidth}px)` }">
         <PlaylistView />
       </div>
@@ -19,7 +21,10 @@
         <CartPlayer />
       </div>
     </div>
-    
+
+    <!-- X18 control board: a full main view, mounted only when active. -->
+    <X18View v-if="mainView === 'x18'" />
+
     <PropertiesPanel v-if="propertiesPanelOpen && selectedItem" />
 
     <ProgressModal
@@ -100,6 +105,10 @@ const cartDetached = ref(false);
 const playlistCollapsed = useState('playlist.collapsed', () => false);
 // Same idea for the cart player — collapse it to hand the height to the playlist.
 const cartCollapsed = useState('cart.collapsed', () => false);
+
+// Which top-level view is shown: the normal playlist/cart workspace, or the
+// X18 control board. Shared via useState so the header nav button can toggle it.
+const mainView = useState<'workspace' | 'x18'>('mainView', () => 'workspace');
 
 const startResize = (e: MouseEvent) => {
   isResizing.value = true;
