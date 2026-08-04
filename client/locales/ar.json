@@ -1,4 +1,4 @@
-﻿{
+{
   "_metadata": {
     "code": "ar",
     "name": "Arabic",
@@ -156,7 +156,10 @@
     "multiSelectWaveform": "تم تحديد عناصر متعددة — اختر عنصرًا واحدًا لعرض شكله الموجي.",
     "multiSelectOutPointDisabled": "معطّل عند تحديد عناصر متعددة (تعتمد نقطة النهاية على مدة كل عنصر).",
     "noWaveformData": "لا تتوفر بيانات الشكل الموجي",
-    "ltcRequiresDevice": "اختر جهاز إخراج LTC في إعدادات المشروع لتمكين إخراج الكود الزمني."
+    "ltcRequiresDevice": "اختر جهاز إخراج LTC في إعدادات المشروع لتمكين إخراج الكود الزمني.",
+    "startNextEnable": "بدء التالي عند العلامة",
+    "startNextTime": "بدء التالي عند",
+    "startNextFadeOut": "تلاشٍ خارجي عند العلامة"
   },
   "playback": {
     "panic": "إيقاف جميع الإشارات",
@@ -165,7 +168,8 @@
     "stop": "إيقاف",
     "delete": "حذف",
     "edit": "تحرير",
-    "masterMix": "Master"
+    "masterMix": "Master",
+    "startNextCountdown": "الوقت حتى بدء المقطع التالي"
   },
   "endBehavior": {
     "nothing": "لا شيء",
@@ -371,6 +375,13 @@
     "meterModeDbfs": "dBFS (المقياس الرقمي الكامل)",
     "meterModeDbtp": "dBTP (الذروة الحقيقية)",
     "meterModeRms": "RMS",
+    "meterBallistics": "Meter Ballistics",
+    "meterBallisticsHelp": "How fast the meters rise and fall.",
+    "meterBallisticsDigitalPpm": "Digital PPM (default)",
+    "meterBallisticsPpmI": "PPM Type I (DIN)",
+    "meterBallisticsPpmII": "PPM Type II (BBC)",
+    "meterBallisticsVu": "VU (slow)",
+    "meterBallisticsInstant": "Instant (fast)",
     "disableAutoVolumeAndTrim": "تعطيل ضبط الصوت والقص التلقائي",
     "disableLimiter": "تعطيل محدد الجدار الصلب",
     "disableLimiterHelp": "يوقف محدد الجدار الصلب، مما يسمح بالقمم فوق السقف. يمكن تغييره أثناء التشغيل.",
@@ -380,7 +391,22 @@
     "noneSelected": "غير محدد",
     "save": "حفظ",
     "close": "إغلاق",
-    "preview": "معاينة"
+    "preview": "معاينة",
+    "transitionMode": "وضع الانتقال الافتراضي",
+    "transitionModeHelp": "الانتقال المطبَّق على المقاطع المستوردة حديثًا. لا يزال بإمكان كل مقطع التبديل بين التلاشي المتقاطع وبدء التالي في خصائصه.",
+    "transitionModeCrossfade": "تلاشٍ متقاطع إلى التالي",
+    "transitionModeStartNext": "بدء التالي عند العلامة",
+    "autoCueNext": "تحضير العنصر التالي تلقائيًا حتى بدون سلوك نهاية",
+    "autoCueNextHelp": "يجهّز العنصر التالي بوصفه «التالي» حتى عندما لا يكون للعنصر قيد التشغيل سلوك نهاية، لتتمكن من التنقل في قائمة التشغيل بزر GO واحد. لا يبدأ التشغيل تلقائيًا.",
+    "tabAudioRouting": "توجيه الصوت",
+    "tabPlaybackBehaviour": "سلوك التشغيل",
+    "tabUserInterface": "واجهة المستخدم",
+    "stopAllFade": "مدة تلاشي «إيقاف الكل» (ثوانٍ)",
+    "stopAllFadeHelp": "المدة التي تستغرقها جميع المقاطع للتلاشي عند الضغط على «إيقاف الكل». اضبطها على 0 للإيقاف الفوري.",
+    "scrollToPlaying": "التمرير إلى المقطع قيد التشغيل",
+    "scrollToPlayingHelp": "إبقاء العنصر قيد التشغيل في منتصف القائمة تلقائيًا.",
+    "indexDisplayStart": "ترقيم عناصر قائمة التشغيل يبدأ من",
+    "indexDisplayStartHelp": "يتحكم في الرقم المعروض لأول عنصر في قائمة التشغيل. تبقى الفهارس الداخلية ومسارات فهارس API معتمدة على الصفر."
   },
   "common": {
     "default": "افتراضي",
@@ -432,14 +458,16 @@
     "endPlayNext": "النهاية: تشغيل التالي",
     "endGotoItem": "النهاية: الانتقال إلى العنصر",
     "endGotoIndex": "النهاية: الانتقال إلى الفهرس",
-    "endLoop": "النهاية: تكرار"
+    "endLoop": "النهاية: تكرار",
+    "startNextMarker": "يبدأ المقطع التالي عند {time}"
   },
   "waveform": {
     "decreaseBy": "تقليل بمقدار {seconds}ث",
     "increaseBy": "زيادة بمقدار {seconds}ث",
     "playFadeTitle": "تلاشي الدخول: {seconds}ث",
     "stopFadeTitle": "تلاشي الخروج: {seconds}ث",
-    "crossFadeTitle": "التلاشي المتقاطع: {seconds}ث"
+    "crossFadeTitle": "التلاشي المتقاطع: {seconds}ث",
+    "startNextTitle": "بدء التالي: {time}"
   },
   "unsavedModal": {
     "title": "تغييرات غير محفوظة",
@@ -452,12 +480,23 @@
     "title": "انقطع الاتصال",
     "message": "تم فقدان الاتصال بخادم LivePlay على {url}.",
     "attempting": "محاولة إعادة الاتصال…",
-    "reconnect": "إعادة الاتصال",
+    "attemptCount": "(محاولات فاشلة: {count})",
+    "locked": "التشغيل والتحرير متوقفان حتى عودة الاتصال — التغييرات التي تُجرى الآن لا يمكن إرسالها إلى الخادم.",
+    "pill": "إعادة الاتصال…",
+    "reconnect": "إعادة المحاولة الآن",
     "restart": "إعادة التشغيل",
     "exit": "خروج",
-    "reconnectHint": "إعادة الاتصال تحاول الاتصال بنفس الخادم مرة أخرى.",
+    "reconnectHint": "«إعادة المحاولة الآن» تتصل بالخادم نفسه فورًا بدلًا من انتظار المحاولة التلقائية التالية.",
     "restartHint": "إعادة التشغيل تعيد تشغيل العميل فقط (يستمر خادم الصوت في العمل).",
     "exitHint": "الخروج يغلق العميل."
+  },
+  "sessionRecovery": {
+    "title": "أُعيد تشغيل الخادم",
+    "message": "عاد الاتصال، لكن لم يعد لدى الخادم أي مشروع مفتوح — على الأرجح أنه أُعيد تشغيله. مشروعك ما زال موجودًا على هذا الجهاز.",
+    "resume": "متابعة الجلسة",
+    "startFresh": "البدء من جديد",
+    "resumeHint": "«متابعة الجلسة» تعيد فتح هذا المشروع على الخادم لتتمكن من المتابعة.",
+    "startFreshHint": "«البدء من جديد» يغلقه ويعود إلى شاشة الترحيب."
   },
   "audioImport": {
     "title": "استيراد الصوت",
@@ -486,5 +525,14 @@
     "deleteAll": "حذف {count} عنصرًا محددًا",
     "deleteOnly": "حذف \"{name}\" فقط",
     "cancel": "إلغاء"
+  },
+  "showMode": {
+    "toggle": "وضع العرض",
+    "toggleHint": "التبديل إلى واجهة تشغيل مبسطة وملائمة للمس مخصصة للعروض.",
+    "exit": "خروج",
+    "exitHint": "اضغط مطولاً للخروج من وضع العرض",
+    "noItems": "لا توجد عناصر في هذا المشروع",
+    "holdToStop": "اضغط مطولاً للإيقاف",
+    "holdToStopAll": "اضغط مطولاً لإيقاف الكل"
   }
 }

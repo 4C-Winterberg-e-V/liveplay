@@ -1,4 +1,4 @@
-﻿{
+{
   "_metadata": {
     "code": "pt",
     "name": "Portuguese",
@@ -156,7 +156,10 @@
     "multiSelectWaveform": "Vários itens selecionados — escolha um único item para exibir sua forma de onda.",
     "multiSelectOutPointDisabled": "Desativado para seleção múltipla (o ponto de saída depende da duração de cada item).",
     "noWaveformData": "Nenhum dado de forma de onda disponível",
-    "ltcRequiresDevice": "Selecione um dispositivo de saída LTC nas Definições do projeto para ativar a saída de timecode."
+    "ltcRequiresDevice": "Selecione um dispositivo de saída LTC nas Definições do projeto para ativar a saída de timecode.",
+    "startNextEnable": "Iniciar próximo no marcador",
+    "startNextTime": "Iniciar próximo em",
+    "startNextFadeOut": "Esmaecer no marcador"
   },
   "playback": {
     "panic": "Parar Todos os Sinais",
@@ -165,7 +168,8 @@
     "stop": "Parar",
     "delete": "Excluir",
     "edit": "Editar",
-    "masterMix": "Master"
+    "masterMix": "Master",
+    "startNextCountdown": "Tempo até a próxima faixa começar"
   },
   "endBehavior": {
     "nothing": "Nada",
@@ -371,6 +375,13 @@
     "meterModeDbfs": "dBFS (Escala digital completa)",
     "meterModeDbtp": "dBTP (Pico verdadeiro)",
     "meterModeRms": "RMS",
+    "meterBallistics": "Meter Ballistics",
+    "meterBallisticsHelp": "How fast the meters rise and fall.",
+    "meterBallisticsDigitalPpm": "Digital PPM (default)",
+    "meterBallisticsPpmI": "PPM Type I (DIN)",
+    "meterBallisticsPpmII": "PPM Type II (BBC)",
+    "meterBallisticsVu": "VU (slow)",
+    "meterBallisticsInstant": "Instant (fast)",
     "disableAutoVolumeAndTrim": "Desabilitar ajustes automáticos de volume e aparagem",
     "disableLimiter": "Desativar o limitador brickwall",
     "disableLimiterHelp": "Desativa o limitador brickwall, permitindo picos acima do teto. Pode ser alterado durante a reprodução.",
@@ -380,7 +391,22 @@
     "noneSelected": "Não selecionado",
     "save": "Guardar",
     "close": "Fechar",
-    "preview": "Pré-visualização"
+    "preview": "Pré-visualização",
+    "transitionMode": "Modo de transição padrão",
+    "transitionModeHelp": "Transição aplicada às faixas recém-importadas. Cada faixa ainda pode alternar entre fusão cruzada e iniciar próximo nas suas propriedades.",
+    "transitionModeCrossfade": "Fusão cruzada para o próximo",
+    "transitionModeStartNext": "Iniciar próximo no marcador",
+    "autoCueNext": "Preparar automaticamente o próximo item mesmo sem comportamento de fim",
+    "autoCueNextHelp": "Prepara o próximo item como «A seguir» mesmo quando o item em reprodução não tem comportamento de fim, para percorrer a lista com um único botão GO. Não inicia a reprodução automaticamente.",
+    "tabAudioRouting": "Encaminhamento de áudio",
+    "tabPlaybackBehaviour": "Comportamento de reprodução",
+    "tabUserInterface": "Interface do utilizador",
+    "stopAllFade": "Fade de «Parar tudo» (segundos)",
+    "stopAllFadeHelp": "Tempo que todas as deixas levam a desvanecer ao premir «Parar tudo». Defina 0 para paragem instantânea.",
+    "scrollToPlaying": "Deslocar para o item em reprodução",
+    "scrollToPlayingHelp": "Manter automaticamente o item em reprodução centrado na lista.",
+    "indexDisplayStart": "Numerar itens da lista a partir de",
+    "indexDisplayStartHelp": "Controla o número mostrado para o primeiro item da lista. Os índices internos e os caminhos de índice da API continuam baseados em zero."
   },
   "common": {
     "default": "padrão",
@@ -432,14 +458,16 @@
     "endPlayNext": "Fim: Tocar próximo",
     "endGotoItem": "Fim: Ir para item",
     "endGotoIndex": "Fim: Ir para índice",
-    "endLoop": "Fim: Repetir"
+    "endLoop": "Fim: Repetir",
+    "startNextMarker": "Inicia a próxima faixa em {time}"
   },
   "waveform": {
     "decreaseBy": "Diminuir em {seconds}s",
     "increaseBy": "Aumentar em {seconds}s",
     "playFadeTitle": "Fade de entrada: {seconds}s",
     "stopFadeTitle": "Fade de saída: {seconds}s",
-    "crossFadeTitle": "Crossfade: {seconds}s"
+    "crossFadeTitle": "Crossfade: {seconds}s",
+    "startNextTitle": "Iniciar próximo: {time}"
   },
   "unsavedModal": {
     "title": "Alterações não salvas",
@@ -452,12 +480,23 @@
     "title": "Ligação perdida",
     "message": "A ligação ao servidor LivePlay em {url} foi perdida.",
     "attempting": "A tentar voltar a ligar…",
-    "reconnect": "Voltar a ligar",
+    "attemptCount": "(Tentativas falhadas: {count})",
+    "locked": "A reprodução e a edição estão em pausa até a ligação voltar — as alterações feitas agora não poderiam ser enviadas para o servidor.",
+    "pill": "A voltar a ligar…",
+    "reconnect": "Tentar novamente agora",
     "restart": "Reiniciar",
     "exit": "Sair",
-    "reconnectHint": "Voltar a ligar tenta novamente o mesmo servidor.",
+    "reconnectHint": "Tentar novamente agora contacta imediatamente o mesmo servidor, em vez de esperar pela próxima tentativa automática.",
     "restartHint": "Reiniciar reinicia apenas o cliente (o servidor de áudio continua a funcionar).",
     "exitHint": "Sair fecha o cliente."
+  },
+  "sessionRecovery": {
+    "title": "O servidor foi reiniciado",
+    "message": "A ligação voltou, mas o servidor já não tem nenhum projeto aberto — muito provavelmente foi reiniciado. O seu projeto continua neste computador.",
+    "resume": "Continuar sessão",
+    "startFresh": "Começar de novo",
+    "resumeHint": "Continuar sessão volta a abrir este projeto no servidor para poder prosseguir.",
+    "startFreshHint": "Começar de novo fecha-o e regressa ao ecrã de boas-vindas."
   },
   "audioImport": {
     "title": "Importar áudio",
@@ -486,5 +525,14 @@
     "deleteAll": "Eliminar {count} itens selecionados",
     "deleteOnly": "Eliminar apenas \"{name}\"",
     "cancel": "Cancelar"
+  },
+  "showMode": {
+    "toggle": "Modo Show",
+    "toggleHint": "Alternar para uma visualização de reprodução simplificada e adequada para toque, feita para shows.",
+    "exit": "Sair",
+    "exitHint": "Mantenha pressionado para sair do Modo Show",
+    "noItems": "Nenhum item neste projeto",
+    "holdToStop": "Mantenha pressionado para parar",
+    "holdToStopAll": "Mantenha pressionado para parar tudo"
   }
 }

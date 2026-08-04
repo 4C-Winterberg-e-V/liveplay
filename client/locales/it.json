@@ -1,4 +1,4 @@
-﻿{
+{
   "_metadata": {
     "code": "it",
     "name": "Italian",
@@ -156,7 +156,10 @@
     "multiSelectWaveform": "Più elementi selezionati: scegli un singolo elemento per visualizzarne la forma d'onda.",
     "multiSelectOutPointDisabled": "Disabilitato per la selezione multipla (il punto di uscita dipende dalla durata di ciascun elemento).",
     "noWaveformData": "Nessun dato della forma d'onda disponibile",
-    "ltcRequiresDevice": "Seleziona un dispositivo di uscita LTC nelle Impostazioni del progetto per abilitare l'uscita timecode."
+    "ltcRequiresDevice": "Seleziona un dispositivo di uscita LTC nelle Impostazioni del progetto per abilitare l'uscita timecode.",
+    "startNextEnable": "Avvia successivo al marcatore",
+    "startNextTime": "Avvia successivo a",
+    "startNextFadeOut": "Dissolvenza in uscita al marcatore"
   },
   "playback": {
     "panic": "Ferma Tutti i Segnali",
@@ -165,7 +168,8 @@
     "stop": "Ferma",
     "delete": "Elimina",
     "edit": "Modifica",
-    "masterMix": "Master"
+    "masterMix": "Master",
+    "startNextCountdown": "Tempo prima dell’avvio della traccia successiva"
   },
   "endBehavior": {
     "nothing": "Niente",
@@ -371,6 +375,13 @@
     "meterModeDbfs": "dBFS (Scala digitale completa)",
     "meterModeDbtp": "dBTP (Picco vero)",
     "meterModeRms": "RMS",
+    "meterBallistics": "Meter Ballistics",
+    "meterBallisticsHelp": "How fast the meters rise and fall.",
+    "meterBallisticsDigitalPpm": "Digital PPM (default)",
+    "meterBallisticsPpmI": "PPM Type I (DIN)",
+    "meterBallisticsPpmII": "PPM Type II (BBC)",
+    "meterBallisticsVu": "VU (slow)",
+    "meterBallisticsInstant": "Instant (fast)",
     "disableAutoVolumeAndTrim": "Disabilita le regolazioni automatiche di volume e taglio",
     "disableLimiter": "Disattiva il limiter brickwall",
     "disableLimiterHelp": "Disattiva il limiter brickwall, consentendo picchi oltre il tetto. Modificabile durante la riproduzione.",
@@ -380,7 +391,22 @@
     "noneSelected": "Non selezionato",
     "save": "Salva",
     "close": "Chiudi",
-    "preview": "Anteprima"
+    "preview": "Anteprima",
+    "transitionMode": "Modalità di transizione predefinita",
+    "transitionModeHelp": "Transizione applicata alle tracce appena importate. Ogni traccia può comunque passare tra dissolvenza incrociata e avvio del successivo nelle sue proprietà.",
+    "transitionModeCrossfade": "Dissolvenza incrociata al successivo",
+    "transitionModeStartNext": "Avvia successivo al marcatore",
+    "autoCueNext": "Prepara automaticamente l’elemento successivo anche senza comportamento di fine",
+    "autoCueNextHelp": "Prepara l’elemento successivo come «Prossimo» anche quando l’elemento in riproduzione non ha un comportamento di fine, così puoi scorrere la playlist con un solo pulsante GO. Non avvia automaticamente la riproduzione.",
+    "tabAudioRouting": "Instradamento audio",
+    "tabPlaybackBehaviour": "Comportamento di riproduzione",
+    "tabUserInterface": "Interfaccia utente",
+    "stopAllFade": "Dissolvenza di «Ferma tutto» (secondi)",
+    "stopAllFadeHelp": "Durata della dissolvenza in uscita di tutte le tracce quando premi «Ferma tutto». Imposta 0 per un arresto immediato.",
+    "scrollToPlaying": "Scorri all’elemento in riproduzione",
+    "scrollToPlayingHelp": "Mantieni automaticamente centrato nell’elenco l’elemento in riproduzione.",
+    "indexDisplayStart": "Numerare gli elementi della playlist da",
+    "indexDisplayStartHelp": "Controlla il numero mostrato per il primo elemento della playlist. Gli indici interni e i percorsi indice dell’API restano basati su zero."
   },
   "common": {
     "default": "predefinito",
@@ -432,14 +458,16 @@
     "endPlayNext": "Fine: Riproduci successivo",
     "endGotoItem": "Fine: Vai all'elemento",
     "endGotoIndex": "Fine: Vai all'indice",
-    "endLoop": "Fine: Ripeti"
+    "endLoop": "Fine: Ripeti",
+    "startNextMarker": "Avvia la traccia successiva a {time}"
   },
   "waveform": {
     "decreaseBy": "Diminuisci di {seconds}s",
     "increaseBy": "Aumenta di {seconds}s",
     "playFadeTitle": "Dissolvenza in entrata: {seconds}s",
     "stopFadeTitle": "Dissolvenza in uscita: {seconds}s",
-    "crossFadeTitle": "Dissolvenza incrociata: {seconds}s"
+    "crossFadeTitle": "Dissolvenza incrociata: {seconds}s",
+    "startNextTitle": "Avvia successivo: {time}"
   },
   "unsavedModal": {
     "title": "Modifiche non salvate",
@@ -452,12 +480,23 @@
     "title": "Connessione persa",
     "message": "La connessione al server LivePlay su {url} è stata persa.",
     "attempting": "Tentativo di riconnessione…",
-    "reconnect": "Riconnetti",
+    "attemptCount": "(Tentativi falliti: {count})",
+    "locked": "La riproduzione e la modifica sono in pausa finché la connessione non torna: le modifiche fatte ora non potrebbero essere inviate al server.",
+    "pill": "Riconnessione…",
+    "reconnect": "Riprova ora",
     "restart": "Riavvia",
     "exit": "Esci",
-    "reconnectHint": "Riconnetti prova di nuovo con lo stesso server.",
+    "reconnectHint": "Riprova ora contatta subito lo stesso server invece di attendere il prossimo tentativo automatico.",
     "restartHint": "Riavvia riavvia solo il client (il server audio continua a funzionare).",
     "exitHint": "Esci chiude il client."
+  },
+  "sessionRecovery": {
+    "title": "Server riavviato",
+    "message": "La connessione è tornata, ma il server non ha più un progetto aperto: molto probabilmente è stato riavviato. Il tuo progetto è ancora qui, su questo computer.",
+    "resume": "Continua sessione",
+    "startFresh": "Ricomincia",
+    "resumeHint": "Continua sessione riapre questo progetto sul server così puoi proseguire.",
+    "startFreshHint": "Ricomincia lo chiude e torna alla schermata iniziale."
   },
   "audioImport": {
     "title": "Importa audio",
@@ -486,5 +525,14 @@
     "deleteAll": "Elimina {count} elementi selezionati",
     "deleteOnly": "Elimina solo \"{name}\"",
     "cancel": "Annulla"
+  },
+  "showMode": {
+    "toggle": "Modalità Show",
+    "toggleHint": "Passa a una vista di riproduzione semplificata e ottimizzata per il tocco, pensata per gli show.",
+    "exit": "Esci",
+    "exitHint": "Tieni premuto per uscire dalla Modalità Show",
+    "noItems": "Nessun elemento in questo progetto",
+    "holdToStop": "Tieni premuto per fermare",
+    "holdToStopAll": "Tieni premuto per fermare tutto"
   }
 }

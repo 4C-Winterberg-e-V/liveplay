@@ -1,8 +1,11 @@
 <template>
-  <div class="playback-controls">
+  <div class="playback-controls" :class="{ 'show-mode': showMode }">
     <!-- Desktop: transport lives here. On phones it moves into the title bar
-         (ProjectHeader) so the active-cue list gets the full width. -->
+         (ProjectHeader) so the active-cue list gets the full width. The
+         Play-Next + Panic buttons upstream inlines here live inside
+         TransportButtons, which is why both hosts can render them. -->
     <TransportButtons class="controls-left" />
+
 
     <div class="active-cues">
       <div v-if="activeCues.size === 0 && !previewingItem" class="no-cues">
@@ -97,6 +100,10 @@ const { findItemByUuid, previewItemUuid, previewCueId, stopPreview, currentProje
 const { playbackMappings } = useCartHotkeys();
 const { t } = useLocalization();
 const server = useLiveplayServer();
+const { uiMode } = useUiMode();
+// Show Mode enlarges the GO / Stop-All buttons for touch; the active-cue cards
+// and meters are already the right size and stay as-is.
+const showMode = computed(() => uiMode.value === 'playback');
 
 // ---- Preview seek / time --------------------------------------------------
 // Subscribe to the preview cue's per-item meter stream so we can display an
@@ -144,15 +151,30 @@ const outputPairs = computed(() => {
     : (server.devices.find((d: any) => d.is_default)?.display_name ?? 'Main');
   const pairs: Array<{ key: string; leftIndex: number; rightIndex: number; label: string }> = [];
 
-  // Main output — always visible
-  pairs.push({ key: 'main', leftIndex: 0, rightIndex: 1, label: mainLabel });
-
-  // Per-device override pairs (allocated at 2+, step 2)
+  // Per-device override pairs (allocated at 2+, step 2). When a project selects
+  // a specific default output device the server routes the program onto one of
+  // these override buses (masters 0/1 stay silent), so we must NOT unconditionally
+  // show a "Main" 0/1 strip — that produced a permanent duplicated, signal-less
+  // "Main" strip alongside the real one.
+  const overridePairs: Array<{ key: string; leftIndex: number; rightIndex: number; label: string }> = [];
   for (let i = 2; i < 30; i += 2) {
     if (activeIdx.has(i) || activeIdx.has(i + 1)) {
-      pairs.push({ key: `out-${i}`, leftIndex: i, rightIndex: i + 1, label: `Out ${i / 2}` });
+      overridePairs.push({ key: `out-${i}`, leftIndex: i, rightIndex: i + 1, label: `Out ${i / 2}` });
     }
   }
+
+  const mainActive = activeIdx.has(0) || activeIdx.has(1);
+  // Show the 0/1 "Main" strip only when it actually carries signal, or when
+  // there is no override bus to represent the main output (so at least one
+  // output strip is always visible). When the program has moved onto the
+  // project's default-device override bus, relabel that first override pair
+  // with the configured device name instead of a bare "Out N".
+  if (mainActive || overridePairs.length === 0) {
+    pairs.push({ key: 'main', leftIndex: 0, rightIndex: 1, label: mainLabel });
+  } else if (overridePairs.length > 0) {
+    overridePairs[0]!.label = mainLabel;
+  }
+  pairs.push(...overridePairs);
 
   // Preview output (master 30/31) — only when active
   if (activeIdx.has(30) || activeIdx.has(31)) {
@@ -185,9 +207,10 @@ const stopAllTooltip = computed(() => {
 });
 
 const handlePanic = () => {
-  // Tell the server to stop everything immediately (no fade); also stop the
-  // legacy in-process engine while it's still in use.
-  server.stopAll(0);
+  // Stop everything, fading over the project-wide Stop All time
+  // (settings.stopAllFadeMs, default 1 s; set to 0 for an instant panic).
+  // panicStop() forwards to the server with no explicit fade so the server
+  // applies that project setting.
   panicStop();
 };
 
@@ -232,6 +255,38 @@ const handlePlayNext = () => {
 .controls-left {
   display: flex;
   gap: var(--spacing-sm);
+}
+
+/* Show Mode — bigger GO / Stop-All buttons. The controls bar grows a little
+   taller to fit them; preview card and stop button are also enlarged. */
+.playback-controls.show-mode {
+  min-height: calc(var(--playback-controls-height) + 20px);
+
+  .control-btn {
+    padding: var(--spacing-lg) var(--spacing-xl);
+    font-size: 17px;
+
+    .material-symbols-rounded,
+    .icon {
+      font-size: 26px;
+    }
+  }
+
+  .preview-cue-card {
+    min-width: 500px;
+    max-width: 500px;
+    padding: var(--spacing-md);
+  }
+
+  .preview-cue-header {
+    font-size: 16px;
+  }
+
+  .preview-stop-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 24px;
+  }
 }
 
 .control-btn {

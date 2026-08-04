@@ -47,6 +47,13 @@ export function flattenItems(
   return m;
 }
 
+// Strip a group's embedded `children` array for comparison/patching. See the
+// long note in computeItemDiff step 4 for why this matters. Non-groups pass
+// through untouched.
+export function withoutChildren(it: any): any {
+  return it && it.type === 'group' ? { ...it, children: undefined } : it;
+}
+
 export interface ItemRef {
   uuid: string;
   item: any;
@@ -99,12 +106,26 @@ export function computeItemDiff(prev: FlatMap, curr: FlatMap): ItemDiff {
   }
 
   // 4. Updates: content changed in place (not a move, not new).
+  //
+  // A group's own JSON embeds its full `children` array, so ANY child property
+  // edit (e.g. a trim point) also changes the group's serialized JSON — which
+  // would otherwise queue a *second*, redundant PATCH for the group, carrying a
+  // full snapshot of every child. The server's update_item does a blind per-key
+  // merge (`it[k] = v`), so if that group-level patch is built from a snapshot
+  // older than the child's own more specific patch and lands after it (a real
+  // race under rapid edits or concurrent activity — overlapping syncItemsDiff
+  // calls don't serialize against each other), it silently reverts the child
+  // back to the stale value embedded in the group's snapshot. Children are
+  // already synced via their own uuid entries in this same map, so a group
+  // patch must only ever carry the group's own metadata, never children.
   for (const [uuid, { item, parentUuid, cartOnly }] of curr) {
     const before = prev.get(uuid);
     if (!before) continue;
     if (before.parentUuid !== parentUuid || before.cartOnly !== cartOnly) continue; // step 1
-    if (stableJson(before.item) === stableJson(item)) continue;
-    updates.push({ uuid, item });
+    const beforeCompare = withoutChildren(before.item);
+    const nowCompare    = withoutChildren(item);
+    if (stableJson(beforeCompare) === stableJson(nowCompare)) continue;
+    updates.push({ uuid, item: nowCompare });
   }
 
   // 5. Reorder: per playlist parent level, if the common-item order changed.

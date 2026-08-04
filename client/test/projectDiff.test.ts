@@ -52,7 +52,7 @@ describe('computeItemDiff', () => {
     expect(d.moves).toEqual([]);
   });
 
-  it('treats a reparent into a group as a move (and updates the group whose children changed)', () => {
+  it('treats a reparent into a group as a move, without patching the group itself', () => {
     const prev = [audio('a'), group('g', [])];
     const cur  = [group('g', [audio('a')])];
     const d = diff(prev, [], cur, []);
@@ -60,8 +60,22 @@ describe('computeItemDiff', () => {
     expect(d.moves[0]).toMatchObject({ parentUuid: 'g', cartOnly: false });
     expect(d.adds).toEqual([]);
     expect(d.removes).toEqual([]); // 'a' still exists, just reparented
-    // 'g's serialized form gained a child, so it's a legitimate in-place update.
+    // 'g's serialized form gained a child, but children are compared with the
+    // embedded `children` array stripped, so a child-only change no longer
+    // queues a redundant group patch. That patch used to carry a full snapshot
+    // of every child and, landing after the child's own more specific patch,
+    // could revert it to a stale value.
+    expect(d.updates).toEqual([]);
+  });
+
+  it('patches a group when its OWN metadata changes, and never sends children', () => {
+    const prev = [group('g', [audio('a')])];
+    const cur  = [{ ...group('g', [audio('a')]), name: 'renamed' }];
+    const d = diff(prev, [], cur, []);
     expect(d.updates.map(x => x.uuid)).toEqual(['g']);
+    // The outgoing patch must not carry the children array.
+    expect(d.updates[0]!.item.children).toBeUndefined();
+    expect(d.updates[0]!.item).toMatchObject({ uuid: 'g', name: 'renamed' });
   });
 
   it('treats a playlist -> cart-only relocation as a move', () => {

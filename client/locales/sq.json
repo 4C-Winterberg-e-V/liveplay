@@ -1,4 +1,4 @@
-﻿{
+{
   "_metadata": {
     "code": "sq",
     "name": "Albanian",
@@ -156,7 +156,10 @@
     "multiSelectWaveform": "Janë zgjedhur disa artikuj — zgjidhni një artikull të vetëm për të shfaqur formën e valës.",
     "multiSelectOutPointDisabled": "E çaktivizuar për përzgjedhje të shumëfishtë (pika e daljes varet nga kohëzgjatja e secilit artikull).",
     "noWaveformData": "Nuk ka të dhëna të formës së valës",
-    "ltcRequiresDevice": "Zgjidh një pajisje dalëse LTC te Cilësimet e projektit për të aktivizuar daljen e timecode."
+    "ltcRequiresDevice": "Zgjidh një pajisje dalëse LTC te Cilësimet e projektit për të aktivizuar daljen e timecode.",
+    "startNextEnable": "Nis tjetrin te shënuesi",
+    "startNextTime": "Nis tjetrin në",
+    "startNextFadeOut": "Zbehje në dalje te shënuesi"
   },
   "playback": {
     "panic": "Ndalo të Gjitha Sinjalet",
@@ -165,7 +168,8 @@
     "stop": "Ndalo",
     "delete": "Fshi",
     "edit": "Redakto",
-    "masterMix": "Master"
+    "masterMix": "Master",
+    "startNextCountdown": "Koha deri sa të nisë pjesa tjetër"
   },
   "endBehavior": {
     "nothing": "Asgjë",
@@ -371,6 +375,13 @@
     "meterModeDbfs": "dBFS (Shkalla e plotë dixhitale)",
     "meterModeDbtp": "dBTP (Majë e vërtetë)",
     "meterModeRms": "RMS",
+    "meterBallistics": "Meter Ballistics",
+    "meterBallisticsHelp": "How fast the meters rise and fall.",
+    "meterBallisticsDigitalPpm": "Digital PPM (default)",
+    "meterBallisticsPpmI": "PPM Type I (DIN)",
+    "meterBallisticsPpmII": "PPM Type II (BBC)",
+    "meterBallisticsVu": "VU (slow)",
+    "meterBallisticsInstant": "Instant (fast)",
     "disableAutoVolumeAndTrim": "Çaktivizo rregullimet automatike të volumit dhe prerjes",
     "disableLimiter": "Çaktivizo limituesin brickwall",
     "disableLimiterHelp": "Çaktivizon limituesin brickwall, duke lejuar kulmet mbi tavanin. Mund të ndryshohet gjatë luajtjes.",
@@ -380,7 +391,22 @@
     "noneSelected": "Asnjë e zgjedhur",
     "save": "Ruaj",
     "close": "Mbyll",
-    "preview": "Paraparim"
+    "preview": "Paraparim",
+    "transitionMode": "Mënyra e parazgjedhur e kalimit",
+    "transitionModeHelp": "Kalimi që zbatohet për pjesët e sapoimportuara. Çdo pjesë mund të ndërrohet mes kalimit të kryqëzuar dhe nisjes së tjetrit te vetitë e saj.",
+    "transitionModeCrossfade": "Kalim i kryqëzuar te tjetri",
+    "transitionModeStartNext": "Nis tjetrin te shënuesi",
+    "autoCueNext": "Përgatit automatikisht artikullin tjetër edhe pa sjellje fundi",
+    "autoCueNextHelp": "Përgatit artikullin tjetër si «Tjetri» edhe kur artikulli që po luhet s’ka sjellje fundi, që të kalosh nëpër listë me një buton të vetëm GO. Nuk e nis luajtjen automatikisht.",
+    "tabAudioRouting": "Rrugëtimi i audios",
+    "tabPlaybackBehaviour": "Sjellja e luajtjes",
+    "tabUserInterface": "Ndërfaqja e përdoruesit",
+    "stopAllFade": "Zbehja e «Ndalo të gjitha» (sekonda)",
+    "stopAllFadeHelp": "Sa zgjat zbehja e të gjitha sinjaleve kur shtypni «Ndalo të gjitha». Vendoseni në 0 për ndalim të menjëhershëm.",
+    "scrollToPlaying": "Rrëshqit te elementi që po luhet",
+    "scrollToPlayingHelp": "Mbaje automatikisht elementin që po luhet në qendër të listës.",
+    "indexDisplayStart": "Numëro artikujt e listës duke filluar nga",
+    "indexDisplayStartHelp": "Kontrollon numrin që shfaqet për artikullin e parë të listës. Indekset e brendshme dhe shtigjet e indeksit të API-së mbeten me bazë zero."
   },
   "common": {
     "default": "e paracaktuar",
@@ -432,14 +458,16 @@
     "endPlayNext": "Mbarim: Luaj të ardhshmin",
     "endGotoItem": "Mbarim: Shko te artikulli",
     "endGotoIndex": "Mbarim: Shko te indeksi",
-    "endLoop": "Mbarim: Përsërit"
+    "endLoop": "Mbarim: Përsërit",
+    "startNextMarker": "Nis pjesën tjetër te {time}"
   },
   "waveform": {
     "decreaseBy": "Zvogëlo me {seconds}s",
     "increaseBy": "Rrit me {seconds}s",
     "playFadeTitle": "Fade-in: {seconds}s",
     "stopFadeTitle": "Fade-out: {seconds}s",
-    "crossFadeTitle": "Cross-fade: {seconds}s"
+    "crossFadeTitle": "Cross-fade: {seconds}s",
+    "startNextTitle": "Nis tjetrin: {time}"
   },
   "unsavedModal": {
     "title": "Ndryshime të paruajtura",
@@ -452,12 +480,23 @@
     "title": "Lidhja u humb",
     "message": "Lidhja me serverin LivePlay në {url} u humb.",
     "attempting": "Po përpiqet të rilidhet…",
-    "reconnect": "Rilidhu",
+    "attemptCount": "(Përpjekje të dështuara: {count})",
+    "locked": "Riprodhimi dhe redaktimi janë në pauzë derisa lidhja të kthehet — ndryshimet e bëra tani nuk do të mund të dërgoheshin te serveri.",
+    "pill": "Duke u rilidhur…",
+    "reconnect": "Riprovo tani",
     "restart": "Rinis",
     "exit": "Dil",
-    "reconnectHint": "Rilidhja provon përsëri të njëjtin server.",
+    "reconnectHint": "Riprovo tani kontakton menjëherë të njëjtin server, në vend që të presë përpjekjen tjetër automatike.",
     "restartHint": "Rinisja rinis vetëm klientin (serveri audio vazhdon të funksionojë).",
     "exitHint": "Dalja mbyll klientin."
+  },
+  "sessionRecovery": {
+    "title": "Serveri u rinis",
+    "message": "Lidhja u rikthye, por serveri nuk ka më asnjë projekt të hapur — me shumë gjasa është rinisur. Projekti juaj ndodhet ende në këtë kompjuter.",
+    "resume": "Vazhdo sesionin",
+    "startFresh": "Fillo nga e para",
+    "resumeHint": "Vazhdo sesionin e rihap këtë projekt në server që të mund të vazhdoni.",
+    "startFreshHint": "Fillo nga e para e mbyll atë dhe kthehet te ekrani i mirëseardhjes."
   },
   "audioImport": {
     "title": "Importo audio",
@@ -486,5 +525,14 @@
     "deleteAll": "Fshi {count} elemente të zgjedhura",
     "deleteOnly": "Fshi vetëm \"{name}\"",
     "cancel": "Anulo"
+  },
+  "showMode": {
+    "toggle": "Modaliteti Shfaqje",
+    "toggleHint": "Kalo në një pamje riprodhimi të thjeshtuar dhe të përshtatshme për prekje gjatë shfaqjeve.",
+    "exit": "Dil",
+    "exitHint": "Mbaje shtypur për të dalë nga Modaliteti Shfaqje",
+    "noItems": "Nuk ka asnjë artikull në këtë projekt",
+    "holdToStop": "Mbaje shtypur për të ndaluar",
+    "holdToStopAll": "Mbaje shtypur për të ndaluar gjithçka"
   }
 }

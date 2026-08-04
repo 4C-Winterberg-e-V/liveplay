@@ -26,9 +26,14 @@ import type {
   Theme,
   CartItem
 } from '~/types/project';
-import { DEFAULT_THEME, DEFAULT_CART_SLOT_KEYS } from '~/types/project';
+import { DEFAULT_THEME, DEFAULT_CART_SLOT_KEYS, anchorStartNextMarker } from '~/types/project';
 import { computeItemDiff, flattenItems } from '~/utils/projectDiff';
-import { applyAutoProcessing } from '~/utils/audio';
+import { applyAutoProcessing, buildWaveformFromChannels } from '~/utils/audio';
+import {
+  formatDisplayIndexPath,
+  normalizeIndexDisplayStart,
+  parseDisplayIndexPath,
+} from '~/utils/indexDisplay';
 
 // ---------------------------------------------------------------------------
 // MODULE-SCOPED state for cross-call coordination.
@@ -50,6 +55,10 @@ import { applyAutoProcessing } from '~/utils/audio';
 let _syncWatchersInstalled = false;
 let _refreshItemsBaselineAfterHydrate: () => void = () => {};
 let _captureBaselinesFn: () => void = () => {};
+// Bridges endItemBatch (outer composable scope) to syncItemsDiff (defined
+// inside the one-time sync-watcher init block) — see endItemBatch's comment
+// for why calling this directly, not just captureBaselines, matters.
+let _syncItemsDiffFn: () => Promise<void> = async () => {};
 let _installItemsWatcherFn:   null | (() => void) = null;
 let _uninstallItemsWatcherFn: null | (() => void) = null;
 
@@ -181,6 +190,12 @@ export const useProject = () => {
   // by the server itself, so we can read it back on subsequent fetches.
   const projectFilePathRef = useState<string>('useProject.projectFilePath', () => '');
 
+  // Bumped every time the client re-hydrates its project from the server.
+  // Components that memoise per-project work keyed on name/folderPath can't
+  // see a reload of the *same* project (both are unchanged), which is exactly
+  // what session recovery does — this counter gives them the edge they need.
+  const projectEpoch = useState<number>('useProject.projectEpoch', () => 0);
+
   // Loading state — set true during open/create/save so the UI can render a
   // loading overlay. `loadingMessage` is the title shown in the overlay.
   const isLoading = useState<boolean>('useProject.isLoading', () => false);
@@ -214,6 +229,13 @@ export const useProject = () => {
   const autoSaveEnabled = computed<boolean>(
     () => (currentProject.value as any)?.settings?.autoSave !== false,
   );
+  const indexDisplayStart = computed<number>(() =>
+    normalizeIndexDisplayStart((currentProject.value as any)?.settings?.indexDisplayStart),
+  );
+  const formatItemIndex = (index?: number[] | null): string =>
+    formatDisplayIndexPath(index, indexDisplayStart.value);
+  const parseItemIndexInput = (raw: string): number[] =>
+    parseDisplayIndexPath(raw, indexDisplayStart.value);
 
   // True for Windows drive paths (C:\…), POSIX roots (/…) and UNC (\\…).
   const isAbsolutePath = (p: string): boolean =>
@@ -828,6 +850,10 @@ export const useProject = () => {
     if (header.settings) (project as any).settings = header.settings;
     currentProject.value = project;
     updateIndices(project.items);
+    // Signal the reload to per-project memoisation elsewhere. Reopening the
+    // same project leaves name and folderPath identical, so this counter is
+    // the only edge those consumers can key off.
+    projectEpoch.value++;
     // A freshly loaded/created project matches its on-disk file.
     hasUnsavedChanges.value = false;
   };
@@ -869,6 +895,93 @@ export const useProject = () => {
   }
 
 
+  // Serialise the in-memory project into the wire shape the server expects.
+  // Shared by saveProject (which sends it alongside the target path) and
+  // resumeProjectOnServer (which replaces the server's document wholesale).
+  const buildDocumentSnapshot = () => {
+    if (!currentProject.value) return null;
+    return {
+      name:          currentProject.value.name,
+      version:       currentProject.value.version,
+      folderPath:    currentProject.value.folderPath,
+      items:         itemsToJSON(currentProject.value.items) ?? [],
+      cartItems:     toJSON(currentProject.value.cartItems) ?? [],
+      cartSlotKeys:  toJSON((currentProject.value as any).cartSlotKeys),
+      playbackKeys:  toJSON((currentProject.value as any).playbackKeys),
+      // This fork's X18 control board. Upstream's buildDocumentSnapshot()
+      // predates it — leaving it out silently dropped the board on every save
+      // and on the server-restart re-push.
+      x18Board:      toJSON((currentProject.value as any).x18Board) ?? [],
+      cartOnlyItems: itemsToJSON(currentProject.value.cartOnlyItems) ?? [],
+      theme:         toJSON(currentProject.value.theme),
+      settings:      toJSON((currentProject.value as any).settings),
+      createdAt:     currentProject.value.createdAt,
+      lastModified:  currentProject.value.lastModified,
+    };
+  };
+
+  // Put the project back onto a server that has forgotten it — the recovery
+  // path after the server process restarts mid-session.
+  //
+  // Order matters, and it's the whole point of this function. Loading the
+  // project FILE first is what gives the server its directory context: the
+  // project file path, the media root and the waveforms/ sidecar directory are
+  // all derived from it, and the waveform pipeline resolves to nothing without
+  // them (POST /api/waveform_generate computes its cache dir from
+  // project_file_path()). Pushing the in-memory document alone leaves that path
+  // empty, which is why a resumed session came back with no waveforms.
+  //
+  // Unsaved edits live only in the client's copy, so they're captured up front
+  // and re-applied afterwards as a document replace — which the server performs
+  // without disturbing the project path established by the load.
+  const resumeProjectOnServer = async (): Promise<boolean> => {
+    if (!currentProject.value) return false;
+    const server = useLiveplayServer();
+    const path = projectFilePathRef.value;
+    try {
+      // Mirror the cart-only store into the document first; it's the same
+      // pre-serialisation step saveProject does, and skipping it would drop
+      // cart slots on the way through.
+      const { cartOnlyItems } = useCartItems();
+      currentProject.value.cartOnlyItems = Array.from(cartOnlyItems.value.values());
+      // Capture before anything reloads — re-hydration overwrites the
+      // in-memory project, and unsaved edits exist nowhere else.
+      const unsaved = hasUnsavedChanges.value ? buildDocumentSnapshot() : null;
+
+      if (path) await server.loadProjectFromPath(path);
+      // Overlay the client's document when the file is stale (unsaved edits) or
+      // when there's no file at all — a project that has never been written to
+      // disk has only this copy.
+      if (unsaved || !path) {
+        const doc = unsaved ?? buildDocumentSnapshot();
+        if (!doc) return false;
+        await server.replaceProjectDocument(doc);
+      }
+
+      // Tear the items deep-watcher down before re-hydrating, the same way
+      // closeProject does. It would otherwise stay live across the swap and
+      // diff every streamed page against the pre-disconnect baseline — a flood
+      // of spurious add/remove PATCHes on top of an already busy reconnect.
+      // streamItemPages reinstalls it once the pages have landed.
+      uninstallItemsWatcherFn();
+
+      // Re-hydrate the client from whatever the server now holds, rather than
+      // trusting the pre-disconnect in-memory copy: cue ids are regenerated by
+      // the reload, and stale ones would break waveform and meter lookups.
+      const ok = await tryRejoinExistingProject();
+      if (ok) {
+        if (path) projectFilePathRef.value = path;
+        // The overlay went to the server's memory, not to disk — the file is
+        // still behind, so the unsaved marker has to survive the rejoin.
+        if (unsaved) hasUnsavedChanges.value = true;
+      }
+      return ok;
+    } catch (e) {
+      console.error('Error resuming project on server:', e);
+      return false;
+    }
+  };
+
   // Save the current project — the server already has the document, it just
   // needs to write to disk.
   const saveProject = async (opts?: { force?: boolean }): Promise<boolean> => {
@@ -902,21 +1015,7 @@ export const useProject = () => {
       // in-memory copy in sync — but we pass the document explicitly so a
       // missed PATCH (race, debounce, hidden watcher gap) can never leave
       // the file (or the engine) with stale property values.
-      const docSnapshot = {
-        name:          currentProject.value.name,
-        version:       currentProject.value.version,
-        folderPath:    currentProject.value.folderPath,
-        items:         itemsToJSON(currentProject.value.items) ?? [],
-        cartItems:     toJSON(currentProject.value.cartItems) ?? [],
-        cartSlotKeys:  toJSON((currentProject.value as any).cartSlotKeys),
-        playbackKeys:  toJSON((currentProject.value as any).playbackKeys),
-        x18Board:      toJSON((currentProject.value as any).x18Board) ?? [],
-        cartOnlyItems: itemsToJSON(currentProject.value.cartOnlyItems) ?? [],
-        theme:         toJSON(currentProject.value.theme),
-        settings:      toJSON((currentProject.value as any).settings),
-        createdAt:     currentProject.value.createdAt,
-        lastModified:  currentProject.value.lastModified,
-      };
+      const docSnapshot = buildDocumentSnapshot();
       const path = projectFilePathRef.value ||
                    `${currentProject.value.folderPath}/${currentProject.value.name}.liveplay`;
       const res = await server.saveProjectTo(path, docSnapshot);
@@ -1438,8 +1537,10 @@ export const useProject = () => {
           case 'waveform_ready': {
             const target = findItemByUuid(patch.item_uuid);
             if (target && target.type === 'audio') {
-              const peaks: number[] = patch.channels?.[0]?.peak ?? [];
               const duration: number = (patch.duration_ms ?? 0) / 1000;
+              // Every source channel, not just the left one (#47).
+              const built = buildWaveformFromChannels(patch.channels, duration);
+              const peaks: number[] = built?.peaks ?? [];
               if (peaks.length > 0) {
                 // Distinguish a brand-new item's FIRST waveform from a
                 // REGENERATION of an item we've already seen peaks for this
@@ -1455,15 +1556,28 @@ export const useProject = () => {
                 // the cache is only cleared on item removal / project change.
                 const hadWaveform = _waveformCache.has(patch.item_uuid);
 
-                (target as any).waveform = markRaw({ peaks, length: peaks.length, duration });
+                (target as any).waveform = markRaw(built!);
                 // Seed the session cache so this waveform survives later
                 // server re-syncs that strip it.
                 cacheWaveform(patch.item_uuid, (target as any).waveform);
 
                 if (!hadWaveform && duration > 0) {
-                  // First waveform for this item: initialise duration + out point.
+                  // First waveform for this item this session: initialise duration.
                   (target as any).duration = duration;
-                  (target as any).outPoint  = duration;
+                  // Only initialise outPoint for a genuinely brand-new item.
+                  // `_waveformCache` is in-memory only and starts empty on every
+                  // reload, so `!hadWaveform` is ALSO true for an existing,
+                  // already-trimmed item whose waveform just happens to be the
+                  // first this fresh session has seen — without this check that
+                  // reload would stomp its real, already-hydrated outPoint back
+                  // to full duration the instant the waveform arrives (in-point
+                  // is never touched here, which is why only out-points were
+                  // reverting). The item's own outPoint — hydrated from the
+                  // project file before this patch ever arrives — is the
+                  // persistent signal the session cache can't provide.
+                  if (!(target as any).outPoint) {
+                    (target as any).outPoint = duration;
+                  }
                 }
 
                 // Auto-process (trim silence + normalise) only for items that
@@ -1480,6 +1594,9 @@ export const useProject = () => {
                       const targetDb: number = settings?.outputTargetLevels?.autoVolumeTargetDb ?? -23;
                       applyAutoProcessing(target as AudioItem, targetDb);
                     }
+                    // Re-anchor the import-default start-next marker to the
+                    // final (possibly auto-trimmed) out point.
+                    anchorStartNextMarker(target as AudioItem);
                   }
                 }
                 triggerWaveformUpdate();
@@ -1709,6 +1826,7 @@ export const useProject = () => {
         console.warn('[useProject] item sync incomplete — baseline rolled back; will retry on next change.');
       }
     }
+    _syncItemsDiffFn = syncItemsDiff;
 
     // ---- Fallback for keys without granular endpoints ----
     // Only fires when one of the specific "no-endpoint-yet" fields changes
@@ -1767,7 +1885,20 @@ export const useProject = () => {
   // Drag-batch helpers — defined at composable scope so they're always
   // accessible from the return object regardless of the init-block latch.
   const beginItemBatch = () => { _suppressItemSyncCount.value++; };
-  const endItemBatch   = () => { _suppressItemSyncCount.value = 0; _captureBaselinesFn(); };
+  // Bug fix: this used to call only _captureBaselinesFn(), which re-snapshots
+  // the *current* (just-dragged, never-sent) item state as the new baseline —
+  // marking the drag's final value as "already in sync" without ever pushing
+  // it to the server. The change looked fine locally but the server (and the
+  // saved project file) kept the pre-drag value, so it silently reverted on
+  // the next reload. _syncItemsDiffFn() (syncItemsDiff) is what actually
+  // diffs against the old baseline and pushes the change before rotating it —
+  // call that first, then _captureBaselinesFn() as a safety net for the
+  // non-item fields (cart/theme/settings) it also baselines.
+  const endItemBatch = () => {
+    _suppressItemSyncCount.value = 0;
+    _syncItemsDiffFn().catch(e => console.warn('[useProject] endItemBatch sync failed:', e));
+    _captureBaselinesFn();
+  };
 
   return {
     currentProject,
@@ -1789,9 +1920,13 @@ export const useProject = () => {
     createNewProject,
     openProject,
     tryRejoinExistingProject,
+    resumeProjectOnServer,
     saveProject,
     hasUnsavedChanges,
     autoSaveEnabled,
+    indexDisplayStart,
+    formatItemIndex,
+    parseItemIndexInput,
     setAutoSave,
     closeProject,
     addItem,
@@ -1803,6 +1938,7 @@ export const useProject = () => {
     moveItem,
     updateIndices,
     projectFilePath: projectFilePathRef,
+    projectEpoch,
     isLoading,
     loadingMessage,
     audioLoadingProgress,

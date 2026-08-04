@@ -60,8 +60,44 @@ const TRANSPORT_FADING_IN = 2;
 const TRANSPORT_FADING_OUT= 3;
 const TRANSPORT_PAUSED    = 4;
 
+// Renderer-scoped guard for the WebSocket subscriptions below. Module scope,
+// not per-call: the whole point is that repeated useAudioEngine() calls reuse
+// one set of subscribers instead of stacking new ones. See the block it guards.
+let _wsWired = false;
+
+// cue-to-continue must never leave a permanent trace on the cue's saved
+// End Behavior — it's a one-time "let this playing instance finish, then
+// advance" action, not a reconfiguration. So instead of writing the resolved
+// next/goto-item/goto-index target into endBehavior (which (a) is eligible
+// for the server's Seamless Advance path — starts the next item ~0.1s
+// *before* this pass's out-point for gapless "next"-chained cues, cutting the
+// loop short, and (b) would permanently overwrite the cue's configured 'loop'
+// with 'next', corrupting the show file for next time this cue is cued up),
+// we arm 'nothing' (same value toggle-loop already uses, proven not to
+// trigger any early-start path) to let the current pass finish for real, and
+// remember BOTH the cue's original endBehavior and the resolved advance
+// target here. removeActiveCue below restores the original endBehavior
+// (leaving the saved cue exactly as the operator configured it) and plays
+// the resolved target directly — never by writing it into endBehavior.
+const pendingLoopContinuations = new Map<string, {
+  originalEndBehavior: { action: string; targetUuid?: string; targetIndex?: number[] };
+  advanceTarget: { action: 'next' | 'goto-item' | 'goto-index'; targetUuid?: string; targetIndex?: number[] };
+}>();
+
+// Shared by cue-to-continue and jump-cue (keyboard, MIDI, and the per-cue UI
+// buttons): goto-item target → goto-index target → structural next, the same
+// precedence endBehavior already supports for non-loop cues today.
+export const resolveLoopContinuationTarget = (
+  item: AudioItem
+): { action: 'next' | 'goto-item' | 'goto-index'; targetUuid?: string; targetIndex?: number[] } => {
+  const { targetUuid, targetIndex } = item.endBehavior;
+  if (targetUuid) return { action: 'goto-item', targetUuid };
+  if (targetIndex) return { action: 'goto-index', targetIndex };
+  return { action: 'next' };
+};
+
 export const useAudioEngine = () => {
-  const { currentProject, findItemByUuid, findItemByIndex } = useProject();
+  const { currentProject, findItemByUuid, findItemByIndex, saveProject } = useProject();
   const { cartOnlyItems } = useCartItems();
   const server = useLiveplayServer();
 
@@ -80,7 +116,11 @@ export const useAudioEngine = () => {
   const masterGainDb = useState<number>('masterGainDb', () => 0);
 
   // Server-authoritative "Up Next" override. setNextItem writes via WS,
-  // server fans out as next_item_set doc_patch.
+  // server fans out as next_item_set doc_patch. All auto-cue arming decisions
+  // (#28: advance-on-stop, first-item-on-open, end-of-list wrap) now live on
+  // the authoritative server (ProjectState::arm_next_after_stop /
+  // arm_first_item_on_open) so every connected client mirrors one decision
+  // instead of each computing its own. The client only reflects this value.
   const nextItemOverrideUuid = useState<string | null>('nextItemOverrideUuid', () => null);
 
   // ---- Helpers -------------------------------------------------------
@@ -165,9 +205,125 @@ export const useAudioEngine = () => {
     activeCues.value.set(item.uuid, view);
   };
 
+  // Fires the pending cue-to-continue advance: restores the cue's saved End
+  // Behavior (never left mutated) and hard-starts the resolved next item.
+  // Called the MOMENT the outgoing pass ends — see the two call sites below
+  // for why that's "enters FadingOut" (or "reaches Stopped" when no fade is
+  // configured at all), not "finishes fading out". Waiting for the fade to
+  // fully complete before starting the next item is exactly the silent gap
+  // this exists to avoid: the operator wants a hard start on the next cue
+  // the instant this pass ends, with the outgoing cue's own configured fade
+  // (if any) trailing underneath — not a fade-to-silence-then-start gap.
+  const resolvePendingLoopContinuation = (uuid: string) => {
+    const pending = pendingLoopContinuations.get(uuid);
+    if (!pending) return;
+    pendingLoopContinuations.delete(uuid);
+    const { originalEndBehavior, advanceTarget } = pending;
+
+    const item = findItemByUuid(uuid);
+    // Restore exactly what the operator had configured — this action must
+    // never leave a permanent trace on the cue's saved End Behavior. Pushed
+    // immediately (not left to the generic 300ms-debounced item-diff watcher)
+    // for the same reason queueLoopContinuation's arm does — see its comment.
+    if (item && item.type === 'audio') {
+      (item as AudioItem).endBehavior = { ...originalEndBehavior } as AudioItem['endBehavior'];
+      saveProject();
+      server.updateProjectItem(uuid, { endBehavior: (item as AudioItem).endBehavior }).catch(() => {});
+    }
+
+    let nextItem: AudioItem | GroupItem | null = null;
+    if (advanceTarget.action === 'goto-item' && advanceTarget.targetUuid) {
+      nextItem = findItemByUuid(advanceTarget.targetUuid);
+    } else if (advanceTarget.action === 'goto-index' && advanceTarget.targetIndex) {
+      nextItem = findItemByIndex(advanceTarget.targetIndex);
+    } else if (item) {
+      const nextIndex = [...item.index];
+      nextIndex[nextIndex.length - 1]++;
+      nextItem = findItemByIndex(nextIndex);
+    }
+    if (nextItem) {
+      if (nextItem.type === 'audio') playCue(nextItem as AudioItem);
+      else if (nextItem.type === 'group') triggerGroup(nextItem);
+    }
+  };
+
   const removeActiveCue = (uuid: string) => {
     activeCues.value.delete(uuid);
+    // Covers cues with no fadeOutDuration configured at all: they go
+    // Playing → Stopped directly, skipping FadingOut entirely, so this is
+    // the only edge that ever fires for them.
+    resolvePendingLoopContinuation(uuid);
   };
+
+  // Used by cue-to-continue (keyboard + MIDI): let the current loop pass
+  // finish for real, then advance directly to `advanceTarget` — never by
+  // writing it into endBehavior. See the pendingLoopContinuations comment
+  // above for why.
+  const queueLoopContinuation = (
+    item: AudioItem,
+    advanceTarget: { action: 'next' | 'goto-item' | 'goto-index'; targetUuid?: string; targetIndex?: number[] }
+  ) => {
+    if (!activeCues.value.has(item.uuid)) {
+      // Not currently playing — nothing to finish. Advance directly, same as
+      // removeActiveCue's post-stop step, without ever touching endBehavior.
+      let nextItem: AudioItem | GroupItem | null = null;
+      if (advanceTarget.action === 'goto-item' && advanceTarget.targetUuid) {
+        nextItem = findItemByUuid(advanceTarget.targetUuid);
+      } else if (advanceTarget.action === 'goto-index' && advanceTarget.targetIndex) {
+        nextItem = findItemByIndex(advanceTarget.targetIndex);
+      } else {
+        const nextIndex = [...item.index];
+        nextIndex[nextIndex.length - 1]++;
+        nextItem = findItemByIndex(nextIndex);
+      }
+      if (nextItem) {
+        if (nextItem.type === 'audio') playCue(nextItem as AudioItem);
+        else if (nextItem.type === 'group') triggerGroup(nextItem);
+      }
+      return;
+    }
+    pendingLoopContinuations.set(item.uuid, {
+      originalEndBehavior: { ...item.endBehavior },
+      advanceTarget,
+    });
+    item.endBehavior = { action: 'nothing' };
+    saveProject();
+    // Push this to the server RIGHT NOW rather than waiting on the generic
+    // item-diff watcher (debounced 300ms): that watcher is fine for ordinary
+    // editing, but this write disables server-side looping (set_loop(false))
+    // and a short loop (a few seconds) can wrap back around before a
+    // 300ms-delayed push ever lands — the pass loops one more time and the
+    // operator sees the button flip back to "loop" as if the press did
+    // nothing. A direct, immediate PATCH closes that race.
+    server.updateProjectItem(item.uuid, { endBehavior: item.endBehavior }).catch(() => {});
+  };
+
+  // jump-cue (keyboard, MIDI, per-cue UI button): stop `item` right now and
+  // start whatever it would have advanced to — never touches endBehavior.
+  const jumpCue = (item: AudioItem) => {
+    const advanceTarget = resolveLoopContinuationTarget(item);
+    let nextItem: AudioItem | GroupItem | null = null;
+    if (advanceTarget.action === 'goto-item' && advanceTarget.targetUuid) {
+      nextItem = findItemByUuid(advanceTarget.targetUuid);
+    } else if (advanceTarget.action === 'goto-index' && advanceTarget.targetIndex) {
+      nextItem = findItemByIndex(advanceTarget.targetIndex);
+    } else {
+      const nextIndex = [...item.index];
+      nextIndex[nextIndex.length - 1]++;
+      nextItem = findItemByIndex(nextIndex);
+    }
+    stopCue(item.uuid);
+    if (nextItem) {
+      if (nextItem.type === 'audio') playCue(nextItem as AudioItem);
+      else if (nextItem.type === 'group') triggerGroup(nextItem);
+    }
+  };
+
+  // Note: the auto-cue "Up Next" arming that used to live here (advance on
+  // stop, first-item on open, end-of-list wrap) is now owned entirely by the
+  // server so multiple clients share one authoritative decision. The client
+  // only reflects `nextItemOverrideUuid` (pushed via next_item_set / snapshot)
+  // and the deterministic `autoNextItemUuid` display below.
 
   // ---- activeGroups projection --------------------------------------
   // A group is "playing" if any of its descendant audio items is in
@@ -250,15 +406,45 @@ export const useAudioEngine = () => {
           }
           break;
       }
+
+      // Issue #28: an item WITHOUT an end behaviour still arms the next
+      // playlist item as "Up Next" when the project setting is enabled
+      // (default on, incl. legacy projects). This only arms the manual GO
+      // target — the server never auto-advances a 'nothing' cue, so playback
+      // still waits for the operator to press GO / spacebar. Lets an operator
+      // step through a pre-ordered playlist with a single button.
+      if (audioItem.endBehavior.action === 'nothing' &&
+          (currentProject.value as any)?.settings?.autoCueNextWithoutEndBehavior !== false) {
+        const nextIndex = [...audioItem.index];
+        nextIndex[nextIndex.length - 1]++;
+        const nextItem = findItemByIndex(nextIndex);
+        if (nextItem) return nextItem.uuid;
+      }
     }
     return null;
   });
 
   // ---- WS / REST plumbing -------------------------------------------
+  // Installed exactly once per renderer. Everything below writes only to
+  // useState-backed shared state, so a single set of subscribers serves every
+  // caller — and a single set is the only safe number. useAudioEngine() is
+  // called per playlist row, per cart slot, per active cue, and from inside
+  // event handlers (MainWorkspace's F1 path), and none of these ever
+  // unsubscribed. The meters broadcast arrives at frame rate, so each leaked
+  // subscriber became permanent per-frame work: re-mounting the playlist —
+  // exactly what session recovery does — multiplied the fan-out by the row
+  // count and left the UI lagging for the rest of the session.
+  if (import.meta.client && !_wsWired) {
+    _wsWired = true;
+    // Detached effect scope. The first caller is nearly always a component,
+    // and a bare watch() here would be owned by that component and stopped the
+    // moment it unmounts — silently taking the now-shared subscription with it.
+    effectScope(true).run(() => {
+
   // cue_state edges: Playing/FadingIn/Paused create or update; Stopped
   // removes. FadingOut keeps the entry so the bar continues to render
   // its trailing seconds.
-  const stopOnCueState = server.onCueState(({ cue_id, transport, playhead_seconds, item_uuid }: any) => {
+  server.onCueState(({ cue_id, transport, playhead_seconds, item_uuid }: any) => {
     if (transport === TRANSPORT_STOPPED) {
       // Remove by item_uuid first (activeCues is keyed by item uuid and the
       // server now includes it) — mirroring the upsert path below. Matching
@@ -278,20 +464,41 @@ export const useAudioEngine = () => {
         }
       }
       recomputeActiveGroups();
+      // "Up Next" arming after a stop is decided by the server (it distinguishes
+      // manual stops from natural ends and owns the end-of-list wrap), then
+      // mirrored back to us via a next_item_set doc_patch.
       return;
     }
     // Prefer item_uuid (server now includes it) so cart items without a
     // cueId annotation are still resolved. Fall back to cueId lookup.
     const item = (item_uuid ? findItemByUuid(item_uuid) : null) ?? findItemByServerCueId(cue_id);
     if (!item || item.type !== 'audio') return;
+    // FadingOut is the earliest signal that this pass has genuinely ended —
+    // fire the pending cue-to-continue advance here so the next cue hard-
+    // starts immediately, with the outgoing cue's own fade (if any, even
+    // just the 1s default every new item gets) trailing underneath rather
+    // than gating when the next cue starts.
+    if (transport === TRANSPORT_FADING_OUT) resolvePendingLoopContinuation(item.uuid);
     upsertActiveCue(item as AudioItem, transport, playhead_seconds, cue_id);
     recomputeActiveGroups();
+    // Consume the "Up Next" arming the moment the armed item actually starts —
+    // via ANY path (GO button, the item's own play button, MIDI, cart, or the
+    // server's own auto-advance), not only the GO button. Otherwise a manual
+    // override still pointing at the now-playing item shadows the derived
+    // autoNextItemUuid, and "Up Next" sticks on the item that's already
+    // playing instead of advancing (the #28 open-a-project regression). Also
+    // pushes the clear to the server so a later reconnect snapshot can't
+    // restore the stale arming.
+    if ((transport === TRANSPORT_PLAYING || transport === TRANSPORT_FADING_IN) &&
+        nextItemOverrideUuid.value && nextItemOverrideUuid.value === item.uuid) {
+      setNextItem(null);
+    }
   });
 
   // On (re)connect the server pushes a snapshot of what's already
   // playing. useLiveplayServer fires this BEFORE synthesising per-cue
   // events; we use it to refresh master gain + next-item state too.
-  const stopOnPlaybackSnapshot = server.onPlaybackSnapshot((snap: any) => {
+  server.onPlaybackSnapshot((snap: any) => {
     if (snap && typeof snap.master_gain_db === 'number') {
       masterGainDb.value = snap.master_gain_db;
     }
@@ -299,7 +506,7 @@ export const useAudioEngine = () => {
   });
 
   // Doc_patch: server-driven state changes other clients might trigger.
-  const stopOnDocPatch = server.onDocPatch((patch: any) => {
+  server.onDocPatch((patch: any) => {
     if (!patch || typeof patch !== 'object') return;
     switch (patch.op) {
       case 'next_item_set':
@@ -320,7 +527,7 @@ export const useAudioEngine = () => {
   // Meter broadcast: master levels + per-cue playhead. Master level is
   // a derived L+R sum so the existing single-bar UI keeps working;
   // accurate per-channel meters use StereoMeter directly.
-  const stopOnMeters = server.onMeters((m: any) => {
+  server.onMeters((m: any) => {
     if (!m) return;
     if (Array.isArray(m.items)) {
       for (const meter of m.items) {
@@ -364,7 +571,7 @@ export const useAudioEngine = () => {
   // When the project items finish streaming (or items are added/removed
   // by another client), re-resolve any pending activeCues that we
   // received cue_state for before the items existed locally.
-  const stopItemsWatch = watch(() => currentProject.value?.items?.length, () => {
+  watch(() => currentProject.value?.items?.length, () => {
     // Sweep server.cues for anything Playing-like and ensure an entry.
     for (const sc of server.cues ?? []) {
       const t = (sc as any).transport;
@@ -382,18 +589,8 @@ export const useAudioEngine = () => {
     recomputeActiveGroups();
   });
 
-  // Tear down this component instance's server subscriptions + watcher when
-  // its reactive scope is disposed. Previously none of the unsubscribe handles
-  // were captured and there was no onScopeDispose, so every PlaylistItem row /
-  // CartSlot that mounted added another permanent set of WS subscribers — they
-  // accumulated for the life of the app and degraded a long session (H-19).
-  onScopeDispose(() => {
-    stopOnCueState();
-    stopOnPlaybackSnapshot();
-    stopOnDocPatch();
-    stopOnMeters();
-    stopItemsWatch();
-  });
+    });
+  }   // end one-time WS wiring
 
   // ---- Transport intents (forward to server) -------------------------
   // Note: the server's WS `play` handler routes to trigger_item, which
@@ -418,10 +615,18 @@ export const useAudioEngine = () => {
 
   const stopCue = async (uuid: string) => {
     if (!uuid) return;
+    // The server treats a single-cue stop as a manual stop for Up-Next arming.
     server.stopItem(uuid);
   };
-  const stopAllCues = async () => { server.stopAll(0); };
-  const panicStop   = async () => { server.stopAll(0); };
+  // Global Stop All — omit the fade so the server applies the project-wide
+  // Stop All fade (settings.stopAllFadeMs, default 1 s). Set that to 0 in
+  // Project Settings for an instant panic.
+  const stopAllCues = async () => {
+    server.stopAll();
+  };
+  const panicStop   = async () => {
+    server.stopAll();
+  };
 
   const pauseCue = async (uuid: string) => {
     if (!uuid) return;
@@ -498,5 +703,7 @@ export const useAudioEngine = () => {
     triggerByUuid,
     triggerByIndex,
     triggerGroup,
+    queueLoopContinuation,
+    jumpCue,
   };
 };

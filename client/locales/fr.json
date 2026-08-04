@@ -1,4 +1,4 @@
-﻿{
+{
   "_metadata": {
     "code": "fr",
     "name": "French",
@@ -156,7 +156,10 @@
     "multiSelectWaveform": "Plusieurs éléments sélectionnés — choisissez un seul élément pour afficher sa forme d'onde.",
     "multiSelectOutPointDisabled": "Désactivé pour la sélection multiple (le point de sortie dépend de la durée de chaque élément).",
     "noWaveformData": "Aucune donnée de forme d'onde disponible",
-    "ltcRequiresDevice": "Sélectionnez un périphérique de sortie LTC dans les Paramètres du projet pour activer la sortie timecode."
+    "ltcRequiresDevice": "Sélectionnez un périphérique de sortie LTC dans les Paramètres du projet pour activer la sortie timecode.",
+    "startNextEnable": "Démarrer le suivant au marqueur",
+    "startNextTime": "Démarrer le suivant à",
+    "startNextFadeOut": "Fondu de sortie au marqueur"
   },
   "playback": {
     "panic": "Arrêter Tous les Signaux",
@@ -165,7 +168,8 @@
     "stop": "Arrêt",
     "delete": "Supprimer",
     "edit": "Modifier",
-    "masterMix": "Master"
+    "masterMix": "Master",
+    "startNextCountdown": "Temps avant le démarrage de la piste suivante"
   },
   "endBehavior": {
     "nothing": "Rien",
@@ -371,6 +375,13 @@
     "meterModeDbfs": "dBFS (Plein échelle numérique)",
     "meterModeDbtp": "dBTP (Crête réelle)",
     "meterModeRms": "RMS",
+    "meterBallistics": "Meter Ballistics",
+    "meterBallisticsHelp": "How fast the meters rise and fall.",
+    "meterBallisticsDigitalPpm": "Digital PPM (default)",
+    "meterBallisticsPpmI": "PPM Type I (DIN)",
+    "meterBallisticsPpmII": "PPM Type II (BBC)",
+    "meterBallisticsVu": "VU (slow)",
+    "meterBallisticsInstant": "Instant (fast)",
     "disableAutoVolumeAndTrim": "Désactiver les ajustements automatiques de volume et de découpe",
     "disableLimiter": "Désactiver le limiteur brickwall",
     "disableLimiterHelp": "Désactive le limiteur brickwall, autorisant les crêtes au-dessus du plafond. Modifiable pendant la lecture.",
@@ -380,7 +391,22 @@
     "noneSelected": "Non sélectionné",
     "save": "Enregistrer",
     "close": "Fermer",
-    "preview": "Aperçu"
+    "preview": "Aperçu",
+    "transitionMode": "Mode de transition par défaut",
+    "transitionModeHelp": "Transition appliquée aux pistes nouvellement importées. Chaque piste peut toujours basculer entre fondu enchaîné et démarrage du suivant dans ses propriétés.",
+    "transitionModeCrossfade": "Fondu enchaîné vers le suivant",
+    "transitionModeStartNext": "Démarrer le suivant au marqueur",
+    "autoCueNext": "Préparer automatiquement l’élément suivant même sans comportement de fin",
+    "autoCueNextHelp": "Prépare l’élément suivant comme « À suivre » même lorsque l’élément en cours n’a pas de comportement de fin, afin de parcourir la liste de lecture avec un seul bouton GO. La lecture ne démarre pas automatiquement.",
+    "tabAudioRouting": "Routage audio",
+    "tabPlaybackBehaviour": "Comportement de lecture",
+    "tabUserInterface": "Interface utilisateur",
+    "stopAllFade": "Fondu de « Tout arrêter » (secondes)",
+    "stopAllFadeHelp": "Durée du fondu de sortie de toutes les séquences lorsque vous appuyez sur « Tout arrêter ». Réglez sur 0 pour un arrêt instantané.",
+    "scrollToPlaying": "Faire défiler jusqu’à l’élément en cours de lecture",
+    "scrollToPlayingHelp": "Garder automatiquement l’élément en cours de lecture centré dans la liste.",
+    "indexDisplayStart": "Numéroter les éléments de la liste à partir de",
+    "indexDisplayStartHelp": "Définit le numéro affiché pour le premier élément de la liste. Les index internes et les chemins d’index de l’API restent basés sur zéro."
   },
   "common": {
     "default": "défaut",
@@ -432,14 +458,16 @@
     "endPlayNext": "Fin : Jouer le suivant",
     "endGotoItem": "Fin : Aller à l'élément",
     "endGotoIndex": "Fin : Aller à l'index",
-    "endLoop": "Fin : Boucler"
+    "endLoop": "Fin : Boucler",
+    "startNextMarker": "Démarre la piste suivante à {time}"
   },
   "waveform": {
     "decreaseBy": "Diminuer de {seconds}s",
     "increaseBy": "Augmenter de {seconds}s",
     "playFadeTitle": "Fondu d'entrée : {seconds}s",
     "stopFadeTitle": "Fondu de sortie : {seconds}s",
-    "crossFadeTitle": "Fondu enchaîné : {seconds}s"
+    "crossFadeTitle": "Fondu enchaîné : {seconds}s",
+    "startNextTitle": "Démarrer le suivant : {time}"
   },
   "unsavedModal": {
     "title": "Modifications non enregistrées",
@@ -452,12 +480,23 @@
     "title": "Connexion perdue",
     "message": "La connexion au serveur LivePlay à {url} a été perdue.",
     "attempting": "Tentative de reconnexion…",
-    "reconnect": "Reconnecter",
+    "attemptCount": "(Tentatives échouées : {count})",
+    "locked": "La lecture et l'édition sont suspendues jusqu'au rétablissement de la connexion — les modifications faites maintenant ne pourraient pas être envoyées au serveur.",
+    "pill": "Reconnexion…",
+    "reconnect": "Réessayer maintenant",
     "restart": "Redémarrer",
     "exit": "Quitter",
-    "reconnectHint": "Reconnecter tente de joindre à nouveau le même serveur.",
+    "reconnectHint": "Réessayer maintenant contacte immédiatement le même serveur au lieu d'attendre la prochaine tentative automatique.",
     "restartHint": "Redémarrer relance uniquement le client (le serveur audio continue de fonctionner).",
     "exitHint": "Quitter ferme le client."
+  },
+  "sessionRecovery": {
+    "title": "Serveur redémarré",
+    "message": "La connexion est rétablie, mais le serveur n'a plus de projet ouvert — il a très probablement été redémarré. Votre projet est toujours présent sur cet ordinateur.",
+    "resume": "Reprendre la session",
+    "startFresh": "Repartir de zéro",
+    "resumeHint": "Reprendre la session rouvre ce projet sur le serveur pour que vous puissiez continuer.",
+    "startFreshHint": "Repartir de zéro le ferme et revient à l'écran d'accueil."
   },
   "audioImport": {
     "title": "Importer de l'audio",
@@ -486,5 +525,14 @@
     "deleteAll": "Supprimer {count} éléments sélectionnés",
     "deleteOnly": "Supprimer uniquement « {name} »",
     "cancel": "Annuler"
+  },
+  "showMode": {
+    "toggle": "Mode Spectacle",
+    "toggleHint": "Passer à une vue de lecture simplifiée et tactile pour les spectacles.",
+    "exit": "Quitter",
+    "exitHint": "Maintenez appuyé pour quitter le Mode Spectacle",
+    "noItems": "Aucun élément dans ce projet",
+    "holdToStop": "Maintenez appuyé pour arrêter",
+    "holdToStopAll": "Maintenez appuyé pour tout arrêter"
   }
 }

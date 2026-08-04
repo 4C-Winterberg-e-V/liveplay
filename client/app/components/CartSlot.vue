@@ -6,6 +6,7 @@
       'has-item': hasItem,
       'is-playing': isPlaying,
       'is-selected': isSelected,
+      'show-mode': showMode,
       'warning-yellow': warningState === 'yellow',
       'warning-orange': warningState === 'orange',
       'warning-red': warningState === 'red',
@@ -18,18 +19,21 @@
                       @pick="onImportPick"
                       @close="showImportModal = false" />
 
-    <div v-if="!hasItem" class="empty-slot" @click="handleImport">
+    <!-- Empty slot: importing is an edit action, so in Show Mode the slot is
+         inert (just a dimmed number) rather than a "click to import" target. -->
+    <div v-if="!hasItem" class="empty-slot" :class="{ 'empty-slot--inert': showMode }" @click="showMode ? undefined : handleImport()">
       <span class="slot-number">{{ slot + 1 }}</span>
       <span v-if="keyLabel" class="key-label">{{ keyLabel }}</span>
-      <span class="slot-hint">{{ t('cart.clickToImport') }}</span>
+      <span v-if="!showMode" class="slot-hint">{{ t('cart.clickToImport') }}</span>
     </div>
-    
+
     <div
       v-else
       class="slot-content"
-      draggable="true"
+      :draggable="!showMode"
       @dragstart="handleDragStart"
       @dragend="handleDragEnd"
+      @click="showMode ? handleSlotClick() : undefined"
     >
       <!-- Waveform canvas -->
       <canvas
@@ -71,8 +75,12 @@
       
       <!-- Bottom info bar with action buttons, behavior icons, and duration -->
       <div class="slot-footer">
-        <!-- Action buttons (always visible) -->
-        <div class="slot-actions">
+        <!-- Action buttons -->
+        <!-- Show Mode removes the play and set-as-next buttons entirely — the
+             whole slot surface triggers playback instead (see @click on
+             .slot-content) — along with the preview/edit/delete edit
+             affordances. -->
+        <div v-if="!showMode" class="slot-actions">
           <ActionButton
             v-if="item.type === 'audio'"
             :icon="'headphones'"
@@ -186,7 +194,7 @@ import type { AudioItem } from '~/types/project';
 import ActionButton from './ActionButton.vue';
 import AudioImportModal from './AudioImportModal.vue';
 import { useOutputTarget, METER_COLORS } from '~/composables/useOutputTarget';
-import { calculatePerceivedLoudness } from '~/utils/audio';
+import { calculatePerceivedLoudness, parseWaveformFileData } from '~/utils/audio';
 
 const props = defineProps<{
   slot: number;
@@ -206,6 +214,11 @@ const { levels: outputTargetLevels } = useOutputTarget();
 const { playCue, stopCue, activeCues, nextItemOverrideUuid, autoNextItemUuid, setNextItem } = useAudioEngine();
 const { t } = useLocalization();
 const { addCartOnlyItem, updateCartOnlyItem, removeCartOnlyItem } = useCartItems();
+const { uiMode } = useUiMode();
+
+// Show Mode: hide edit affordances (import/preview/edit/delete + drag) and
+// enlarge the slot for touch. Waveform, colour, flags and warnings unchanged.
+const showMode = computed(() => uiMode.value === 'playback');
 
 const waveformCanvas = ref<HTMLCanvasElement | null>(null);
 const currentTime = ref(0);
@@ -405,8 +418,17 @@ const importFromServerPath = async (serverPath: string) => {
 };
 
 
+// Show Mode: the whole slot surface is the trigger — click to play, click
+// again to stop. Selection and drag-reorder are edit-only affordances and
+// stay disabled here.
+const handleSlotClick = () => {
+  if (!props.item) return;
+  isPlaying.value ? handleStop() : handlePlay();
+};
+
 const handleSelect = (event?: MouseEvent) => {
   if (!props.item) return;
+  if (showMode.value) return;
   // Stamp the selection as cart-owned so a global keyboard DEL clears cart
   // slots (rather than deleting the underlying playlist items).
   selectionContext.value = 'cart';
@@ -600,8 +622,9 @@ let waveformPollInterval: NodeJS.Timeout | null = null;
 
 onMounted(() => {
   // Use native DOM listeners for drag-and-drop — Vue event handlers
-  // on this component don't receive drop events (likely a Vue 3 scoped template issue)
-  if (slotRef.value) {
+  // on this component don't receive drop events (likely a Vue 3 scoped template issue).
+  // Skipped in Show Mode so cues can't be accidentally reordered/replaced mid-show.
+  if (slotRef.value && !showMode.value) {
     slotRef.value.addEventListener('dragenter', (e) => {
       e.preventDefault();
     });
@@ -674,8 +697,9 @@ const startWaveformPolling = () => {
       try {
         const result = await window.electronAPI.readFile(resolveProjectPath(audioItem.waveformPath));
         if (result.success && result.data) {
-          const waveformData = JSON.parse(result.data);
-          if (waveformData.peaks && waveformData.peaks.length > 0) {
+          // Accepts both the server's per-channel cache and legacy ffmpeg files.
+          const waveformData = parseWaveformFileData(JSON.parse(result.data));
+          if (waveformData) {
             audioItem.waveform = waveformData;
             
             // Update duration from waveform data if available
@@ -740,7 +764,10 @@ const handleDrop = async (e: DragEvent) => {
   e.preventDefault();
   e.stopPropagation();
   isDragOver.value = false;
-  
+
+  // No cart edits (reorder / import / replace) in Show Mode, even via an OS
+  // file drop — guards the case where the slot mounted in edit mode first.
+  if (showMode.value) return;
   if (!e.dataTransfer || !currentProject.value) return;
   
   // Check if it's a cart item being reordered
@@ -1232,5 +1259,58 @@ const handleDrop = async (e: DragEvent) => {
 
   // Decorative start/end-behaviour icons aren't needed on the touch card.
   .behavior-indicators { display: none; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Show Mode — bigger name text and chunky play/stop / set-next        */
+/* buttons for touch. Empty slots become inert (no import cursor).      */
+/* ------------------------------------------------------------------ */
+.cart-slot.show-mode {
+  &:hover {
+    /* No hover-grow in Show Mode — touch has no hover and the scale
+       nudge just makes big targets feel jittery. */
+    transform: none;
+  }
+
+  .empty-slot--inert {
+    cursor: default;
+  }
+
+  .slot-name {
+    font-size: 17px;
+  }
+
+  .slot-duration {
+    font-size: 14px;
+  }
+
+  .behavior-icon {
+    font-size: 18px !important;
+  }
+
+  :deep(.action-btn--cart) {
+    width: 46px;
+    height: 46px;
+
+    .material-symbols-rounded {
+      font-size: 24px;
+    }
+  }
+
+  .slot-actions {
+    gap: var(--spacing-sm);
+  }
+
+  /* No buttons in Show Mode — the whole slot is the play/stop trigger, and
+     it's not draggable, so drop the "move" cursor and shrink the footer
+     padding back down (no buttons to clear). */
+  .slot-content {
+    cursor: pointer;
+    padding-bottom: var(--spacing-sm);
+
+    &:active {
+      cursor: pointer;
+    }
+  }
 }
 </style>

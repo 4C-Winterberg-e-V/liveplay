@@ -22,6 +22,10 @@ client/dist-electron/
 .vscode/*
 !.vscode/extensions.json
 .idea
+# Lockfiles are committed so CI builds are reproducible, but this fork uses
+# pnpm: pnpm-lock.yaml at the repo root is the single lockfile for every
+# workspace package (client, docs-site). npm lockfiles are ignored everywhere
+# so a stray `npm install` can't commit a second, conflicting dependency graph.
 package-lock.json
 build/
 !client/build/

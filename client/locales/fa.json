@@ -1,4 +1,4 @@
-﻿{
+{
   "_metadata": {
     "code": "fa",
     "name": "Farsi",
@@ -156,7 +156,10 @@
     "multiSelectWaveform": "چند مورد انتخاب شده است — برای نمایش شکل موج، یک مورد را انتخاب کنید.",
     "multiSelectOutPointDisabled": "برای انتخاب چندتایی غیرفعال است (نقطه پایان به مدت‌زمان هر مورد بستگی دارد).",
     "noWaveformData": "داده‌ای برای شکل موج موجود نیست",
-    "ltcRequiresDevice": "برای فعال‌سازی خروجی تایم‌کد، یک دستگاه خروجی LTC را در تنظیمات پروژه انتخاب کنید."
+    "ltcRequiresDevice": "برای فعال‌سازی خروجی تایم‌کد، یک دستگاه خروجی LTC را در تنظیمات پروژه انتخاب کنید.",
+    "startNextEnable": "شروع بعدی در نشانگر",
+    "startNextTime": "شروع بعدی در",
+    "startNextFadeOut": "محو شدن در نشانگر"
   },
   "playback": {
     "panic": "توقف همه سیگنال‌ها",
@@ -165,7 +168,8 @@
     "stop": "توقف",
     "delete": "حذف",
     "edit": "ویرایش",
-    "masterMix": "Master"
+    "masterMix": "Master",
+    "startNextCountdown": "زمان تا شروع قطعه بعدی"
   },
   "endBehavior": {
     "nothing": "هیچ",
@@ -371,6 +375,13 @@
     "meterModeDbfs": "dBFS (مقیاس کامل دیجیتال)",
     "meterModeDbtp": "dBTP (قله واقعی)",
     "meterModeRms": "RMS",
+    "meterBallistics": "Meter Ballistics",
+    "meterBallisticsHelp": "How fast the meters rise and fall.",
+    "meterBallisticsDigitalPpm": "Digital PPM (default)",
+    "meterBallisticsPpmI": "PPM Type I (DIN)",
+    "meterBallisticsPpmII": "PPM Type II (BBC)",
+    "meterBallisticsVu": "VU (slow)",
+    "meterBallisticsInstant": "Instant (fast)",
     "disableAutoVolumeAndTrim": "غیرفعال کردن تنظیمات خودکار صدا و برش",
     "disableLimiter": "غیرفعال کردن لیمیتر brickwall",
     "disableLimiterHelp": "لیمیتر brickwall را خاموش می‌کند و اجازه می‌دهد پیک‌ها از سقف فراتر روند. در حین پخش قابل تغییر است.",
@@ -380,7 +391,22 @@
     "noneSelected": "انتخاب نشده",
     "save": "ذخیره",
     "close": "بستن",
-    "preview": "پیش‌نمایش"
+    "preview": "پیش‌نمایش",
+    "transitionMode": "حالت گذار پیش‌فرض",
+    "transitionModeHelp": "گذاری که برای قطعات تازه‌واردشده اعمال می‌شود. هر قطعه همچنان می‌تواند در ویژگی‌هایش بین محو متقاطع و شروع بعدی جابه‌جا شود.",
+    "transitionModeCrossfade": "محو متقاطع به بعدی",
+    "transitionModeStartNext": "شروع بعدی در نشانگر",
+    "autoCueNext": "آماده‌سازی خودکار مورد بعدی حتی بدون رفتار پایان",
+    "autoCueNextHelp": "مورد بعدی را به‌عنوان «بعدی» آماده می‌کند حتی وقتی مورد در حال پخش رفتار پایانی ندارد، تا بتوانید با یک دکمه GO در فهرست پخش حرکت کنید. پخش را به‌صورت خودکار آغاز نمی‌کند.",
+    "tabAudioRouting": "مسیریابی صدا",
+    "tabPlaybackBehaviour": "رفتار پخش",
+    "tabUserInterface": "رابط کاربری",
+    "stopAllFade": "محوشدن «توقف همه» (ثانیه)",
+    "stopAllFadeHelp": "مدت‌زمان محوشدن همه موارد هنگام فشردن «توقف همه». برای توقف فوری روی ۰ بگذارید.",
+    "scrollToPlaying": "پیمایش به مورد در حال پخش",
+    "scrollToPlayingHelp": "نگه‌داشتن خودکار مورد در حال پخش در وسط فهرست.",
+    "indexDisplayStart": "شماره‌گذاری موارد فهرست پخش از",
+    "indexDisplayStartHelp": "شماره‌ای را که برای اولین مورد فهرست پخش نمایش داده می‌شود تعیین می‌کند. شاخص‌های داخلی و مسیرهای شاخص API همچنان از صفر شروع می‌شوند."
   },
   "common": {
     "default": "پیش‌فرض",
@@ -432,14 +458,16 @@
     "endPlayNext": "پایان: پخش بعدی",
     "endGotoItem": "پایان: رفتن به آیتم",
     "endGotoIndex": "پایان: رفتن به شاخص",
-    "endLoop": "پایان: حلقه"
+    "endLoop": "پایان: حلقه",
+    "startNextMarker": "قطعه بعدی را در {time} آغاز می‌کند"
   },
   "waveform": {
     "decreaseBy": "کاهش {seconds} ثانیه",
     "increaseBy": "افزایش {seconds} ثانیه",
     "playFadeTitle": "فید ورودی: {seconds} ثانیه",
     "stopFadeTitle": "فید خروجی: {seconds} ثانیه",
-    "crossFadeTitle": "کراس فید: {seconds} ثانیه"
+    "crossFadeTitle": "کراس فید: {seconds} ثانیه",
+    "startNextTitle": "شروع بعدی: {time}"
   },
   "unsavedModal": {
     "title": "تغییرات ذخیره‌نشده",
@@ -452,12 +480,23 @@
     "title": "اتصال قطع شد",
     "message": "اتصال به سرور LivePlay در {url} قطع شده است.",
     "attempting": "در حال تلاش برای اتصال مجدد…",
-    "reconnect": "اتصال مجدد",
+    "attemptCount": "(تلاش‌های ناموفق: {count})",
+    "locked": "پخش و ویرایش تا بازگشت اتصال متوقف است — تغییراتی که اکنون انجام شود قابل ارسال به سرور نیست.",
+    "pill": "در حال اتصال مجدد…",
+    "reconnect": "تلاش مجدد اکنون",
     "restart": "راه‌اندازی مجدد",
     "exit": "خروج",
-    "reconnectHint": "اتصال مجدد دوباره همان سرور را امتحان می‌کند.",
+    "reconnectHint": "«تلاش مجدد اکنون» بی‌درنگ به همان سرور وصل می‌شود و منتظر تلاش خودکار بعدی نمی‌ماند.",
     "restartHint": "راه‌اندازی مجدد فقط کلاینت را دوباره اجرا می‌کند (سرور صوتی به کار خود ادامه می‌دهد).",
     "exitHint": "خروج کلاینت را می‌بندد."
+  },
+  "sessionRecovery": {
+    "title": "سرور دوباره راه‌اندازی شد",
+    "message": "اتصال برقرار شد، اما دیگر هیچ پروژه‌ای روی سرور باز نیست — به احتمال زیاد سرور دوباره راه‌اندازی شده است. پروژه شما همچنان روی این رایانه موجود است.",
+    "resume": "ادامه نشست",
+    "startFresh": "شروع تازه",
+    "resumeHint": "«ادامه نشست» این پروژه را دوباره روی سرور باز می‌کند تا بتوانید کار را ادامه دهید.",
+    "startFreshHint": "«شروع تازه» آن را می‌بندد و به صفحه خوش‌آمدگویی بازمی‌گردد."
   },
   "audioImport": {
     "title": "وارد کردن صدا",
@@ -486,5 +525,14 @@
     "deleteAll": "حذف {count} مورد انتخاب‌شده",
     "deleteOnly": "فقط حذف \"{name}\"",
     "cancel": "لغو"
+  },
+  "showMode": {
+    "toggle": "حالت نمایش",
+    "toggleHint": "تغییر به نمای پخش ساده و مناسب لمسی برای اجراها.",
+    "exit": "خروج",
+    "exitHint": "برای خروج از حالت نمایش نگه دارید",
+    "noItems": "هیچ موردی در این پروژه وجود ندارد",
+    "holdToStop": "برای توقف نگه دارید",
+    "holdToStopAll": "برای توقف همه نگه دارید"
   }
 }

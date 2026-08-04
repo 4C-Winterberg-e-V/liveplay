@@ -1,4 +1,4 @@
-﻿{
+{
   "_metadata": {
     "code": "no",
     "name": "Norwegian",
@@ -156,7 +156,10 @@
     "multiSelectWaveform": "Flere elementer valgt – velg ett enkelt element for å vise bølgeformen.",
     "multiSelectOutPointDisabled": "Deaktivert ved flervalg (utpunktet avhenger av hvert elements varighet).",
     "noWaveformData": "Ingen bølgeformdata tilgjengelig",
-    "ltcRequiresDevice": "Velg en LTC-utgangsenhet i Prosjektinnstillinger for å aktivere timecode-utgang."
+    "ltcRequiresDevice": "Velg en LTC-utgangsenhet i Prosjektinnstillinger for å aktivere timecode-utgang.",
+    "startNextEnable": "Start neste ved markør",
+    "startNextTime": "Start neste ved",
+    "startNextFadeOut": "Ton ut ved markør"
   },
   "playback": {
     "panic": "Stopp alle signaler",
@@ -165,7 +168,8 @@
     "stop": "Stopp",
     "delete": "Slett",
     "edit": "Rediger",
-    "masterMix": "Master"
+    "masterMix": "Master",
+    "startNextCountdown": "Tid til neste spor starter"
   },
   "endBehavior": {
     "nothing": "Ingenting",
@@ -371,6 +375,13 @@
     "meterModeDbfs": "dBFS (digital fullskala)",
     "meterModeDbtp": "dBTP (ekte topp)",
     "meterModeRms": "RMS",
+    "meterBallistics": "Meter Ballistics",
+    "meterBallisticsHelp": "How fast the meters rise and fall.",
+    "meterBallisticsDigitalPpm": "Digital PPM (default)",
+    "meterBallisticsPpmI": "PPM Type I (DIN)",
+    "meterBallisticsPpmII": "PPM Type II (BBC)",
+    "meterBallisticsVu": "VU (slow)",
+    "meterBallisticsInstant": "Instant (fast)",
     "disableAutoVolumeAndTrim": "Deaktiver automatiske volum- og klippejusteringer",
     "disableLimiter": "Deaktiver brickwall-limiter",
     "disableLimiterHelp": "Slår av brickwall-limiteren og tillater topper over taket. Kan endres under avspilling.",
@@ -380,7 +391,22 @@
     "noneSelected": "Ikke valgt",
     "save": "Lagre",
     "close": "Lukk",
-    "preview": "Forhåndsvisning"
+    "preview": "Forhåndsvisning",
+    "transitionMode": "Standard overgangsmodus",
+    "transitionModeHelp": "Overgang som brukes på nylig importerte spor. Hvert spor kan fortsatt veksle mellom krysstoning og start neste i egenskapene sine.",
+    "transitionModeCrossfade": "Krysston til neste",
+    "transitionModeStartNext": "Start neste ved markør",
+    "autoCueNext": "Klargjør neste element automatisk selv uten sluttoppførsel",
+    "autoCueNextHelp": "Klargjør neste element som «Neste» selv når elementet som spilles ikke har noen sluttoppførsel, slik at du kan bla gjennom spillelisten med én GO-knapp. Det starter ikke avspilling automatisk.",
+    "tabAudioRouting": "Lydruting",
+    "tabPlaybackBehaviour": "Avspillingsatferd",
+    "tabUserInterface": "Brukergrensesnitt",
+    "stopAllFade": "Uttoning for «Stopp alle» (sekunder)",
+    "stopAllFadeHelp": "Hvor lang tid alle klipp bruker på å tone ut når du trykker «Stopp alle». Sett til 0 for umiddelbar stopp.",
+    "scrollToPlaying": "Rull til elementet som spilles av",
+    "scrollToPlayingHelp": "Hold elementet som spilles av automatisk sentrert i listen.",
+    "indexDisplayStart": "Nummerer spillelisteelementer fra",
+    "indexDisplayStartHelp": "Styrer tallet som vises for det første elementet i spillelisten. Interne indekser og API-indeksstier forblir nullbaserte."
   },
   "common": {
     "default": "standard",
@@ -432,14 +458,16 @@
     "endPlayNext": "Slutt: Spill neste",
     "endGotoItem": "Slutt: Gå til element",
     "endGotoIndex": "Slutt: Gå til indeks",
-    "endLoop": "Slutt: Loop"
+    "endLoop": "Slutt: Loop",
+    "startNextMarker": "Starter neste spor ved {time}"
   },
   "waveform": {
     "decreaseBy": "Reduser med {seconds}s",
     "increaseBy": "Øk med {seconds}s",
     "playFadeTitle": "Innfading: {seconds}s",
     "stopFadeTitle": "Utfading: {seconds}s",
-    "crossFadeTitle": "Kryssfading: {seconds}s"
+    "crossFadeTitle": "Kryssfading: {seconds}s",
+    "startNextTitle": "Start neste: {time}"
   },
   "unsavedModal": {
     "title": "Ulagrede endringer",
@@ -452,12 +480,23 @@
     "title": "Tilkobling mistet",
     "message": "Tilkoblingen til LivePlay-serveren på {url} har gått tapt.",
     "attempting": "Prøver å koble til på nytt…",
-    "reconnect": "Koble til på nytt",
+    "attemptCount": "(Mislykkede forsøk: {count})",
+    "locked": "Avspilling og redigering er satt på pause til tilkoblingen er tilbake — endringer gjort nå kunne ikke sendes til serveren.",
+    "pill": "Kobler til på nytt…",
+    "reconnect": "Prøv igjen nå",
     "restart": "Start på nytt",
     "exit": "Avslutt",
-    "reconnectHint": "Koble til på nytt prøver samme server igjen.",
+    "reconnectHint": "Prøv igjen nå kontakter samme server med én gang i stedet for å vente på neste automatiske forsøk.",
     "restartHint": "Start på nytt starter bare klienten på nytt (lydserveren fortsetter å kjøre).",
     "exitHint": "Avslutt lukker klienten."
+  },
+  "sessionRecovery": {
+    "title": "Serveren ble startet på nytt",
+    "message": "Tilkoblingen er tilbake, men serveren har ikke lenger et prosjekt åpent — den ble mest sannsynlig startet på nytt. Prosjektet ditt ligger fortsatt på denne maskinen.",
+    "resume": "Fortsett økten",
+    "startFresh": "Begynn på nytt",
+    "resumeHint": "Fortsett økten åpner dette prosjektet på serveren igjen slik at du kan fortsette.",
+    "startFreshHint": "Begynn på nytt lukker det og går tilbake til velkomstskjermen."
   },
   "audioImport": {
     "title": "Importer lyd",
@@ -486,5 +525,14 @@
     "deleteAll": "Slett {count} valgte elementer",
     "deleteOnly": "Slett bare «{name}»",
     "cancel": "Avbryt"
+  },
+  "showMode": {
+    "toggle": "Show-modus",
+    "toggleHint": "Bytt til en forenklet, touch-vennlig avspillingsvisning for show.",
+    "exit": "Avslutt",
+    "exitHint": "Hold inne for å avslutte Show-modus",
+    "noItems": "Ingen elementer i dette prosjektet",
+    "holdToStop": "Hold inne for å stoppe",
+    "holdToStopAll": "Hold inne for å stoppe alt"
   }
 }

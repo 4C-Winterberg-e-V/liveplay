@@ -1,5 +1,6 @@
 <template>
-  <div class="cart-player" :class="{ collapsed: cartCollapsed }" ref="cartPlayerRef">
+  <div class="cart-player" ref="cartPlayerRef" :class="{ collapsed: cartCollapsed, 'show-mode': showMode }">
+
     <div class="cart-header">
       <!-- Collapse toggle: phones only. Folds the cart away to give the
            playlist more height. -->
@@ -56,6 +57,8 @@ const { getCartItem } = useCartItems();
 const { keyMappings, mount: mountHotkeys, unmount: unmountHotkeys } = useCartHotkeys();
 const { mount: mountMidi, unmount: unmountMidi } = useMidiController();
 const { t } = useLocalization();
+const { uiMode } = useUiMode();
+const showMode = computed(() => uiMode.value === 'playback');
 
 // Popping the cart into a separate OS window needs Electron's multi-window IPC;
 // hide the button in a pure browser context (no dead click).
@@ -232,5 +235,11 @@ onMounted(() => {
   &.grid-cols-4 {
     grid-template-columns: repeat(4, 1fr);
   }
+}
+
+/* Show Mode — taller cart tiles so the enlarged play/stop controls and
+   3-line names have room to breathe on a touch screen. */
+.cart-player.show-mode .cart-grid {
+  grid-auto-rows: minmax(150px, 1fr);
 }
 </style>

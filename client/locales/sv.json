@@ -1,4 +1,4 @@
-﻿{
+{
   "_metadata": {
     "code": "sv",
     "name": "Swedish",
@@ -156,7 +156,10 @@
     "multiSelectWaveform": "Flera objekt valda – välj ett enskilt objekt för att visa dess vågform.",
     "multiSelectOutPointDisabled": "Inaktiverad vid flerval (utpunkten beror på varje objekts längd).",
     "noWaveformData": "Inga vågformsdata tillgängliga",
-    "ltcRequiresDevice": "Välj en LTC-utgångsenhet i Projektinställningar för att aktivera timecode-utgång."
+    "ltcRequiresDevice": "Välj en LTC-utgångsenhet i Projektinställningar för att aktivera timecode-utgång.",
+    "startNextEnable": "Starta nästa vid markör",
+    "startNextTime": "Starta nästa vid",
+    "startNextFadeOut": "Tona ut vid markör"
   },
   "playback": {
     "panic": "Stoppa alla signaler",
@@ -165,7 +168,8 @@
     "stop": "Stoppa",
     "delete": "Ta bort",
     "edit": "Redigera",
-    "masterMix": "Master"
+    "masterMix": "Master",
+    "startNextCountdown": "Tid tills nästa spår börjar"
   },
   "endBehavior": {
     "nothing": "Ingenting",
@@ -371,6 +375,13 @@
     "meterModeDbfs": "dBFS (digital fullskala)",
     "meterModeDbtp": "dBTP (sant toppvärde)",
     "meterModeRms": "RMS",
+    "meterBallistics": "Meter Ballistics",
+    "meterBallisticsHelp": "How fast the meters rise and fall.",
+    "meterBallisticsDigitalPpm": "Digital PPM (default)",
+    "meterBallisticsPpmI": "PPM Type I (DIN)",
+    "meterBallisticsPpmII": "PPM Type II (BBC)",
+    "meterBallisticsVu": "VU (slow)",
+    "meterBallisticsInstant": "Instant (fast)",
     "disableAutoVolumeAndTrim": "Inaktivera automatisk volym- och trimjustering",
     "disableLimiter": "Inaktivera brickwall-limiter",
     "disableLimiterHelp": "Stänger av brickwall-limitern och tillåter toppar över taket. Kan ändras under uppspelning.",
@@ -380,7 +391,22 @@
     "noneSelected": "Ej vald",
     "save": "Spara",
     "close": "Stäng",
-    "preview": "Förhandsgranskning"
+    "preview": "Förhandsgranskning",
+    "transitionMode": "Standardövergångsläge",
+    "transitionModeHelp": "Övergång som tillämpas på nyligen importerade spår. Varje spår kan fortfarande växla mellan övertoning och starta nästa i sina egenskaper.",
+    "transitionModeCrossfade": "Övertona till nästa",
+    "transitionModeStartNext": "Starta nästa vid markör",
+    "autoCueNext": "Förbered nästa objekt automatiskt även utan slutbeteende",
+    "autoCueNextHelp": "Förbereder nästa objekt som «Nästa» även när objektet som spelas inte har något slutbeteende, så att du kan stega genom spellistan med en enda GO-knapp. Det startar inte uppspelning automatiskt.",
+    "tabAudioRouting": "Ljudrutt",
+    "tabPlaybackBehaviour": "Uppspelningsbeteende",
+    "tabUserInterface": "Användargränssnitt",
+    "stopAllFade": "Uttoning för ”Stoppa alla” (sekunder)",
+    "stopAllFadeHelp": "Hur lång tid alla ljudklipp tar på sig att tona ut när du trycker på ”Stoppa alla”. Ställ in 0 för omedelbart stopp.",
+    "scrollToPlaying": "Rulla till det som spelas upp",
+    "scrollToPlayingHelp": "Håll automatiskt det uppspelade objektet centrerat i listan.",
+    "indexDisplayStart": "Numrera spellisteobjekt från",
+    "indexDisplayStartHelp": "Styr numret som visas för det första objektet i spellistan. Interna index och API-indexsökvägar förblir nollbaserade."
   },
   "common": {
     "default": "standard",
@@ -432,14 +458,16 @@
     "endPlayNext": "Slut: Spela nästa",
     "endGotoItem": "Slut: Gå till objekt",
     "endGotoIndex": "Slut: Gå till index",
-    "endLoop": "Slut: Upprepa"
+    "endLoop": "Slut: Upprepa",
+    "startNextMarker": "Startar nästa spår vid {time}"
   },
   "waveform": {
     "decreaseBy": "Minska med {seconds}s",
     "increaseBy": "Öka med {seconds}s",
     "playFadeTitle": "Infadning: {seconds}s",
     "stopFadeTitle": "Utfadning: {seconds}s",
-    "crossFadeTitle": "Korstonande: {seconds}s"
+    "crossFadeTitle": "Korstonande: {seconds}s",
+    "startNextTitle": "Starta nästa: {time}"
   },
   "unsavedModal": {
     "title": "Osparade ändringar",
@@ -452,12 +480,23 @@
     "title": "Anslutning förlorad",
     "message": "Anslutningen till LivePlay-servern på {url} har förlorats.",
     "attempting": "Försöker återansluta…",
-    "reconnect": "Återanslut",
+    "attemptCount": "(Misslyckade försök: {count})",
+    "locked": "Uppspelning och redigering är pausade tills anslutningen är tillbaka — ändringar som görs nu skulle inte kunna skickas till servern.",
+    "pill": "Återansluter…",
+    "reconnect": "Försök igen nu",
     "restart": "Starta om",
     "exit": "Avsluta",
-    "reconnectHint": "Återanslut försöker med samma server igen.",
+    "reconnectHint": "Försök igen nu kontaktar samma server direkt i stället för att vänta på nästa automatiska försök.",
     "restartHint": "Starta om startar bara om klienten (ljudservern fortsätter att köra).",
     "exitHint": "Avsluta stänger klienten."
+  },
+  "sessionRecovery": {
+    "title": "Servern har startats om",
+    "message": "Anslutningen är tillbaka, men servern har inte längre något projekt öppet — den har troligen startats om. Ditt projekt finns kvar på den här datorn.",
+    "resume": "Fortsätt sessionen",
+    "startFresh": "Börja om",
+    "resumeHint": "Fortsätt sessionen öppnar det här projektet på servern igen så att du kan fortsätta.",
+    "startFreshHint": "Börja om stänger det och återgår till välkomstskärmen."
   },
   "audioImport": {
     "title": "Importera ljud",
@@ -486,5 +525,14 @@
     "deleteAll": "Ta bort {count} markerade objekt",
     "deleteOnly": "Ta bort endast ”{name}”",
     "cancel": "Avbryt"
+  },
+  "showMode": {
+    "toggle": "Föreställningsläge",
+    "toggleHint": "Växla till en förenklad, pekvänlig uppspelningsvy för föreställningar.",
+    "exit": "Avsluta",
+    "exitHint": "Håll intryckt för att avsluta föreställningsläget",
+    "noItems": "Inga objekt i det här projektet",
+    "holdToStop": "Håll intryckt för att stoppa",
+    "holdToStopAll": "Håll intryckt för att stoppa allt"
   }
 }

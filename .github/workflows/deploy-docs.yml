@@ -36,7 +36,11 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Clean install dependencies
+      # docs-site IS a pnpm workspace package here (see pnpm-workspace.yaml),
+      # so its deps resolve from the root pnpm-lock.yaml. That also makes
+      # upstream's npm@11 pin unnecessary — the npm 10.8 "edgesOut" resolver
+      # crash on Nuxt's platform-gated oxc bindings is an npm bug pnpm never had.
+      - name: Install dependencies
         working-directory: ./docs-site
         shell: bash
         run: |
