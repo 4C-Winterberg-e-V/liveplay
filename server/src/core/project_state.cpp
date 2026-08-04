@@ -8,6 +8,7 @@
 #include "liveplay/util/unicode_path.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <ctime>
@@ -24,6 +25,36 @@ namespace {
 inline std::string id_to_string(const audio::CueId& id)          { return id.value; }
 inline std::string id_to_string(const audio::MixerChannelId& id) { return id.value; }
 inline std::string id_to_string(const audio::DeviceId& id)       { return id.value; }
+
+// ---------------------------------------------------------------------------
+// Master-bus budget for device routings
+// ---------------------------------------------------------------------------
+// Masters 0/1 belong to the engine's built-in "Main" routing (see
+// AudioEngine::ensure_default_routing) and the top pair to the preview bus, so
+// device routings claim pairs from [kFirstDeviceMaster, kDeviceMasterLimit).
+// On the engine's default 32-channel master bus that leaves 14 pairs.
+constexpr audio::MasterChannelIndex kFirstDeviceMaster = 2;
+constexpr audio::MasterChannelIndex kPreviewMasterL    = 30;
+constexpr audio::MasterChannelIndex kPreviewMasterR    = 31;
+constexpr audio::MasterChannelIndex kDeviceMasterLimit = kPreviewMasterL;
+
+// Lower-case for case-insensitive device-name matching. Mirrors what
+// AudioEngine::open_device_by_name() does when it resolves a name substring.
+inline std::string to_lower_ascii(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+    return s;
+}
+
+// Hardware channels for the LTC output. Timecode is mono, so an explicit
+// settings.ltcChannel pins it to that single hardware channel. With no explicit
+// choice we keep the historical behaviour — hardware channels 1 and 2 of the
+// LTC device both carry the timecode.
+inline OutputChannelPair ltc_output_channels(const json& settings) {
+    if (const auto ch = output_channel_setting(settings, "ltcChannel"))
+        return OutputChannelPair{*ch, *ch};
+    return kDefaultOutputChannels;
+}
 
 // Convert a Unix timestamp (seconds since epoch) to an ISO 8601 UTC string.
 inline std::string unix_ts_to_iso(std::int64_t unix_sec) {
@@ -455,6 +486,12 @@ ProjectState::~ProjectState() {
     if (!preview_device_.empty()) {
         engine_.close_device(preview_device_);
     }
+    // Release every interface a device routing opened. These are deliberately
+    // kept open for the process lifetime (several routings share one handle),
+    // so shutdown is the only place they get closed.
+    for (const auto& [_, dev] : open_devices_) {
+        if (dev.id != preview_device_) engine_.close_device(dev.id);
+    }
 }
 
 void ProjectState::start_async_mirror() {
@@ -476,6 +513,7 @@ void ProjectState::start_async_mirror() {
             struct LtcItemSnap { bool enabled; std::string timecode; int fps_index; };
             std::unordered_map<std::string, LtcItemSnap> ltc_snaps;
             std::string ltc_device_name;
+            OutputChannelPair ltc_channels{};
             std::unordered_map<std::string, std::filesystem::path> actually_wanted;
             {
                 std::lock_guard lock{mutex_};
@@ -504,11 +542,12 @@ void ProjectState::start_async_mirror() {
                         }
                     }
                 }
-                // Snapshot the project-level LTC output device name.
+                // Snapshot the project-level LTC output device + channel.
                 if (doc.contains("settings") && doc["settings"].is_object()) {
                     const auto& s = doc["settings"];
                     if (s.contains("ltcDevice") && s["ltcDevice"].is_string())
                         ltc_device_name = s["ltcDevice"].get<std::string>();
+                    ltc_channels = ltc_output_channels(s);
                 }
 
                 // Unload missing cues
@@ -574,7 +613,7 @@ void ProjectState::start_async_mirror() {
                 for (auto& [_, ls] : ltc_snaps)
                     if (ls.enabled) { any_ltc_enabled = true; break; }
                 if (any_ltc_enabled && !ltc_device_name.empty())
-                    ensure_device_routing(ltc_device_name);
+                    ensure_device_routing(ltc_device_name, ltc_channels);
             }
 
             // Phase 3: register results + metadata under lock. Cheap because
@@ -651,7 +690,8 @@ void ProjectState::start_async_mirror() {
                             }
                             // Route the LTC synthetic channel to the LTC device mixer.
                             if (!ltc_device_name.empty()) {
-                                auto dr_it = device_routings_.find(ltc_device_name);
+                                auto dr_it = device_routings_.find(
+                                    device_routing_key(ltc_device_name, ltc_channels));
                                 if (dr_it != device_routings_.end()) {
                                     const auto ltc_ch = static_cast<audio::ChannelIndex>(
                                         cue->source_channel_count() - 1);
@@ -731,7 +771,7 @@ void ProjectState::reset() {
     }
     next_item_override_.clear();
 
-    std::lock_guard lock{mutex_};
+    std::unique_lock lock{mutex_};
 
     // Stop and unload every engine cue. Clearing the bookkeeping maps alone is
     // not enough — the PlaybackItems live in the engine and keep playing until
@@ -757,6 +797,13 @@ void ProjectState::reset() {
     project_file_path_.clear();
     document_ = default_empty_document();
     apply_to_engine_locked();
+
+    // Every device routing belonged to the project we just closed, and its cues
+    // are already stopped and unloaded — hand the mixers and master pairs back
+    // so the next project starts from a clean bus. prune_device_routings()
+    // acquires mutex_ itself.
+    lock.unlock();
+    prune_device_routings();
 }
 
 json ProjectState::default_empty_document() {
@@ -1168,6 +1215,7 @@ void ProjectState::apply_ltc_device_routing() {
     // 1. Under a brief lock, gather: the configured LTC device name and the
     //    list of LTC-enabled cues with their LTC channel index.
     std::string ltc_device;
+    OutputChannelPair ltc_channels{};
     std::vector<std::pair<audio::CueId, audio::ChannelIndex>> ltc_routes;
     {
         std::lock_guard lock{mutex_};
@@ -1175,6 +1223,7 @@ void ProjectState::apply_ltc_device_routing() {
             const auto& s = document_["settings"];
             if (s.contains("ltcDevice") && s["ltcDevice"].is_string())
                 ltc_device = s["ltcDevice"].get<std::string>();
+            ltc_channels = ltc_output_channels(s);
         }
         if (!ltc_device.empty()) {
             for (auto& [uuid, cue_id] : item_uuid_to_cue_) {
@@ -1192,7 +1241,7 @@ void ProjectState::apply_ltc_device_routing() {
 
     // 2. Ensure the LTC device is open and has a mixer (acquires/releases mutex
     //    internally — safe because we're not holding mutex_ here).
-    const auto ltc_mixer = ensure_device_routing(ltc_device);
+    const auto ltc_mixer = ensure_device_routing(ltc_device, ltc_channels);
     if (ltc_mixer.empty()) return;
 
     // 3. Route each LTC channel to the LTC device mixer (engine ops; no mutex
@@ -1210,6 +1259,7 @@ void ProjectState::apply_ltc_device_routing() {
 // ---------------------------------------------------------------------------
 void ProjectState::apply_default_device_routing() {
     std::string device_name;
+    OutputChannelPair channels{};
     std::vector<audio::CueId> non_override_cues;
     {
         std::lock_guard lock{mutex_};
@@ -1217,6 +1267,7 @@ void ProjectState::apply_default_device_routing() {
             const auto& s = document_["settings"];
             if (s.contains("defaultOutputDevice") && s["defaultOutputDevice"].is_string())
                 device_name = s["defaultOutputDevice"].get<std::string>();
+            channels = output_channel_pair_setting(s, "defaultOutputChannels");
         }
         if (!device_name.empty()) {
             for_each_item(document_,
@@ -1235,14 +1286,15 @@ void ProjectState::apply_default_device_routing() {
     }
     if (device_name.empty() || non_override_cues.empty()) return;
 
-    const auto mixer = ensure_device_routing(device_name);
+    const auto mixer = ensure_device_routing(device_name, channels);
     if (mixer.empty()) return;
 
     for (const auto& cue_id : non_override_cues)
         route_cue_to_mixer(cue_id, mixer);
 
-    Logger::info("apply_default_device_routing: routed {} cue(s) to '{}'",
-                 non_override_cues.size(), device_name);
+    Logger::info("apply_default_device_routing: routed {} cue(s) to '{}' ch {}/{}",
+                 non_override_cues.size(), device_name,
+                 channels.left + 1, channels.right + 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -1553,6 +1605,9 @@ bool ProjectState::replace_full_document(const json& doc) {
     start_async_mirror();
     // Route LTC channels to the LTC device (also acquires mutex_ internally).
     apply_ltc_device_routing();
+    // The incoming document defines the full set of device routings; anything
+    // left over from the previous one is stale.
+    prune_device_routings();
     return true;
 }
 
@@ -2068,6 +2123,9 @@ bool ProjectState::play_item(const std::string& uuid,
     double       crossfade_sec = 0.0;
     double       stop_fade_sec = 0.0;
     std::string  device_override;
+    OutputChannelPair device_override_channels{};
+    std::string  default_device;
+    OutputChannelPair default_device_channels{};
     std::string  start_behavior_action;
     std::string  start_behavior_target_uuid;
     std::string  end_behavior_action;
@@ -2113,6 +2171,8 @@ bool ProjectState::play_item(const std::string& uuid,
             if (found->contains("deviceOverride") &&
                 (*found)["deviceOverride"].is_string()) {
                 device_override = (*found)["deviceOverride"].get<std::string>();
+                device_override_channels = output_channel_pair_setting(
+                    *found, "deviceOverrideChannels");
             }
             if (found->contains("startBehavior") &&
                 (*found)["startBehavior"].is_object()) {
@@ -2136,6 +2196,15 @@ bool ProjectState::play_item(const std::string& uuid,
                     custom_actions_snapshot.push_back(std::move(sca));
                 }
             }
+        }
+
+        // The project-wide output, used when this cue has no override of its own.
+        if (document_.contains("settings") && document_["settings"].is_object()) {
+            const auto& s = document_["settings"];
+            if (s.contains("defaultOutputDevice") && s["defaultOutputDevice"].is_string())
+                default_device = s["defaultOutputDevice"].get<std::string>();
+            default_device_channels =
+                output_channel_pair_setting(s, "defaultOutputChannels");
         }
 
         // Collect every cue id except this one.
@@ -2177,15 +2246,33 @@ bool ProjectState::play_item(const std::string& uuid,
     }
     // "no-ducking" → do nothing.
 
-    // Apply per-cue device routing right before play.
+    // Apply device routing right before play. Order matters: the cue must end
+    // up on exactly one mixer, and route_cue_to_mixer() is what guarantees that
+    // by unrouting it from every other one first.
     if (!device_override.empty()) {
-        const auto mixer = ensure_device_routing(device_override);
+        const auto mixer = ensure_device_routing(device_override,
+                                                device_override_channels);
+        if (!mixer.empty()) {
+            route_cue_to_mixer(target_cue, mixer);
+        } else {
+            engine_.ensure_default_routing();
+        }
+    } else if (!default_device.empty()) {
+        // No per-cue override, but the project names an output device: send the
+        // cue there, on the hardware channels chosen in the project settings.
+        // Falling through to the engine's Main routing here (what this used to
+        // do) dragged the cue back onto hardware channels 1/2 on every play,
+        // which is why a re-started cue ignored the channel selection.
+        const auto mixer = ensure_device_routing(default_device,
+                                                default_device_channels);
         if (!mixer.empty()) {
             route_cue_to_mixer(target_cue, mixer);
         } else {
             engine_.ensure_default_routing();
         }
     } else {
+        // No device selected anywhere — take the cue off any device routing it
+        // may have had and let the engine's Main routing carry it.
         std::vector<audio::MixerChannelId> override_mixers;
         {
             std::lock_guard lock{mutex_};
@@ -2425,52 +2512,204 @@ bool ProjectState::trigger_item(const std::string& uuid,
 }
 
 // ---------------------------------------------------------------------------
-// Per-device routing — each cue with a `deviceOverride` is wired through a
-// dedicated mixer + pair of master channels into that specific output
-// device. Items without an override fall through to the engine's default
-// Main mixer (master channels 0/1, default device).
+// Per-device routing — every output the project names (the default output, the
+// LTC output, each cue's `deviceOverride`) is wired through a dedicated mixer
+// and the master channel(s) behind it into specific *hardware channels* of that
+// device. One routing exists per (device, channel pair); cues without any
+// override fall through to the engine's default Main mixer (masters 0/1 on the
+// default device).
 // ---------------------------------------------------------------------------
-audio::MixerChannelId
-ProjectState::ensure_device_routing(const std::string& device_name) {
+audio::ChannelCount
+ProjectState::device_channel_count(const std::string& device_name) const {
+    if (device_name.empty()) return 0;
+    const auto needle = to_lower_ascii(device_name);
+    for (const auto& d : engine_.enumerate_devices()) {
+        if (to_lower_ascii(d.display_name).find(needle) != std::string::npos)
+            return d.channel_count;
+    }
+    return 0;
+}
+
+ProjectState::OpenDevice
+ProjectState::ensure_device_open(const std::string& device_name) {
     if (device_name.empty()) return {};
     {
         std::lock_guard lock{mutex_};
-        auto it = device_routings_.find(device_name);
+        auto it = open_devices_.find(device_name);
+        if (it != open_devices_.end()) return it->second;
+    }
+
+    // Open with every channel the device reports so any hardware output the
+    // operator picks is addressable — an 18-out interface opened as stereo
+    // silently drops channels 3..18. Drivers can refuse their own maximum
+    // (WASAPI shared mode routinely exposes only a stereo pair), so fall back
+    // rather than leaving the output dead.
+    const auto reported = device_channel_count(device_name);
+    const auto wanted   = std::max<audio::ChannelCount>(reported, 2);
+
+    OpenDevice mine{engine_.open_device_by_name(device_name, wanted), wanted};
+    if (mine.id.empty() && wanted > 2) {
+        Logger::warn("ensure_device_open: '{}' refused {} output channels — "
+                     "retrying in stereo", device_name, wanted);
+        mine = OpenDevice{engine_.open_device_by_name(device_name, 2), 2};
+    }
+    if (mine.id.empty()) return {};
+
+    OpenDevice winner{};
+    bool       lost_race = false;
+    {
+        std::lock_guard lock{mutex_};
+        const auto [it, inserted] = open_devices_.emplace(device_name, mine);
+        winner    = it->second;
+        lost_race = !inserted;
+    }
+    if (lost_race) {
+        // Another thread opened the same device while we were outside the lock.
+        // Drop our duplicate so the interface isn't held open twice.
+        engine_.close_device(mine.id);
+        return winner;
+    }
+    Logger::info("ensure_device_open: '{}' open with {} output channel(s)",
+                 device_name, mine.channels);
+    return mine;
+}
+
+bool ProjectState::claim_master_pair_locked(audio::MasterChannelIndex& left,
+                                            audio::MasterChannelIndex& right) {
+    const auto limit = std::min<audio::MasterChannelIndex>(
+        kDeviceMasterLimit, engine_.config().master_channels);
+    for (auto l = kFirstDeviceMaster; l + 1 < limit; l += 2) {
+        if (claimed_master_pairs_.count(l)) continue;
+        claimed_master_pairs_.insert(l);
+        left  = l;
+        right = l + 1;
+        return true;
+    }
+    return false;
+}
+
+void ProjectState::release_master_pair_locked(audio::MasterChannelIndex left) {
+    claimed_master_pairs_.erase(left);
+}
+
+std::unordered_set<std::string> ProjectState::desired_routing_keys_locked() {
+    std::unordered_set<std::string> keys;
+
+    if (document_.contains("settings") && document_["settings"].is_object()) {
+        const auto& s = document_["settings"];
+        const auto add = [&](const char* device_key, OutputChannelPair ch) {
+            const auto it = s.find(device_key);
+            if (it == s.end() || !it->is_string()) return;
+            const auto name = it->get<std::string>();
+            if (!name.empty()) keys.insert(device_routing_key(name, ch));
+        };
+        add("defaultOutputDevice",
+            output_channel_pair_setting(s, "defaultOutputChannels"));
+        add("ltcDevice", ltc_output_channels(s));
+    }
+
+    for_each_item(document_, [&](json& item, const std::string&) {
+        if (!item.contains("deviceOverride") || !item["deviceOverride"].is_string())
+            return;
+        const auto name = item["deviceOverride"].get<std::string>();
+        if (name.empty()) return;
+        keys.insert(device_routing_key(
+            name, output_channel_pair_setting(item, "deviceOverrideChannels")));
+    });
+
+    return keys;
+}
+
+void ProjectState::prune_device_routings() {
+    std::vector<DeviceRouting> stale;
+    {
+        std::lock_guard lock{mutex_};
+        const auto wanted = desired_routing_keys_locked();
+        for (auto it = device_routings_.begin(); it != device_routings_.end();) {
+            if (wanted.count(it->first) != 0) { ++it; continue; }
+            stale.push_back(it->second);
+            release_master_pair_locked(it->second.master_l);
+            it = device_routings_.erase(it);
+        }
+    }
+    // The hardware device stays open — another routing may share it — but the
+    // mixer and its master slots go back to the pool so re-picking channels in
+    // the UI doesn't strand them. Removing the mixer also drops the item routes
+    // that fed it; any cue still pointing here is re-wired on its next play.
+    for (const auto& r : stale) {
+        engine_.remove_mixer_channel(r.mixer);
+        engine_.clear_master_assignment(r.master_l);
+        if (r.master_r != r.master_l) engine_.clear_master_assignment(r.master_r);
+        Logger::info("prune_device_routings: dropped '{}' ch {}/{} (masters {}/{})",
+                     r.device_name, r.channels.left + 1, r.channels.right + 1,
+                     r.master_l, r.master_r);
+    }
+}
+
+audio::MixerChannelId
+ProjectState::ensure_device_routing(const std::string& device_name,
+                                    OutputChannelPair channels) {
+    if (device_name.empty()) return {};
+    const auto key = device_routing_key(device_name, channels);
+    {
+        std::lock_guard lock{mutex_};
+        auto it = device_routings_.find(key);
         if (it != device_routings_.end()) return it->second.mixer;
     }
 
     // Open device + allocate masters + create mixer (all engine APIs are
     // independently locked, so we don't hold our own mutex during them).
-    const auto dev = engine_.open_device_by_name(device_name, 2);
-    if (dev.empty()) {
+    const auto dev = ensure_device_open(device_name);
+    if (dev.id.empty()) {
         Logger::warn("ensure_device_routing: could not open '{}'", device_name);
         return {};
     }
+    if (channels.highest() >= dev.channels) {
+        Logger::warn("ensure_device_routing: '{}' is open with {} channel(s); "
+                     "hardware channel {} is out of range and stays silent",
+                     device_name, dev.channels, channels.highest() + 1);
+    }
 
-    audio::MasterChannelIndex master_l;
-    audio::MasterChannelIndex master_r;
+    audio::MasterChannelIndex master_l = 0;
+    audio::MasterChannelIndex master_r = 0;
     {
         std::lock_guard lock{mutex_};
-        master_l = next_override_master_;
-        master_r = next_override_master_ + 1;
-        next_override_master_ += 2;
+        // Re-check — another thread may have built this routing while we were
+        // opening the device.
+        auto it = device_routings_.find(key);
+        if (it != device_routings_.end()) return it->second.mixer;
+        if (!claim_master_pair_locked(master_l, master_r)) {
+            Logger::error("ensure_device_routing: master bus exhausted — cannot "
+                          "route '{}' to hardware channel(s) {}/{}",
+                          device_name, channels.left + 1, channels.right + 1);
+            return {};
+        }
     }
+
+    // A mono selection is wired through a single master: the render loop sums
+    // every master landing on the same hardware channel, so using both halves
+    // of the pair there would play the signal twice (+6 dB). The second index
+    // stays claimed so releasing a pair remains symmetric.
+    if (channels.mono()) master_r = master_l;
 
     const auto mixer = engine_.create_mixer_channel(
-        "Output: " + device_name);
-    engine_.assign_master_to_device(master_l, dev, 0);
-    engine_.assign_master_to_device(master_r, dev, 1);
+        device_routing_label(device_name, channels));
+    engine_.assign_master_to_device(master_l, dev.id, channels.left);
     engine_.route_mixer_to_master(mixer, master_l);
-    engine_.route_mixer_to_master(mixer, master_r);
+    if (!channels.mono()) {
+        engine_.assign_master_to_device(master_r, dev.id, channels.right);
+        engine_.route_mixer_to_master(mixer, master_r);
+    }
 
     {
         std::lock_guard lock{mutex_};
-        device_routings_[device_name] = DeviceRouting{
-            dev, mixer, master_l, master_r,
+        device_routings_[key] = DeviceRouting{
+            dev.id, mixer, master_l, master_r, device_name, channels,
         };
     }
-    Logger::info("ensure_device_routing: '{}' → mixer '{}' (masters {}/{})",
-                 device_name, mixer.value, master_l, master_r);
+    Logger::info("ensure_device_routing: '{}' ch {}/{} → mixer '{}' (masters {}/{})",
+                 device_name, channels.left + 1, channels.right + 1,
+                 mixer.value, master_l, master_r);
     return mixer;
 }
 
@@ -2480,11 +2719,19 @@ void ProjectState::route_cue_to_mixer(const audio::CueId& cue,
     if (!pi) return;
     const auto src_count = pi->source_channel_count();
 
-    // Drop any prior item-to-mixer routes (incl. Main) by walking every
-    // known mixer — the engine doesn't have a "list routes for cue" API, so
-    // we unroute against each mixer we know about. Cheap because the
-    // unroute is a no-op when no route exists.
+    // Drop any prior item-to-mixer routes by walking every known mixer — the
+    // engine doesn't have a "list routes for cue" API, so we unroute against
+    // each mixer we know about. Cheap because the unroute is a no-op when no
+    // route exists.
+    //
+    // The engine's own "Main" mixer has to be in that list. It isn't in
+    // mixers_ (that map only holds mixers the *document* defines, which is
+    // normally empty) — leaving it out meant a cue re-routed to hardware
+    // channels 5/6 kept its Main route as well and came out of 1/2 at the same
+    // time.
     std::vector<audio::MixerChannelId> known_mixers;
+    if (const auto main = engine_.default_mixer(); !main.empty())
+        known_mixers.push_back(main);
     {
         std::lock_guard lock{mutex_};
         for (auto& [_, m] : mixers_) known_mixers.push_back(m.id);
@@ -2504,15 +2751,10 @@ void ProjectState::route_cue_to_mixer(const audio::CueId& cue,
 // Preview routing — independent playback of a cue through the configured
 // preview device, used for DJ-style pre-listening. The infrastructure
 // (device + mixer + master assignments) is set up lazily on first preview
-// and reused for subsequent ones.
+// and reused for subsequent ones. kPreviewMasterL/R (declared at the top of
+// this file) reserve the tail of the master bus so preview never collides with
+// project routing.
 // ---------------------------------------------------------------------------
-namespace {
-// Master channels reserved for preview output. Picked from the tail of the
-// 32-channel master bus so they don't collide with project routing.
-constexpr audio::MasterChannelIndex kPreviewMasterL = 30;
-constexpr audio::MasterChannelIndex kPreviewMasterR = 31;
-}  // namespace
-
 bool ProjectState::start_preview(const std::string& item_uuid) {
     if (item_uuid.empty()) return false;
 
@@ -2520,6 +2762,7 @@ bool ProjectState::start_preview(const std::string& item_uuid) {
     std::filesystem::path file_path;
     double in_point = 0.0;
     std::string preview_device_name;
+    OutputChannelPair preview_channels{};
     {
         std::lock_guard lock{mutex_};
         // path
@@ -2537,6 +2780,7 @@ bool ProjectState::start_preview(const std::string& item_uuid) {
             if (s.contains("previewDevice") && s["previewDevice"].is_string()) {
                 preview_device_name = s["previewDevice"].get<std::string>();
             }
+            preview_channels = output_channel_pair_setting(s, "previewChannels");
         }
     }
     if (file_path.empty()) {
@@ -2566,13 +2810,15 @@ bool ProjectState::start_preview(const std::string& item_uuid) {
         // If the user changed the preview device since our last setup,
         // close the old one and start fresh.
         std::string current_name;
+        OutputChannelPair current_channels{};
         audio::DeviceId current_device;
         audio::MixerChannelId current_mixer;
         {
             std::lock_guard lock{mutex_};
-            current_name   = preview_device_name_;
-            current_device = preview_device_;
-            current_mixer  = preview_mixer_;
+            current_name     = preview_device_name_;
+            current_channels = preview_channels_;
+            current_device   = preview_device_;
+            current_mixer    = preview_mixer_;
         }
 
         if (preview_device_name.empty()) {
@@ -2580,37 +2826,58 @@ bool ProjectState::start_preview(const std::string& item_uuid) {
             return false;
         }
 
-        if (current_name != preview_device_name && !current_device.empty()) {
-            // Close old preview device + mixer.
-            engine_.close_device(current_device);
+        // Re-wire when either the device or its hardware channels changed. The
+        // device itself stays open — ensure_device_open() hands out one handle
+        // per interface, so closing it here could mute a project routing that
+        // shares it.
+        bool have_infra = !current_device.empty();
+        if (have_infra && (current_name != preview_device_name ||
+                           current_channels != preview_channels)) {
             if (!current_mixer.empty()) engine_.remove_mixer_channel(current_mixer);
-            std::lock_guard lock{mutex_};
-            preview_device_ = audio::DeviceId{};
-            preview_mixer_  = audio::MixerChannelId{};
-            preview_device_name_.clear();
+            engine_.clear_master_assignment(kPreviewMasterL);
+            engine_.clear_master_assignment(kPreviewMasterR);
+            {
+                std::lock_guard lock{mutex_};
+                preview_device_ = audio::DeviceId{};
+                preview_mixer_  = audio::MixerChannelId{};
+                preview_device_name_.clear();
+            }
+            have_infra = false;
         }
 
-        if (preview_device_.empty()) {
-            // Open the device, create a dedicated "Preview" mixer, wire it.
-            const auto dev = engine_.open_device_by_name(preview_device_name, 2);
-            if (dev.empty()) {
+        if (!have_infra) {
+            // Open the device, create a dedicated "Preview" mixer, wire it to
+            // the configured hardware channels.
+            const auto dev = ensure_device_open(preview_device_name);
+            if (dev.id.empty()) {
                 Logger::warn("preview: could not open device '{}'", preview_device_name);
                 return false;
             }
+            if (preview_channels.highest() >= dev.channels) {
+                Logger::warn("preview: '{}' is open with {} channel(s); hardware "
+                             "channel {} is out of range and stays silent",
+                             preview_device_name, dev.channels,
+                             preview_channels.highest() + 1);
+            }
             const auto mixer = engine_.create_mixer_channel("Preview");
-            engine_.assign_master_to_device(kPreviewMasterL, dev, 0);
-            engine_.assign_master_to_device(kPreviewMasterR, dev, 1);
+            engine_.assign_master_to_device(kPreviewMasterL, dev.id, preview_channels.left);
             engine_.route_mixer_to_master(mixer, kPreviewMasterL);
-            engine_.route_mixer_to_master(mixer, kPreviewMasterR);
+            // A mono selection uses one master only, so the signal isn't summed
+            // onto the same hardware channel twice.
+            if (!preview_channels.mono()) {
+                engine_.assign_master_to_device(kPreviewMasterR, dev.id, preview_channels.right);
+                engine_.route_mixer_to_master(mixer, kPreviewMasterR);
+            }
             {
                 std::lock_guard lock{mutex_};
-                preview_device_      = dev;
+                preview_device_      = dev.id;
                 preview_mixer_       = mixer;
                 preview_device_name_ = preview_device_name;
-                preview_mixer = mixer;
+                preview_channels_    = preview_channels;
             }
+            preview_mixer = mixer;
         } else {
-            preview_mixer = preview_mixer_;
+            preview_mixer = current_mixer;
         }
     }
 
@@ -2730,9 +2997,15 @@ bool ProjectState::patch_settings(const json& patch) {
             document_["settings"] = json::object();
         }
         for (auto& [k, v] : patch.items()) {
-            if (k == "ltcDevice")           ltc_device_changed     = true;
-            if (k == "defaultOutputDevice") default_device_changed = true;
-            if (k == "previewDevice")       preview_device_changed = true;
+            // A hardware-channel change re-applies the same routing path as a
+            // change of the device itself — the routing is identified by
+            // (device, channels), so either half moving means a re-wire.
+            if (k == "ltcDevice" || k == "ltcChannel")
+                ltc_device_changed     = true;
+            if (k == "defaultOutputDevice" || k == "defaultOutputChannels")
+                default_device_changed = true;
+            if (k == "previewDevice" || k == "previewChannels")
+                preview_device_changed = true;
             if (k == "outputTarget")        output_target_changed  = true;
             if (k == "disableLimiter") {
                 limiter_toggle_changed = true;
@@ -2753,6 +3026,11 @@ bool ProjectState::patch_settings(const json& patch) {
     if (ltc_device_changed)     apply_ltc_device_routing();
     if (default_device_changed) apply_default_device_routing();
     if (preview_device_changed) apply_preview_device_change();
+    // The routings that were just re-applied above left the previous
+    // (device, channel) combinations behind. Drop them now that every affected
+    // cue has been re-wired, so flipping a channel in the UI doesn't leak a
+    // mixer and a master pair per attempt.
+    if (ltc_device_changed || default_device_changed) prune_device_routings();
     // Apply brickwall limiter ceiling for the chosen output platform.
     if (output_target_changed)  engine_.set_master_ceiling_db(new_ceiling_db);
     // Enable/disable the limiter live so the change is heard immediately.

@@ -217,6 +217,12 @@ public:
     // number of times.
     void ensure_default_routing();
 
+    // The "Main" mixer ensure_default_routing() owns — the one wired to master
+    // channels 0/1. Empty until it has been created. Callers that re-route a cue
+    // elsewhere must unroute it from this mixer too, otherwise the cue keeps
+    // feeding hardware channels 0/1 in parallel with its new destination.
+    MixerChannelId default_mixer() const;
+
     // ---- Mixer channels --------------------------------------------------
     MixerChannelId create_mixer_channel(std::string display_name);
     void remove_mixer_channel(const MixerChannelId& id);
@@ -301,6 +307,9 @@ private:
     std::unordered_map<std::string, std::shared_ptr<PlaybackItem>>  items_;
     std::unordered_map<std::string, std::shared_ptr<MixerChannel>>  mixers_;
     std::vector<std::unique_ptr<Device>>         devices_;
+    // The mixer ensure_default_routing() created and wired to masters 0/1.
+    // Guarded by mutex_.
+    MixerChannelId                               default_mixer_;
 
     // Pending route description — the source-of-truth that topology rebuilds from.
     struct PendingRoute {

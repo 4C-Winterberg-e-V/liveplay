@@ -243,6 +243,8 @@ Example: a stereo MP3 (`L`, `R`) playing on a 4-channel cue can simultaneously f
 
 Mutators: `POST /api/routing/item_to_mixer`, `/mixer_to_master`, `/master_to_device`.
 
+Operators don't wire the matrix by hand for the common case. `ProjectState` builds one **device routing** — a mixer plus the master channel(s) behind it — per unique *(device, hardware channel pair)* the project references: the default output, the preview output, the LTC output, and every cue's `deviceOverride`. Two cues aimed at channels 5/6 of the same interface share a routing; a third on 7/8 of it gets its own. Which channels each of those lands on is chosen in the UI and stored in the project — see [Output device settings](#theme--settings). Master pairs come from a pool in `[2, 30)` (0/1 belong to the engine's `Main` routing, 30/31 to preview) and are returned to it when a selection change strands the routing they belonged to.
+
 ### Brick-wall master limiter
 
 [`limiter.hpp`](include/liveplay/audio/limiter.hpp). Defaults: −0.3 dBFS ceiling, 5 ms lookahead (~240 samples at 48 kHz), 50 ms release. The detector runs a sliding-max peak window with O(1) amortised update; the gain envelope snaps down within the lookahead window and one-pole-releases back to unity. Output is mathematically clamped to the ceiling so clipping is impossible for finite inputs.
@@ -483,6 +485,23 @@ Mutating routes return `{ ok: true, ... }` only — the full document is **not**
 |---------------|------|----------|--------------|
 | `PATCH /api/project/theme`    | partial `theme` object | the resulting `theme` object | `theme_patched` |
 | `PATCH /api/project/settings` | partial `settings` object | the resulting `settings` object | `settings_patched` |
+
+**Output device settings.** Each device selection is a device *name* (as listed by `GET /api/devices`) plus an optional choice of which **hardware channels** of it to land on. Channel indices are 0-based, matching `hw_channel` in the routing API — hardware channel 0 is the output labelled 1 on the interface.
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `defaultOutputDevice` | string \| null | device every cue without a `deviceOverride` plays through |
+| `defaultOutputChannels` | `[left, right]` | hardware channels for that device — defaults to `[0, 1]` |
+| `previewDevice` | string \| null | device for pre-listen (headphones button) |
+| `previewChannels` | `[left, right]` | hardware channels for the preview output — defaults to `[0, 1]` |
+| `ltcDevice` | string \| null | device the LTC timecode channel is sent to |
+| `ltcChannel` | int | single hardware channel for LTC (mono). Unset keeps the legacy behaviour: timecode on channels 0 *and* 1 |
+
+Per cue, the item object takes the same shape: `deviceOverride` (string) plus `deviceOverrideChannels` (`[left, right]`, default `[0, 1]`).
+
+A malformed or absent channel selection always falls back to `[0, 1]`, which is what LivePlay wired unconditionally before the selection existed — pre-existing projects keep playing out of the first stereo pair. Setting `left == right` makes the routing **mono**: one master channel feeds that one hardware channel, rather than two masters summing into it at +6 dB.
+
+The device itself is opened once per interface with as many output channels as it reports, so several routings can address different hardware channels of the same box. Picking a channel beyond what the device was opened with is logged as a warning and stays silent.
 
 #### Project export / import (`.lpa` archives)
 

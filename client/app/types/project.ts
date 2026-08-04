@@ -37,6 +37,14 @@ export interface AudioItem extends BaseItem {
   ltcEnabled?: boolean;         // output LTC on the project's ltcDevice when playing
   ltcStartTimecode?: string;    // starting timecode "HH:MM:SS:FF" (default "00:00:00:00")
   ltcFrameRate?: number;        // 0=24, 1=25, 2=29.97NDF, 3=29.97DF, 4=30 (default 4)
+  // Per-cue output routing. `deviceOverride` names an output device (as listed
+  // by GET /api/devices) to play this cue through instead of the project's
+  // defaultOutputDevice; `deviceOverrideChannels` picks which *hardware*
+  // channels of it to land on, as 0-based [left, right] indices — [0, 1] when
+  // absent, which is where overrides always went before this was selectable.
+  // The same index twice means mono into that single channel.
+  deviceOverride?: string;
+  deviceOverrideChannels?: [number, number];
 }
 
 // Waveform data format (from ffmpeg/audiowaveform)
