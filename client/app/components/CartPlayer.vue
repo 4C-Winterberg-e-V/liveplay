@@ -246,7 +246,7 @@ onMounted(() => {
   .cart-header-actions {
     display: flex;
     gap: var(--spacing-sm);
-    margin-left: auto;
+    margin-inline-start: auto;
   }
   .cart-empty-toggle {
     display: flex;

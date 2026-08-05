@@ -698,7 +698,7 @@ onMounted(() => {
     text-align: left;
     cursor: pointer;
 
-    @media (hover: hover) and (pointer: fine) {
+    @media (any-hover: hover) and (any-pointer: fine) {
       &:hover { background: var(--color-surface-hover); }
     }
     .material-symbols-rounded { font-size: 20px; }
@@ -710,7 +710,7 @@ onMounted(() => {
   border-bottom: 1px solid var(--color-border) !important;
 
   .autosave-toggle__track {
-    margin-left: auto;
+    margin-inline-start: auto;
   }
 
   &:disabled {

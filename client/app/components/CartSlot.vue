@@ -475,6 +475,11 @@ const padLongPressed = ref(false);
 let padTimer: ReturnType<typeof setTimeout> | null = null;
 let padStartX = 0;
 let padStartY = 0;
+// Set once the finger has travelled far enough that this was a scroll, not a tap.
+// Browsers usually suppress `click` after a scroll — but "usually" is not a
+// guarantee I want standing between a flick through the cart grid and a cue
+// going out over the PA.
+let padMoved = false;
 
 const clearPadTimer = () => {
   if (padTimer) { clearTimeout(padTimer); padTimer = null; }
@@ -484,6 +489,8 @@ function handlePadTap() {
   if (!isCoarse.value) return;
   // A long press already did its job; don't also fire the cue on release.
   if (padLongPressed.value) { padLongPressed.value = false; return; }
+  // A scroll is not a trigger.
+  if (padMoved) { padMoved = false; return; }
   if (isPlaying.value) handleStop(); else handlePlay();
 }
 
@@ -492,6 +499,7 @@ function onPadPointerDown(e: PointerEvent) {
   padStartX = e.clientX;
   padStartY = e.clientY;
   padLongPressed.value = false;
+  padMoved = false;
   // Long press is how a pad gets selected (and re-assigned) on touch, since the
   // pad's short tap is now Play and drag-and-drop does not exist here.
   padTimer = setTimeout(() => {
@@ -503,6 +511,8 @@ function onPadPointerDown(e: PointerEvent) {
 }
 
 function onPadPointerMove(e: PointerEvent) {
+  // 10px on either axis means the finger is scrolling the grid.
+  if (Math.abs(e.clientX - padStartX) > 10 || Math.abs(e.clientY - padStartY) > 10) padMoved = true;
   if (!padTimer) return;
   if (Math.abs(e.clientX - padStartX) > 6 || Math.abs(e.clientY - padStartY) > 6) clearPadTimer();
 }
@@ -528,22 +538,13 @@ const handleSetAsNext = () => {
 const handleDelete = () => {
   if (!currentProject.value || !props.item) return;
 
-  // When this slot's item is part of a multi-selection, defer to the confirm
-  // dialog (Delete N Selected / Delete Only this / Cancel), deleting on the
-  // cart path so selected slots are unassigned rather than removed from the
-  // playlist.
-  if (requestDeleteFromButton(props.item.uuid, 'cart')) return;
-
-  // Remove from cart-only items
-  removeCartOnlyItem(props.item.uuid);
-
-  // Remove from cart
-  const index = currentProject.value.cartItems.findIndex((ci: any) => ci.slot === props.slot);
-  if (index !== -1) {
-    currentProject.value.cartItems.splice(index, 1);
-    const { saveProject } = useProject();
-    saveProject();
-  }
+  // The app's own confirm dialog owns every cart delete now — single slot or
+  // multi-selection. It deletes on the CART path, so selected slots are
+  // unassigned rather than their cues being pulled out of the playlist.
+  // (This used to fall through to an inline removal when the slot was not part
+  // of a multi-selection; requestDeleteFromButton now always handles it, so
+  // that branch would be dead code.)
+  requestDeleteFromButton(props.item.uuid, 'cart');
 };
 
 const handleEdit = () => {
@@ -695,6 +696,10 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  // Without this a pad unmounted mid-press (empty-pad filter toggling, deck
+  // switch) would still fire its long press and open the import dialog for a
+  // slot that is no longer on screen.
+  clearPadTimer();
   if (resizeObserver && waveformCanvas.value) {
     resizeObserver.unobserve(waveformCanvas.value);
     resizeObserver.disconnect();
@@ -928,7 +933,7 @@ const handleDrop = async (e: DragEvent) => {
      tapped — so a pad kept the accent border and the 1.02 scale indefinitely,
      mimicking the selected / drag-over state. The coarse-pointer :active rule
      below is the honest replacement. */
-  @media (hover: hover) and (pointer: fine) {
+  @media (any-hover: hover) and (any-pointer: fine) {
     &:hover {
       background-color: var(--color-surface-hover);
       border-color: var(--color-accent);
@@ -1313,7 +1318,8 @@ const handleDrop = async (e: DragEvent) => {
     content: attr(data-slot);
     position: absolute;
     top: 2px;
-    right: 6px;
+    /* Logical, so the glyph stays in the trailing corner in RTL too. */
+    inset-inline-end: 6px;
     font-size: 11px;
     font-family: var(--font-mono);
     opacity: 0.55;

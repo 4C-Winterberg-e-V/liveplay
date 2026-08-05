@@ -1664,10 +1664,14 @@ const formatTime = (seconds: number): string => {
   .properties-tabs::after {
     content: '';
     position: sticky;
-    right: 0;
+    inset-inline-end: 0;
     flex: 0 0 24px;
     align-self: stretch;
+    /* to-right is correct for LTR; RTL flips it below. */
     background: linear-gradient(to right, transparent, var(--color-surface));
+  }
+  [dir='rtl'] .properties-tabs::after {
+    background: linear-gradient(to left, transparent, var(--color-surface));
   }
 
   .properties-content {

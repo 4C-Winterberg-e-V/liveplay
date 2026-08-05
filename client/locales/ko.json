@@ -99,7 +99,7 @@
     "configureControls": "컨트롤 설정",
     "tabKeyboard": "키보드",
     "tabMidi": "MIDI",
-    "showEmptySlots": "Show empty slots"
+    "showEmptySlots": "빈 슬롯 표시"
   },
   "properties": {
     "title": "속성",

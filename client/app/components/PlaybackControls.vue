@@ -306,7 +306,7 @@ const handlePlayNext = () => {
   border-radius: var(--border-radius-md);
   font-weight: 500;
   
-  @media (hover: hover) and (pointer: fine) {
+  @media (any-hover: hover) and (any-pointer: fine) {
     &:hover:not(:disabled) {
       background-color: var(--color-surface-hover);
       border-color: var(--color-accent);
@@ -327,7 +327,7 @@ const handlePlayNext = () => {
     color: black;
     font-weight: 600;
 
-    @media (hover: hover) and (pointer: fine) {
+    @media (any-hover: hover) and (any-pointer: fine) {
       &:hover:not(:disabled) {
         background-color: var(--color-warning);
         border-color: var(--color-warning);
@@ -343,7 +343,7 @@ const handlePlayNext = () => {
   color: white;
   font-weight: 600;
 
-  @media (hover: hover) and (pointer: fine) {
+  @media (any-hover: hover) and (any-pointer: fine) {
     &:hover:not(:disabled) {
       background-color: var(--color-danger);
       border-color: var(--color-danger);
@@ -466,7 +466,7 @@ const handlePlayNext = () => {
   cursor: pointer;
   border: none;
 
-  @media (hover: hover) and (pointer: fine) {
+  @media (any-hover: hover) and (any-pointer: fine) {
     &:hover {
       opacity: 0.8;
     }
@@ -520,7 +520,7 @@ const handlePlayNext = () => {
   cursor: pointer;
   direction: ltr;
 
-  @media (hover: hover) and (pointer: fine) {
+  @media (any-hover: hover) and (any-pointer: fine) {
     &:hover .preview-progress-handle {
       opacity: 1;
     }
@@ -661,13 +661,17 @@ const handlePlayNext = () => {
   .preview-stop-btn {
     width: var(--lp-tap-lg);
     height: var(--lp-tap-lg);
-    margin-left: auto;
+    margin-inline-start: auto;
     flex-shrink: 0;
     font-size: 34px;
   }
   .seek-hit {
     padding-block: 15px;
-    touch-action: none;
+    /* pan-y, NOT none: this 44px strip sits inside a vertically scrolling cue
+       list, and `none` meant a finger landing on it could not scroll to the
+       second running cue. The browser keeps the vertical axis; the pointer
+       handlers own horizontal drags. */
+    touch-action: pan-y;
   }
   .preview-progress-bar {
     height: 14px;

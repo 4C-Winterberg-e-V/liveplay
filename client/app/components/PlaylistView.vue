@@ -624,7 +624,7 @@ const handleDrop = async (e: DragEvent) => {
   }
   .playlist-actions {
     flex: 0 0 auto;
-    margin-left: auto;
+    margin-inline-start: auto;
     gap: var(--spacing-sm);
   }
   /* Icon-only, uniform 44px squares: 3 x 44 + 2 x 8 = 148px inside 344px. */

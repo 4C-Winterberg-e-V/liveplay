@@ -25,7 +25,7 @@ $transition-slow: 350ms ease;
 //   compact    : (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse)
 //   wide-short : (max-height: 559px) and (any-pointer: coarse) and (min-width: 600px)
 //   coarse     : (any-pointer: coarse)
-//   hoverable  : (hover: hover) and (pointer: fine)
+//   hoverable  : (any-hover: hover) and (any-pointer: fine)
 //
 // Three arms, and each earns its place:
 //   * `max-width: 767px` — a genuinely narrow viewport, mouse or finger.

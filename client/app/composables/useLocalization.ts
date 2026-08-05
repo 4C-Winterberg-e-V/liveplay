@@ -70,23 +70,27 @@ export const useLocalization = () => {
     loadLocales();
   }
 
+  // Walk a dotted path through one locale's object. Returns undefined on a miss
+  // rather than the key, so the caller can decide what to fall back to.
+  const lookup = (locale: string, keys: string[]): string | undefined => {
+    let value: any = locales.value[locale];
+    if (!value) return undefined;
+    for (const k of keys) {
+      if (value && typeof value === 'object' && k !== '_metadata') value = value[k];
+      else return undefined;
+    }
+    return typeof value === 'string' ? value : undefined;
+  };
+
   const t = (key: string, params?: Record<string, string | number>): string => {
     const keys = key.split('.');
-    let value: any = locales.value[currentLocale.value];
+    // Fall back to English before falling back to the raw key path. Several
+    // locales are missing whole sections (the X18 feature is only translated in
+    // de/en), and a UI that prints "X18.TITLE" at the user is strictly worse
+    // than one that prints "X18 Mixer".
+    const value = lookup(currentLocale.value, keys) ?? lookup('en', keys);
 
-    if (!value) {
-      return key; // Return key if locale not loaded yet
-    }
-
-    for (const k of keys) {
-      if (value && typeof value === 'object' && k !== '_metadata') {
-        value = value[k];
-      } else {
-        return key; // Return key if translation not found
-      }
-    }
-
-    let result = typeof value === 'string' ? value : key;
+    let result = value ?? key;
     if (params) {
       for (const [param, val] of Object.entries(params)) {
         result = result.replace(`{${param}}`, String(val));

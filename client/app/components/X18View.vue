@@ -407,7 +407,7 @@ onUnmounted(() => {
   cursor: pointer;
   font-size: 13px;
 }
-@media (hover: hover) and (pointer: fine) {
+@media (any-hover: hover) and (any-pointer: fine) {
   .x18-btn:hover { background: var(--color-surface-hover); }
 }
 .x18-btn--active { color: var(--color-accent); border-color: var(--color-accent); }
@@ -454,7 +454,7 @@ onUnmounted(() => {
   text-align: left;
   transition: transform 0.05s ease, box-shadow 0.1s ease;
 }
-@media (hover: hover) and (pointer: fine) {
+@media (any-hover: hover) and (any-pointer: fine) {
   .x18-tile:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25); }
 }
 .x18-tile:active { transform: scale(0.98); }

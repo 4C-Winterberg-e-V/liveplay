@@ -362,6 +362,15 @@ button {
   }
 }
 
+// Keep the brightness acknowledgement, drop the movement.
+@media (prefers-reduced-motion: reduce) {
+  button:active:not(:disabled),
+  .cart-slot:active,
+  .x18-tile:active {
+    transform: none;
+  }
+}
+
 // Inputs
 input,
 textarea,

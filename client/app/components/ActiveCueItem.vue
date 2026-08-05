@@ -358,7 +358,7 @@ const formatTime = (seconds: number): string => {
     background-color: var(--color-danger);
   }
 
-  @media (hover: hover) and (pointer: fine) {
+  @media (any-hover: hover) and (any-pointer: fine) {
     &:hover {
       opacity: 0.8;
     }
@@ -393,7 +393,7 @@ const formatTime = (seconds: number): string => {
   /* Force LTR direction for progress bars in RTL languages */
   direction: ltr;
 
-  @media (hover: hover) and (pointer: fine) {
+  @media (any-hover: hover) and (any-pointer: fine) {
     &:hover {
       .progress-handle {
         opacity: 1;
@@ -473,14 +473,18 @@ const formatTime = (seconds: number): string => {
   .stop-btn {
     width: var(--lp-tap-lg);
     height: var(--lp-tap-lg);
-    margin-left: auto;
+    margin-inline-start: auto;
     font-size: 34px;
   }
 
   /* 14px bar + 2×15px padding = a 44px target that still looks like a 14px bar. */
   .seek-hit {
     padding-block: 15px;
-    touch-action: none;
+    /* pan-y, NOT none: this 44px strip sits inside a vertically scrolling cue
+       list, and `none` meant a finger landing on it could not scroll to the
+       second running cue. The browser keeps the vertical axis; the pointer
+       handlers own horizontal drags. */
+    touch-action: pan-y;
   }
 
   .progress-bar {

@@ -41,7 +41,7 @@ withDefaults(defineProps<{
     font-size: 18px;
   }
 
-  @media (hover: hover) and (pointer: fine) {
+  @media (any-hover: hover) and (any-pointer: fine) {
     &:hover:not(:disabled) {
       background-color: var(--color-surface-hover);
       border-color: var(--color-accent);
@@ -59,7 +59,7 @@ withDefaults(defineProps<{
   color: white;
   border-color: #FF0000;
 
-  @media (hover: hover) and (pointer: fine) {
+  @media (any-hover: hover) and (any-pointer: fine) {
     &:hover:not(:disabled) {
       background: linear-gradient(135deg, #CC0000 0%, #990000 100%);
       border-color: #CC0000;

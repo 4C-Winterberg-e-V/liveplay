@@ -441,6 +441,9 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  // A row can disappear mid-press (deleted, or the deck switches panels), and a
+  // surviving timer would then toggle the selection of an item that is gone.
+  clearLongPress();
   if (resizeObserver) {
     resizeObserver.disconnect();
     resizeObserver = null;
@@ -958,7 +961,7 @@ const findItemByIndex = (index: number[]): AudioItem | GroupItem | null => {
   font-size: 12px;
   color: var(--color-text-secondary);
 
-  @media (hover: hover) and (pointer: fine) {
+  @media (any-hover: hover) and (any-pointer: fine) {
     &:hover {
       color: var(--color-text-primary);
     }
@@ -1017,7 +1020,7 @@ const findItemByIndex = (index: number[]): AudioItem | GroupItem | null => {
   display: flex;
   gap: 2px;
   align-items: center;
-  margin-left: auto;
+  margin-inline-start: auto;
   
   .behavior-icon {
     font-size: 14px;
@@ -1102,7 +1105,7 @@ const findItemByIndex = (index: number[]): AudioItem | GroupItem | null => {
     flex-shrink: 0;
     gap: var(--lp-gap-tap);
     margin-top: 0;
-    margin-left: auto;
+    margin-inline-start: auto;
   }
   .item-content {
     padding: 4px var(--spacing-sm);
@@ -1202,6 +1205,12 @@ const findItemByIndex = (index: number[]): AudioItem | GroupItem | null => {
     text-transform: uppercase;
     letter-spacing: 0.04em;
     line-height: 1;
+    /* "ABSPIELEN" just fits 56px; "ВОСПРОИЗВЕСТИ" does not. Truncate rather
+       than overflow — the glyph above still carries the meaning. */
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .item-actions :deep(.pl-act--edit) {
     width: var(--lp-tap);

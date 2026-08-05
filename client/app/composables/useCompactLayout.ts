@@ -16,7 +16,7 @@
 export const LP_COMPACT    = '(max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse)';
 export const LP_WIDE_SHORT = '(max-height: 559px) and (any-pointer: coarse) and (min-width: 600px)';
 export const LP_COARSE     = '(any-pointer: coarse)';
-export const LP_HOVERABLE  = '(hover: hover) and (pointer: fine)';
+export const LP_HOVERABLE  = '(any-hover: hover) and (any-pointer: fine)';
 
 // One listener per query for the whole app, however many components call the
 // composable. Module-level because useState gives us a shared ref but not a

@@ -22,7 +22,7 @@ const SANCTIONED = [
   '(max-height: 559px) and (any-pointer: coarse) and (min-width: 600px)',
   '(any-pointer: coarse)',
   '(any-pointer: fine)',
-  '(hover: hover) and (pointer: fine)',
+  '(any-hover: hover) and (any-pointer: fine)',
   '(prefers-reduced-motion: reduce)',
 ];
 

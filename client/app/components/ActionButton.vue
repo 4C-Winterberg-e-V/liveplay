@@ -57,7 +57,7 @@ const computedStyle = computed(() => {
   transition: all var(--transition-fast);
   cursor: pointer;
 
-  @media (hover: hover) and (pointer: fine) {
+  @media (any-hover: hover) and (any-pointer: fine) {
     &:hover:not(:disabled) {
       background-color: var(--action-highlight, var(--color-accent));
       border-color: var(--action-highlight, var(--color-accent));

@@ -1173,6 +1173,11 @@ export const useProject = () => {
       return true;
     }
     _deleteOnlyUuid = null;
+    // Defensive: if a button-opened dialog ever exits without going through
+    // confirm/cancel, a stale `true` here would make this dialog's "delete"
+    // take the single-item branch with no uuid — a silent no-op on a
+    // multi-selection.
+    _deleteSingleOnly = false;
     _deleteContext = selectionContext.value;
     deleteDialogName.value = '';
     deleteDialogCount.value = size;

@@ -98,7 +98,7 @@ const handlePlayNext = () => {
   color: var(--color-text-primary);
   cursor: pointer;
 
-  @media (hover: hover) and (pointer: fine) {
+  @media (any-hover: hover) and (any-pointer: fine) {
     &:hover:not(:disabled) {
       background-color: var(--color-surface-hover);
       border-color: var(--color-accent);
@@ -119,7 +119,7 @@ const handlePlayNext = () => {
     color: black;
     font-weight: 600;
 
-    @media (hover: hover) and (pointer: fine) {
+    @media (any-hover: hover) and (any-pointer: fine) {
       &:hover:not(:disabled) {
         background-color: var(--color-warning);
         border-color: var(--color-warning);
@@ -135,7 +135,7 @@ const handlePlayNext = () => {
   color: white;
   font-weight: 600;
 
-  @media (hover: hover) and (pointer: fine) {
+  @media (any-hover: hover) and (any-pointer: fine) {
     &:hover:not(:disabled) {
       background-color: var(--color-danger);
       border-color: var(--color-danger);
