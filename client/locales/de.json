@@ -106,7 +106,8 @@
     "attach": "Einbetten",
     "configureControls": "Steuerung konfigurieren",
     "tabKeyboard": "Tastatur",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "Leere Slots anzeigen"
   },
   "properties": {
     "title": "Eigenschaften",
@@ -261,7 +262,9 @@
     "stopPreview": "Vorschau stoppen",
     "previewNoDevice": "Kein Vorschaugerät konfiguriert — klicken, um Projekteinstellungen zu öffnen",
     "confirmDelete": "«{name}» löschen?",
-    "clickToEdit": "Klicken, um einen Wert einzugeben"
+    "clickToEdit": "Klicken, um einen Wert einzugeben",
+    "moveUp": "Nach oben",
+    "moveDown": "Nach unten"
   },
   "about": {
     "developedBy": "Entwickelt von",
@@ -452,7 +455,8 @@
     "loading": "Wird geladen…",
     "error": "Fehler",
     "cancel": "Abbrechen",
-    "delete": "Löschen"
+    "delete": "Löschen",
+    "done": "Fertig"
   },
   "repair": {
     "title": "Beschädigtes Projekt erkannt",

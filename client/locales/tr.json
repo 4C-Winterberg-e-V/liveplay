@@ -98,7 +98,8 @@
     "attach": "Ekle",
     "configureControls": "Kontrolleri yapılandır",
     "tabKeyboard": "Klavye",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "Boş yuvaları göster"
   },
   "properties": {
     "title": "Özellikler",
@@ -203,7 +204,9 @@
     "stopPreview": "Ön izlemeyi durdur",
     "previewNoDevice": "Ön izleme cihazı yapılandırılmamış — Proje Ayarlarını açmak için tıklayın",
     "confirmDelete": "«{name}» silinsin mi?",
-    "clickToEdit": "Bir değer yazmak için tıklayın"
+    "clickToEdit": "Bir değer yazmak için tıklayın",
+    "moveUp": "Yukarı taşı",
+    "moveDown": "Aşağı taşı"
   },
   "about": {
     "developedBy": "Geliştiren",
@@ -386,7 +389,8 @@
     "default": "varsayılan",
     "loading": "Yükleniyor…",
     "error": "Hata",
-    "cancel": "İptal"
+    "cancel": "İptal",
+    "done": "Tamam"
   },
   "repair": {
     "title": "Bozuk proje tespit edildi",

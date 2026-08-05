@@ -27,9 +27,15 @@
     <div
       v-else
       class="slot-content"
+      :data-slot="slot + 1"
       draggable="true"
       @dragstart="handleDragStart"
       @dragend="handleDragEnd"
+      @click="handlePadTap"
+      @pointerdown="onPadPointerDown"
+      @pointermove="onPadPointerMove"
+      @pointerup="onPadPointerUp"
+      @pointercancel="onPadPointerUp"
     >
       <!-- Waveform canvas -->
       <canvas
@@ -113,10 +119,11 @@
           <ActionButton
             icon="delete"
             highlight-color="var(--color-danger)"
-            class="cart-act--hide-mobile"
+            class="cart-act--delete"
             context="Cart"
             @click.stop="handleDelete"
             :title="t('actions.remove')"
+            :aria-label="t('actions.remove')"
           />
         </div>
         
@@ -187,6 +194,7 @@ import ActionButton from './ActionButton.vue';
 import AudioImportModal from './AudioImportModal.vue';
 import { useOutputTarget, METER_COLORS } from '~/composables/useOutputTarget';
 import { calculatePerceivedLoudness } from '~/utils/audio';
+import { useCompactLayout } from '~/composables/useCompactLayout';
 
 const props = defineProps<{
   slot: number;
@@ -205,6 +213,9 @@ const { currentProject, selectedItem, selectedItems, selectionContext, requestDe
 const { levels: outputTargetLevels } = useOutputTarget();
 const { playCue, stopCue, activeCues, nextItemOverrideUuid, autoNextItemUuid, setNextItem } = useAudioEngine();
 const { t } = useLocalization();
+// isCoarse, not isCompact: whether a pad tap makes sound must follow the input
+// device, not the window size.
+const { isCoarse } = useCompactLayout();
 const { addCartOnlyItem, updateCartOnlyItem, removeCartOnlyItem } = useCartItems();
 
 const waveformCanvas = ref<HTMLCanvasElement | null>(null);
@@ -452,6 +463,53 @@ const handlePlay = () => {
   if (!props.item) return;
   playCue(props.item);
 };
+
+// ---- Pad as trigger (touch only) -----------------------------------------
+// Two thirds of a filled pad had no click handler at all: Play was an ~18px
+// footer button, so the obvious gesture — tap the big coloured pad — did nothing.
+//
+// Gated on the POINTER, never on width. `?cartWindow=1` renders CartPlayer alone
+// in a window Electron lets shrink to 380x400; under a width gate a mouse click
+// that used to SELECT a pad there would fire a cue into the PA instead.
+const padLongPressed = ref(false);
+let padTimer: ReturnType<typeof setTimeout> | null = null;
+let padStartX = 0;
+let padStartY = 0;
+
+const clearPadTimer = () => {
+  if (padTimer) { clearTimeout(padTimer); padTimer = null; }
+};
+
+function handlePadTap() {
+  if (!isCoarse.value) return;
+  // A long press already did its job; don't also fire the cue on release.
+  if (padLongPressed.value) { padLongPressed.value = false; return; }
+  if (isPlaying.value) handleStop(); else handlePlay();
+}
+
+function onPadPointerDown(e: PointerEvent) {
+  if (!isCoarse.value) return;
+  padStartX = e.clientX;
+  padStartY = e.clientY;
+  padLongPressed.value = false;
+  // Long press is how a pad gets selected (and re-assigned) on touch, since the
+  // pad's short tap is now Play and drag-and-drop does not exist here.
+  padTimer = setTimeout(() => {
+    padTimer = null;
+    padLongPressed.value = true;
+    if (isSelected.value) handleImport();
+    else handleSelect();
+  }, 500);
+}
+
+function onPadPointerMove(e: PointerEvent) {
+  if (!padTimer) return;
+  if (Math.abs(e.clientX - padStartX) > 6 || Math.abs(e.clientY - padStartY) > 6) clearPadTimer();
+}
+
+function onPadPointerUp() {
+  clearPadTimer();
+}
 
 const handleStop = () => {
   if (!props.item) return;
@@ -866,10 +924,16 @@ const handleDrop = async (e: DragEvent) => {
   display: flex;
   flex-direction: column;
   
-  &:hover {
-    background-color: var(--color-surface-hover);
-    border-color: var(--color-accent);
-    transform: scale(1.02);
+  /* Touch never fires :hover, but mobile WebKit LATCHES it on the last element
+     tapped — so a pad kept the accent border and the 1.02 scale indefinitely,
+     mimicking the selected / drag-over state. The coarse-pointer :active rule
+     below is the honest replacement. */
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      background-color: var(--color-surface-hover);
+      border-color: var(--color-accent);
+      transform: scale(1.02);
+    }
   }
   
   &.has-item {
@@ -1198,39 +1262,128 @@ const handleDrop = async (e: DragEvent) => {
 }
 
 // ---- Touch / phone layout --------------------------------------------------
-// On phones a cart slot only needs Play, Play-Next and Settings. Hide preview +
-// delete, enlarge the two transport buttons to comfortable tap targets, and
-// drop the decorative behaviour icons so nothing crowds the row.
-@media (max-width: 768px) {
-  .cart-act--hide-mobile { display: none; }
-
-  .slot-actions {
-    flex: 1;
-    gap: 8px;
+// Three things were wrong here: the pad itself was inert (Play was an ~18px
+// footer button), the 44px footer painted on top of the cue name because the
+// reserved gutter was a hardcoded 40px, and a filled pad could never be cleared
+// because delete was hidden with no other route to it.
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
+  // Overlap fixed structurally rather than by tuning the reservation: the footer
+  // rejoins the flex flow and `margin-top: auto` pins it to the bottom, so it
+  // cannot paint over the name whatever height its buttons take.
+  .slot-content {
+    padding-bottom: var(--spacing-sm);
+    // The pad is the trigger now; `cursor: move` advertised a drag that touch
+    // cannot perform.
+    cursor: pointer;
+  }
+  .slot-footer {
+    position: static;
+    inset: auto;
+    margin-top: auto;
+  }
+  // Its entire contents are commented out (see the template) and it reserved 30px.
+  .slot-waveform-area {
+    display: none;
   }
 
-  // Play + Play-Next stretch to fill the row; Settings stays a fixed square.
-  // flex-basis:0 (via flex:1) overrides ActionButton's fixed 28px width.
-  .slot-actions .cart-act--play,
+  // The name gets the row. The slot number moves to a corner glyph and the
+  // PC-keyboard chip goes: both were flex-shrink: 0 while the name was the only
+  // thing allowed to collapse, which left it about four characters wide.
+  .slot-header {
+    flex-wrap: wrap;
+  }
+  .slot-header .slot-number,
+  .slot-header .key-label,
+  .empty-slot .key-label {
+    display: none;
+  }
+  .slot-header .slot-name {
+    flex: 1 1 100%;
+    font-size: 15px;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+  .slot-header .status-pill {
+    order: 2;
+  }
+  // Pad identity as a corner glyph, outside the flex flow. Mandatory once empty
+  // pads are hidden: grid position no longer encodes the pad number, so without
+  // this "fire cart 7" becomes unsayable.
+  .slot-content::before {
+    content: attr(data-slot);
+    position: absolute;
+    top: 2px;
+    right: 6px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    opacity: 0.55;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  // The empty-slot hint was 120px of content forced into a 94px box with
+  // overflow: hidden, so it was sliced mid-word. Clamp it instead.
+  .empty-slot {
+    gap: 2px;
+    overflow: hidden;
+    padding-block: 4px;
+  }
+  .empty-slot .slot-number {
+    font-size: 22px;
+    line-height: 1.1;
+  }
+  .empty-slot .slot-hint {
+    font-size: 11px;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    padding-left: 0;
+  }
+
+  // Footer as two deterministic tracks rather than a flex squeeze — the old
+  // `flex: 1` on three buttons produced 44px-tall, ~18px-wide slivers carrying a
+  // 26px glyph. Play is gone from here (the pad is Play) and delete is reached
+  // through the gear, so a destructive control is not on the trigger wall.
+  .cart-act--hide-mobile,
+  .cart-act--play,
+  .cart-act--delete {
+    display: none;
+  }
+  .slot-actions {
+    display: grid;
+    grid-template-columns: 1fr var(--lp-tap);
+    gap: var(--lp-gap-tap);
+    flex: 0 0 auto;
+    width: 100%;
+  }
   .slot-actions .cart-act--next {
-    flex: 1;
-    height: 44px;
+    width: auto;
+    height: var(--lp-tap);
     min-width: 0;
   }
-  .slot-actions .cart-act--play :deep(.material-symbols-rounded),
-  .slot-actions .cart-act--next :deep(.material-symbols-rounded) {
-    font-size: 26px;
-  }
   .slot-actions .cart-act--settings {
-    width: 44px;
-    height: 44px;
-    flex-shrink: 0;
+    width: var(--lp-tap);
+    height: var(--lp-tap);
   }
-  .slot-actions .cart-act--settings :deep(.material-symbols-rounded) {
+  .slot-actions :deep(.material-symbols-rounded) {
     font-size: 22px;
   }
-
-  // Decorative start/end-behaviour icons aren't needed on the touch card.
-  .behavior-indicators { display: none; }
+  // The cue bar above already shows duration and remaining time while playing.
+  .slot-info,
+  .behavior-indicators {
+    display: none;
+  }
 }
+
+// Press feedback with no transform and no accent border: those stay reserved for
+// .is-selected and .drag-over, so a press can never be mistaken for a selection.
+@media (any-pointer: coarse) {
+  .cart-slot:active {
+    background-color: var(--color-surface-hover);
+  }
+}
+
 </style>

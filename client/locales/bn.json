@@ -98,7 +98,8 @@
     "attach": "সংযুক্ত করুন",
     "configureControls": "নিয়ন্ত্রণ কনফিগার করুন",
     "tabKeyboard": "কীবোর্ড",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "খালি স্লট দেখান"
   },
   "properties": {
     "title": "বৈশিষ্ট্য",
@@ -203,7 +204,9 @@
     "stopPreview": "পূর্বশ্রবণ বন্ধ করুন",
     "previewNoDevice": "কোনো পূর্বশ্রবণ ডিভাইস কনফিগার করা নেই — প্রকল্প সেটিংস খুলতে ক্লিক করুন",
     "confirmDelete": "«{name}» মুছবেন?",
-    "clickToEdit": "একটি মান টাইপ করতে ক্লিক করুন"
+    "clickToEdit": "একটি মান টাইপ করতে ক্লিক করুন",
+    "moveUp": "উপরে সরান",
+    "moveDown": "নিচে সরান"
   },
   "about": {
     "developedBy": "দ্বারা উন্নত",
@@ -386,7 +389,8 @@
     "default": "ডিফল্ট",
     "loading": "লোড হচ্ছে…",
     "error": "ত্রুটি",
-    "cancel": "বাতিল"
+    "cancel": "বাতিল",
+    "done": "সম্পন্ন"
   },
   "repair": {
     "title": "দূষিত প্রকল্প শনাক্ত হয়েছে",

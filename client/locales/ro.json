@@ -98,7 +98,8 @@
     "attach": "Ataşează",
     "configureControls": "Configurare controale",
     "tabKeyboard": "Tastatură",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "Afișează sloturile goale"
   },
   "properties": {
     "title": "Proprietati",
@@ -203,7 +204,9 @@
     "stopPreview": "Oprire previzualizare",
     "previewNoDevice": "Niciun dispozitiv de previzualizare configurat — clic pentru a deschide Setările Proiectului",
     "confirmDelete": "Șterge «{name}»?",
-    "clickToEdit": "Clic pentru a introduce o valoare"
+    "clickToEdit": "Clic pentru a introduce o valoare",
+    "moveUp": "Mută sus",
+    "moveDown": "Mută jos"
   },
   "about": {
     "developedBy": "Dezvoltat de",
@@ -386,7 +389,8 @@
     "default": "implicit",
     "loading": "Se încarcă…",
     "error": "Eroare",
-    "cancel": "Anulează"
+    "cancel": "Anulează",
+    "done": "Gata"
   },
   "repair": {
     "title": "Proiect corupt detectat",

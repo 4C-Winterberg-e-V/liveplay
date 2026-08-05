@@ -98,7 +98,8 @@
     "attach": "Reinserisci",
     "configureControls": "Configura controlli",
     "tabKeyboard": "Tastiera",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "Mostra slot vuoti"
   },
   "properties": {
     "title": "Proprietà",
@@ -203,7 +204,9 @@
     "stopPreview": "Ferma anteprima",
     "previewNoDevice": "Nessun dispositivo di anteprima configurato — clicca per aprire le Impostazioni Progetto",
     "confirmDelete": "Eliminare «{name}»?",
-    "clickToEdit": "Fai clic per digitare un valore"
+    "clickToEdit": "Fai clic per digitare un valore",
+    "moveUp": "Sposta su",
+    "moveDown": "Sposta giù"
   },
   "about": {
     "developedBy": "Sviluppato da",
@@ -386,7 +389,8 @@
     "default": "predefinito",
     "loading": "Caricamento…",
     "error": "Errore",
-    "cancel": "Annulla"
+    "cancel": "Annulla",
+    "done": "Fatto"
   },
   "repair": {
     "title": "Progetto danneggiato rilevato",

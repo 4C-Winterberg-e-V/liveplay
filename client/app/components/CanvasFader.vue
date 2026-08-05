@@ -17,7 +17,7 @@
   <div
     ref="hostRef"
     class="canvas-fader"
-    @mousedown="onMouseDown"
+    @pointerdown="onPointerDown"
     @dblclick="$emit('reset')"
     @wheel.prevent="onWheel"
   >
@@ -26,6 +26,10 @@
 </template>
 
 <script setup lang="ts">
+import { useCompactLayout } from '~/composables/useCompactLayout';
+// Thumb size follows the input device, never the window width.
+const { isCoarse } = useCompactLayout();
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = withDefaults(defineProps<{
@@ -124,7 +128,9 @@ function draw() {
   ctx.stroke();
 
   // Thumb
-  const thumbR = 6;
+  // A 6px thumb is a reasonable mouse target and a poor finger one. Read inside
+  // draw() so switching input device repaints at the right size.
+  const thumbR = isCoarse.value ? 11 : 6;
   ctx.fillStyle = accent;
   ctx.strokeStyle = surface;
   ctx.lineWidth = 2;
@@ -164,6 +170,7 @@ onUnmounted(() => {
 let dragging   = false;
 let dragStartY = 0;
 let dragStartDb = 0;
+let resetTimer: ReturnType<typeof setTimeout> | null = null;
 
 function trackHeightPx(): number {
   const host = hostRef.value;
@@ -171,13 +178,24 @@ function trackHeightPx(): number {
   return Math.max(1, host.clientHeight - 12); // matches padTop + padBottom
 }
 
-function onMouseDown(e: MouseEvent) {
-  if (e.button !== 0) return;
+// PointerEvent extends MouseEvent, so every clientY calculation below and the
+// Shift fine-mode are unchanged — this just also works under a finger, which
+// mousedown never did. The fader was completely inoperable on touch, which left
+// PANIC as the only answer to "too loud".
+function onPointerDown(e: PointerEvent) {
+  // Reproduces the old left-button-only rule without rejecting touch.
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
   dragging = true;
   dragStartY = e.clientY;
   dragStartDb = props.db;
-  window.addEventListener('mousemove', onMouseMove);
-  window.addEventListener('mouseup', onMouseUp);
+  try { hostRef.value?.setPointerCapture(e.pointerId); } catch { /* not fatal */ }
+  // Touch has no dblclick, so a long press is the reset gesture there.
+  if (e.pointerType !== 'mouse') {
+    resetTimer = setTimeout(() => { resetTimer = null; emit('reset'); }, 500);
+  }
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerUp);
   // For a single click without drag, snap to clicked position. We use a
   // tiny threshold: only snap if the click is far from the thumb.
   const host = hostRef.value;
@@ -194,19 +212,23 @@ function onMouseDown(e: MouseEvent) {
   }
 }
 
-function onMouseMove(e: MouseEvent) {
+function onPointerMove(e: PointerEvent) {
   if (!dragging) return;
   const dy = dragStartY - e.clientY; // dragging up = positive
+  // Real movement means this is a drag, not a long press.
+  if (resetTimer && Math.abs(dy) > 6) { clearTimeout(resetTimer); resetTimer = null; }
   const sens = e.shiftKey ? 0.25 : 1;
   const dbPerPx = (range.value / trackHeightPx()) * sens;
   const nextDb = clampToStep(dragStartDb + dy * dbPerPx, e.shiftKey);
   emit('input', nextDb);
 }
 
-function onMouseUp() {
+function onPointerUp() {
   dragging = false;
-  window.removeEventListener('mousemove', onMouseMove);
-  window.removeEventListener('mouseup', onMouseUp);
+  if (resetTimer) { clearTimeout(resetTimer); resetTimer = null; }
+  window.removeEventListener('pointermove', onPointerMove);
+  window.removeEventListener('pointerup', onPointerUp);
+  window.removeEventListener('pointercancel', onPointerUp);
 }
 
 function onWheel(e: WheelEvent) {
@@ -237,5 +259,13 @@ function clampToStep(db: number, fine: boolean): number {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* A 20px-wide fader is not a finger target. The 4px track stays centred by the
+   existing trackX maths, so widening the host needs nothing else. */
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
+  .canvas-fader {
+    width: var(--lp-tap);
+  }
 }
 </style>

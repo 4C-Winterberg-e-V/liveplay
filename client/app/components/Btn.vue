@@ -41,9 +41,11 @@ withDefaults(defineProps<{
     font-size: 18px;
   }
 
-  &:hover:not(:disabled) {
-    background-color: var(--color-surface-hover);
-    border-color: var(--color-accent);
+  @media (hover: hover) and (pointer: fine) {
+    &:hover:not(:disabled) {
+      background-color: var(--color-surface-hover);
+      border-color: var(--color-accent);
+    }
   }
 
   &:disabled {
@@ -57,14 +59,24 @@ withDefaults(defineProps<{
   color: white;
   border-color: #FF0000;
 
-  &:hover:not(:disabled) {
-    background: linear-gradient(135deg, #CC0000 0%, #990000 100%);
-    border-color: #CC0000;
+  @media (hover: hover) and (pointer: fine) {
+    &:hover:not(:disabled) {
+      background: linear-gradient(135deg, #CC0000 0%, #990000 100%);
+      border-color: #CC0000;
+    }
   }
 
   &:disabled {
     background: linear-gradient(135deg, #666666 0%, #555555 100%);
     border-color: #666666;
+  }
+}
+
+/* Touch floor for every Btn in the app, so hosts that don't size them
+   explicitly still clear the minimum. */
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
+  .btn {
+    min-height: var(--lp-tap);
   }
 }
 </style>

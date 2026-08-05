@@ -129,6 +129,10 @@ let _deleteOnlyUuid: string | null = null;
 // Which delete path the dialog's buttons should take, captured when the dialog
 // opens so it can't drift if the selection changes underneath it.
 let _deleteContext: 'playlist' | 'cart' = 'playlist';
+// True when the dialog was opened for exactly one item that is NOT part of a
+// multi-selection. In that case "delete" must remove that one item, not
+// whatever happens to be selected.
+let _deleteSingleOnly = false;
 
 export const useProject = () => {
   const currentProject = useState<Project | null>('currentProject', () => null);
@@ -1082,6 +1086,42 @@ export const useProject = () => {
     saveProject();
   };
 
+  // Move an item one position up or down within its own parent array.
+  // (Distinct from the older absolute-index `moveItem` below, which is unused
+  // and does not persist.)
+  //
+  // Reordering used to exist only as HTML5 drag-and-drop, which touch devices
+  // do not implement at all — so on a phone the running order of a show was
+  // simply not editable. This is the same parent-array resolution / splice /
+  // updateIndices sequence PlaylistItem's drop handler performs, factored out so
+  // a pair of buttons can drive it. The drag path is left untouched.
+  const moveItemBy = (uuid: string, delta: -1 | 1): void => {
+    if (!currentProject.value) return;
+    const item = findItemByUuid(uuid);
+    if (!item) return;
+
+    // Root items live in project.items; nested ones in their group's children.
+    let parentArray: (AudioItem | GroupItem)[] = currentProject.value.items;
+    let parentIndex: number[] = [];
+    if (item.index.length > 1) {
+      const parentGroup = findItemByIndex(item.index.slice(0, -1));
+      if (!parentGroup || parentGroup.type !== 'group') return;
+      parentArray = (parentGroup as GroupItem).children;
+      parentIndex = parentGroup.index;
+    }
+
+    const from = parentArray.findIndex(i => i.uuid === uuid);
+    if (from === -1) return;
+    const to = from + delta;
+    // Clamped rather than wrapped: the first item must not jump to the end.
+    if (to < 0 || to >= parentArray.length) return;
+
+    const [moved] = parentArray.splice(from, 1);
+    parentArray.splice(to, 0, moved);
+    updateIndices(parentArray, parentIndex);
+    saveProject();
+  };
+
   // Remove every selected item via the path appropriate to where the selection
   // lives. Playlist deletes pull items from the tree; cart deletes only
   // unassign slots. The set is snapshotted first because both paths mutate it.
@@ -1101,17 +1141,25 @@ export const useProject = () => {
   // leaves the deletion to the dialog. Returns false for the simple
   // single-item case, which the caller handles itself. `context` reflects which
   // panel the button lives in (cart vs playlist).
+  // Always returns true: the dialog owns the deletion in every case now.
+  // Previously a single item fell through to the caller's `window.confirm()`,
+  // which blocks the whole renderer — including meter updates and the transport
+  // — behind an OS modal. That is wrong on a phone, where it is a full-screen
+  // system sheet over a running show, and it was never right on desktop either.
   const requestDeleteFromButton = (uuid: string, context: 'playlist' | 'cart' = 'playlist'): boolean => {
-    if (selectedItems.value.has(uuid) && selectedItems.value.size > 1) {
-      _deleteOnlyUuid = uuid;
-      _deleteContext = context;
-      deleteDialogName.value = findItemByUuid(uuid)?.displayName ?? '';
-      deleteDialogCount.value = selectedItems.value.size;
-      deleteDialogAllowOnly.value = true;
-      deleteDialogVisible.value = true;
-      return true;
-    }
-    return false;
+    const inMultiSelection = selectedItems.value.has(uuid) && selectedItems.value.size > 1;
+    _deleteOnlyUuid = uuid;
+    _deleteContext = context;
+    // Single mode matters: "delete all" means the SELECTION, and the clicked
+    // item is not necessarily in it (or there may be no selection at all).
+    // Without this flag, confirming would delete something the operator never
+    // pointed at.
+    _deleteSingleOnly = !inMultiSelection;
+    deleteDialogName.value = findItemByUuid(uuid)?.displayName ?? '';
+    deleteDialogCount.value = inMultiSelection ? selectedItems.value.size : 1;
+    deleteDialogAllowOnly.value = inMultiSelection;
+    deleteDialogVisible.value = true;
+    return true;
   };
 
   // Entry point from the keyboard DEL key. A single selected item is removed
@@ -1135,7 +1183,16 @@ export const useProject = () => {
 
   const deleteDialogConfirmAll = () => {
     deleteDialogVisible.value = false;
-    deleteSelection(_deleteContext);
+    if (_deleteSingleOnly && _deleteOnlyUuid) {
+      // Opened from a row's trash button with no multi-selection behind it:
+      // delete exactly that item.
+      if (_deleteContext === 'cart') deleteCartItems([_deleteOnlyUuid]);
+      else removeItem(_deleteOnlyUuid);
+    } else {
+      deleteSelection(_deleteContext);
+    }
+    _deleteOnlyUuid = null;
+    _deleteSingleOnly = false;
   };
   const deleteDialogConfirmOnly = () => {
     deleteDialogVisible.value = false;
@@ -1144,10 +1201,12 @@ export const useProject = () => {
       else removeItem(_deleteOnlyUuid);
     }
     _deleteOnlyUuid = null;
+    _deleteSingleOnly = false;
   };
   const deleteDialogCancel = () => {
     deleteDialogVisible.value = false;
     _deleteOnlyUuid = null;
+    _deleteSingleOnly = false;
   };
 
   // Find item by UUID
@@ -1822,6 +1881,7 @@ export const useProject = () => {
     selectionContext,
     deleteSelection,
     deleteCartItems,
+    moveItemBy,
     requestDeleteFromButton,
     requestDeleteFromKeyboard,
     deleteDialogVisible,

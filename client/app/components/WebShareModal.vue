@@ -9,9 +9,9 @@
   (electron/web-share.js). In the browser build this modal is never reachable.
 -->
 <template>
-  <div class="modal-overlay" @click.self="close">
-    <div class="modal-content web-share-modal">
-      <button class="modal-close" @click="close" :title="t('actions.close')">
+  <div class="modal-overlay lp-sheet-backdrop" @click.self="close">
+    <div class="modal-content web-share-modal lp-sheet">
+      <button class="modal-close lp-close" @click="close" :title="t('actions.close')">
         <span class="material-symbols-rounded">close</span>
       </button>
 
@@ -330,7 +330,7 @@ onUnmounted(() => { if (unsub) unsub(); });
   position: relative;
   width: 560px;
   max-width: 92vw;
-  max-height: 88vh;
+  max-height: 88dvh;
   overflow-y: auto;
   background: var(--color-surface);
   border: 1px solid var(--color-border);

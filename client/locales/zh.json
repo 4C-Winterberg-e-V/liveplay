@@ -98,7 +98,8 @@
     "attach": "合并",
     "configureControls": "配置控制",
     "tabKeyboard": "键盘",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "显示空插槽"
   },
   "properties": {
     "title": "属性",
@@ -203,7 +204,9 @@
     "stopPreview": "停止预听",
     "previewNoDevice": "未配置预听设备 — 单击以打开项目设置",
     "confirmDelete": "删除「{name}」？",
-    "clickToEdit": "点击以输入数值"
+    "clickToEdit": "点击以输入数值",
+    "moveUp": "上移",
+    "moveDown": "下移"
   },
   "about": {
     "developedBy": "开发者",
@@ -386,7 +389,8 @@
     "default": "默认",
     "loading": "加载中…",
     "error": "错误",
-    "cancel": "取消"
+    "cancel": "取消",
+    "done": "完成"
   },
   "repair": {
     "title": "检测到损坏的项目",

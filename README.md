@@ -60,7 +60,7 @@ a venue, safely.
 |------|------------------------------------|------------------------------------------|
 | **Web client** | UI only runs inside Electron | UI also builds and runs as a plain **browser app** (`BUILD_TARGET=web`), with smart server-address detection, CORS-safe requests, and graceful degradation when no Electron APIs exist |
 | **Sharing to mobile** | — | One-click **Share** in the app header: serve the UI on the **LAN** or via a bundled **Cloudflare quick-tunnel**, with QR code |
-| **Mobile UX** | Desktop layout only | Full **responsive pass**: collapsible playlist & cart, full-screen Properties panel, touch-optimised cart slots, transport in the title bar, iOS safe-area / PWA support |
+| **Mobile UX** | Desktop layout only | **Touch-first pass**: bottom deck tabs with live counts, a permanent PLAY-NEXT / STOP-ALL bar, one-line cue rows, Pointer-Event faders & trimming, bottom-sheet dialogs, iOS safe-area / PWA support |
 | **Authentication** | None on the API | Per-session **PIN / BasicAuth gate**, stable session cookie so the WebSocket survives login, **toggleable** auth, **manually settable PIN**, and an **optional fixed tunnel URL** (Named Tunnel) per machine |
 | **Remote hosting** | — | Web client also builds as a **standalone SPA** that you can serve behind your own same-origin reverse proxy (Caddy / nginx / Traefik) with a BasicAuth gate |
 | **Server security** | API can read/write arbitrary paths | Server filesystem access is **confined to a sandbox**; file dialogs no longer open at `/` |
@@ -157,9 +157,28 @@ of any shared session:
   not in the app bundle. See
   [`docs/web-sharing-stable-url.md`](docs/web-sharing-stable-url.md).
 
-The mobile UI is a full responsive layout — collapsible playlist and cart,
-full-screen Properties panel, touch-sized cart slots, and iOS safe-area / PWA
-handling — not a shrunk desktop view.
+The mobile UI is a touch-first operating surface, not a shrunk desktop view:
+
+- **One surface at a time.** A bottom deck-tab row switches between **Playlist**,
+  **Cart Player** and **X18 Mixer**, each carrying a live count, so the panel you
+  are looking at gets the full height instead of half of it.
+- **The transport is always in reach.** **PLAY NEXT** and **STOP ALL CUES** sit in
+  a permanent bottom bar that nothing — not the properties sheet, not a dialog —
+  is allowed to cover. Stop-All is always enabled.
+- **One cue per line.** Cue rows are a single 56px line with a labelled
+  **PLAY/STOP** button, so a phone shows 8–10 cues instead of 2. Everything
+  destructive or order-changing lives in the properties sheet, not a thumb-slip
+  from Play.
+- **Running cues stay readable.** Two simultaneous cues stack and scroll with
+  their name, remaining time and level intact.
+- **Touch actually works.** Faders, in/out trimming, seek scrubbing and cue
+  reordering are driven by Pointer Events; seek only commits on release, so a
+  stray tap cannot jump a live cue.
+- **Dialogs are bottom sheets**, and iOS safe-area / PWA handling and the
+  dead-air countdown are respected throughout.
+
+Layout adapts to the viewport; anything that can *make sound* adapts to the
+pointer instead, so a small desktop window never behaves like a touchscreen.
 
 Details and security notes:
 [`docs/web-hosting-inapp-mac.md`](docs/web-hosting-inapp-mac.md). For

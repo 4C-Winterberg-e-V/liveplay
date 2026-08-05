@@ -20,10 +20,15 @@
       <span class="material-symbols-rounded">fast_forward</span>
       <span class="control-btn__label">{{ t('controls.playNext') }}</span>
     </button>
+    <!-- Not :disabled. stopAll is idempotent, and a control that spends most of
+         a show greyed out never becomes muscle memory — worse, a client/server
+         desync would leave the one emergency button inert. It keeps the same
+         0.5 opacity when nothing is playing (see .panic-btn--idle), so desktop
+         renders exactly as before. -->
     <button
       class="control-btn panic-btn"
+      :class="{ 'panic-btn--idle': activeCues.size === 0 }"
       @click="handlePanic"
-      :disabled="activeCues.size === 0"
       :title="stopAllTooltip"
     >
       <span class="icon">⚠</span>
@@ -93,9 +98,11 @@ const handlePlayNext = () => {
   color: var(--color-text-primary);
   cursor: pointer;
 
-  &:hover:not(:disabled) {
-    background-color: var(--color-surface-hover);
-    border-color: var(--color-accent);
+  @media (hover: hover) and (pointer: fine) {
+    &:hover:not(:disabled) {
+      background-color: var(--color-surface-hover);
+      border-color: var(--color-accent);
+    }
   }
 
   &:disabled {
@@ -112,10 +119,12 @@ const handlePlayNext = () => {
     color: black;
     font-weight: 600;
 
-    &:hover:not(:disabled) {
-      background-color: var(--color-warning);
-      border-color: var(--color-warning);
-      filter: brightness(0.88);
+    @media (hover: hover) and (pointer: fine) {
+      &:hover:not(:disabled) {
+        background-color: var(--color-warning);
+        border-color: var(--color-warning);
+        filter: brightness(0.88);
+      }
     }
   }
 }
@@ -126,11 +135,19 @@ const handlePlayNext = () => {
   color: white;
   font-weight: 600;
 
-  &:hover:not(:disabled) {
-    background-color: var(--color-danger);
-    border-color: var(--color-danger);
-    filter: brightness(0.85);
+  @media (hover: hover) and (pointer: fine) {
+    &:hover:not(:disabled) {
+      background-color: var(--color-danger);
+      border-color: var(--color-danger);
+      filter: brightness(0.85);
+    }
   }
+}
+
+/* Reproduces exactly the 0.5 opacity the removed `:disabled` produced, so the
+   desktop rendering of an idle PANIC is pixel-identical. */
+.panic-btn--idle {
+  opacity: 0.5;
 }
 
 .icon {
@@ -138,5 +155,24 @@ const handlePlayNext = () => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Touch equivalent of the hover affordance above. */
+@media (any-pointer: coarse) {
+  .control-btn:active:not(:disabled) {
+    border-color: var(--color-accent);
+  }
+}
+
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
+  /* On a phone PANIC must read as available at all times — a landmark you can
+     find in the dark, not a control that is grey for most of the show. */
+  .panic-btn--idle {
+    opacity: 1;
+  }
+  /* Floor, in case a host forgets to set the separation itself. */
+  .transport-buttons {
+    gap: var(--lp-sep);
+  }
 }
 </style>

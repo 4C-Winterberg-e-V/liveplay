@@ -112,7 +112,8 @@
     "loading": "Loading…",
     "error": "Error",
     "cancel": "Cancel",
-    "delete": "Delete"
+    "delete": "Delete",
+    "done": "Done"
   },
   "project": {
     "enterName": "Enter Project Name",
@@ -152,7 +153,8 @@
     "resetDefaults": "Reset to Defaults",
     "close": "Close",
     "detach": "Detach",
-    "attach": "Attach"
+    "attach": "Attach",
+    "showEmptySlots": "Show empty slots"
   },
   "behaviors": {
     "startPlayNext": "Start: Play Next",
@@ -324,7 +326,9 @@
     "stopPreview": "Stop preview",
     "previewNoDevice": "No preview device configured — click to open Project Settings",
     "clickToEdit": "Click to type a value",
-    "confirmDelete": "Delete \"{name}\"?"
+    "confirmDelete": "Delete \"{name}\"?",
+    "moveUp": "Move up",
+    "moveDown": "Move down"
   },
   "about": {
     "developedBy": "Developed by",

@@ -14,6 +14,18 @@
       </button>
       <h2 @click="onCartTitleClick">{{ t('cart.title') }}</h2>
       <div class="cart-header-actions">
+        <!-- Empty pads are hidden on touch by default: 16 pads x 2 columns is
+             888px of mostly-blank grid in a ~300px viewport. This restores them,
+             and the corner number on each pad keeps "fire cart 7" sayable once
+             position no longer encodes the pad number. -->
+        <Btn
+          icon="grid_view"
+          :text="t('cart.showEmptySlots')"
+          :aria-label="t('cart.showEmptySlots')"
+          class="cart-empty-toggle"
+          :class="{ 'cart-empty-toggle--on': showEmptySlots }"
+          @click="showEmptySlots = !showEmptySlots"
+        />
         <Btn
           v-if="!isDetachedWindow && hasElectron"
           icon="open_in_new"
@@ -30,13 +42,13 @@
       </div>
     </div>
 
-    <div class="cart-grid" :class="gridClass">
+    <div class="cart-grid lp-scroll-fade" :class="gridClass">
       <CartSlot
-        v-for="slot in 16"
-        :key="slot"
-        :slot="slot - 1"
-        :item="getCartItem(slot - 1)"
-        :keyLabel="getKeyLabel(slot - 1)"
+        v-for="s in visibleSlots"
+        :key="s"
+        :slot="s"
+        :item="getCartItem(s)"
+        :keyLabel="getKeyLabel(s)"
       />
     </div>
   </div>
@@ -46,6 +58,7 @@
 import type { AudioItem } from '~/types/project';
 import { formatKeyLabel } from '~/composables/useCartHotkeys';
 import Btn from './Btn.vue';
+import { useCompactLayout } from '~/composables/useCompactLayout';
 
 const props = defineProps<{
   isDetachedWindow?: boolean;
@@ -65,11 +78,28 @@ const hasElectron = import.meta.client && !!(window as any).electronAPI;
 // useState so MainWorkspace can shrink the cart section to its header. No effect
 // on desktop (toggle + collapse CSS are gated to the phone media query).
 const cartCollapsed = useState('cart.collapsed', () => false);
+// isCompact for layout, isCoarse for behaviour. Which pads exist is gated on the
+// POINTER, not the width: `?cartWindow=1` renders this component alone in a
+// window Electron lets shrink to 380x400, and a mouse-driven cart must keep all
+// 16 pads in their fixed positions.
+const { isCompact, isCoarse } = useCompactLayout();
 function onCartTitleClick() {
-  if (import.meta.client && window.matchMedia?.('(max-width: 768px)').matches) {
-    cartCollapsed.value = !cartCollapsed.value;
-  }
+  if (!isCompact.value) return;
+  cartCollapsed.value = !cartCollapsed.value;
 }
+
+const showEmptySlots = useState('lp.cart.showEmpty', () => false);
+const visibleSlots = computed(() => {
+  const all = Array.from({ length: 16 }, (_, i) => i);
+  if (!isCoarse.value || showEmptySlots.value) return all;
+  const filled = all.filter(i => !!getCartItem(i));
+  // Fail open. getCartItem resolves a slot's uuid against the cart-only map or
+  // the playlist, so a slot whose item has not hydrated yet (or whose uuid went
+  // stale) resolves to null. Filtering blindly would then leave a blank panel
+  // under a deck tab that still reads "CART 6" — the worst possible mid-show
+  // surprise. Sixteen empty pads is at least legible.
+  return filled.length > 0 ? filled : all;
+});
 
 const handleDetach = () => {
   if (!currentProject.value || !import.meta.client || !window.electronAPI) return;
@@ -90,16 +120,9 @@ const updateGridColumns = () => {
 
   const width = cartPlayerRef.value.offsetWidth;
 
-  // Adjust grid columns based on width
-  if (width < 500) {
-    gridClass.value = 'grid-cols-2';
-  } else if (width < 800) {
-    gridClass.value = 'grid-cols-2';
-  } else if (width < 1100) {
-    gridClass.value = 'grid-cols-3';
-  } else {
-    gridClass.value = 'grid-cols-4';
-  }
+  // The <500 and <800 branches both produced grid-cols-2, so this is the same
+  // output with the dead branch removed.
+  gridClass.value = width < 800 ? 'grid-cols-2' : width < 1100 ? 'grid-cols-3' : 'grid-cols-4';
 };
 
 const getKeyLabel = (slotIndex: number): string => {
@@ -163,7 +186,8 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-md) var(--spacing-lg);
-  min-height: 68px;
+  /* --lp-panel-header-h is compact-only, so desktop keeps 68px. */
+  min-height: var(--lp-panel-header-h, 68px);
   box-sizing: border-box;
   border-bottom: 1px solid var(--color-border);
   background-color: var(--color-surface);
@@ -196,19 +220,57 @@ onMounted(() => {
 }
 .cart-collapse-toggle .material-symbols-rounded { font-size: 22px; }
 
-/* Phones: enable collapse, fold the grid away, and drop the Attach button
-   (pointless in a browser/touch context). */
-@media (max-width: 768px) {
-  /* Slimmer header to reclaim vertical space. */
+/* Hidden on desktop; revealed only in the compact block below. */
+.cart-empty-toggle {
+  display: none;
+}
+.cart-empty-toggle--on {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* Phones: the deck tab is the panel's label and carries its count, so the title
+   row goes and the actions get the width. The actions are deliberately NOT
+   relocated into the shell: `?cartWindow=1` mounts this component without
+   MainWorkspace, so a shell-level bar would make Attach and "show empty pads"
+   unreachable in a 380px detached window. */
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
   .cart-header {
-    min-height: 44px;
-    padding: var(--spacing-xs) var(--spacing-md);
+    min-height: var(--lp-panel-header-h);
+    padding: 0 var(--spacing-sm);
   }
-  .cart-header h2 { font-size: 16px; cursor: pointer; flex: 1; }
-  .cart-collapse-toggle { display: inline-flex; width: 32px; height: 32px; }
-  .cart-header-actions { display: none; }
-  .cart-player.collapsed { height: auto; }
-  .cart-player.collapsed .cart-grid { display: none; }
+  .cart-header h2,
+  .cart-collapse-toggle {
+    display: none;
+  }
+  .cart-header-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-left: auto;
+  }
+  .cart-empty-toggle {
+    display: flex;
+  }
+  .cart-header-actions :deep(.btn) {
+    width: var(--lp-tap);
+    height: var(--lp-tap);
+    min-height: var(--lp-tap);
+    padding: 0;
+    justify-content: center;
+  }
+  .cart-header-actions :deep(.btn > span:not(.material-symbols-rounded)) {
+    display: none;
+  }
+  .cart-header-actions :deep(.btn .material-symbols-rounded) {
+    font-size: var(--lp-tap-icon);
+  }
+  .cart-grid {
+    grid-auto-rows: minmax(var(--lp-cart-row-h), 1fr);
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm);
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 
