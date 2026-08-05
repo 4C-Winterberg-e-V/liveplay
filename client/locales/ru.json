@@ -71,7 +71,10 @@
     "seconds": "СЕКУНД",
     "clock": "Часы",
     "autosave": "Автосохранение",
-    "unsavedChanges": "Несохранённые изменения"
+    "unsavedChanges": "Несохранённые изменения",
+    "masterLevel": "Уровень мастера",
+    "enterFullscreen": "Полный экран",
+    "exitFullscreen": "Выйти из полного экрана"
   },
   "playlist": {
     "title": "Плейлист",

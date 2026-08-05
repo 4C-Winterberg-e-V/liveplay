@@ -71,7 +71,10 @@
     "seconds": "সেকেন্ড",
     "clock": "ঘড়ি",
     "autosave": "স্বয়ংক্রিয় সংরক্ষণ",
-    "unsavedChanges": "অসংরক্ষিত পরিবর্তন"
+    "unsavedChanges": "অসংরক্ষিত পরিবর্তন",
+    "masterLevel": "মাস্টার লেভেল",
+    "enterFullscreen": "পূর্ণ স্ক্রীন",
+    "exitFullscreen": "পূর্ণ স্ক্রীন থেকে বেরিয়ে যান"
   },
   "playlist": {
     "title": "প্লেলিস্ট",

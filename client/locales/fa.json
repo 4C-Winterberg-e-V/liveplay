@@ -71,7 +71,10 @@
     "seconds": "ثانیه",
     "clock": "ساعت",
     "autosave": "ذخیره خودکار",
-    "unsavedChanges": "تغییرات ذخیره‌نشده"
+    "unsavedChanges": "تغییرات ذخیره‌نشده",
+    "masterLevel": "سطح مستر",
+    "enterFullscreen": "تمام‌صفحه",
+    "exitFullscreen": "خروج از تمام‌صفحه"
   },
   "playlist": {
     "title": "لیست پخش",

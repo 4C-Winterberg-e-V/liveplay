@@ -71,7 +71,10 @@
     "seconds": "ثواني",
     "clock": "ساعة",
     "autosave": "حفظ تلقائي",
-    "unsavedChanges": "تغييرات غير محفوظة"
+    "unsavedChanges": "تغييرات غير محفوظة",
+    "masterLevel": "مستوى الماستر",
+    "enterFullscreen": "شاشة كاملة",
+    "exitFullscreen": "إنهاء الشاشة الكاملة"
   },
   "playlist": {
     "title": "قائمة التشغيل",

@@ -71,7 +71,10 @@
     "seconds": "SECUNDE",
     "clock": "Ceas",
     "autosave": "Salvare automată",
-    "unsavedChanges": "Modificări nesalvate"
+    "unsavedChanges": "Modificări nesalvate",
+    "masterLevel": "Nivel master",
+    "enterFullscreen": "Ecran complet",
+    "exitFullscreen": "Ieși din ecran complet"
   },
   "playlist": {
     "title": "Lista de redare",

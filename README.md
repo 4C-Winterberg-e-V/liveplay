@@ -177,6 +177,27 @@ The mobile UI is a touch-first operating surface, not a shrunk desktop view:
 - **Dialogs are bottom sheets**, and iOS safe-area / PWA handling and the
   dead-air countdown are respected throughout.
 
+### Install it as an app (recommended)
+
+The browser's address bar costs 60–90px — one to two cue rows. Getting rid of it:
+
+- **Install / Add to Home Screen.** LivePlay ships a web-app manifest
+  (`display: fullscreen`) with square maskable icons, so Android offers
+  *Install app* and iOS *Add to Home Screen*. Launched from the home screen there
+  is no browser chrome at all. When fullscreen also hides the system status bar,
+  the app puts its own clock back in the header — an operator needs the time.
+- **Or just go full screen.** Installing needs a secure context, so it is
+  available over the **Cloudflare tunnel** (https) but not over the plain-http
+  **LAN** share. There, the header ⋯ menu has a **Full screen** entry that uses
+  the Fullscreen API instead — same result, nothing to install. (Safari on iPhone
+  has no Fullscreen API; use Add to Home Screen there.)
+
+The bundled service worker is deliberately a **pass-through that caches
+nothing**. LivePlay cannot do anything without its audio engine, so an offline
+shell would boot into a dead screen — and a cached bundle running against a newer
+engine is a failure that would surface mid-show. It exists only because a
+registered worker is part of what makes the app installable.
+
 Layout adapts to the viewport; anything that can *make sound* adapts to the
 pointer instead, so a small desktop window never behaves like a touchscreen.
 

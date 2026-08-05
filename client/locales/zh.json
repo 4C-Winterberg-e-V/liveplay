@@ -71,7 +71,10 @@
     "seconds": "秒",
     "clock": "时钟",
     "autosave": "自动保存",
-    "unsavedChanges": "未保存的更改"
+    "unsavedChanges": "未保存的更改",
+    "masterLevel": "主输出电平",
+    "enterFullscreen": "全屏",
+    "exitFullscreen": "退出全屏"
   },
   "playlist": {
     "title": "播放列表",

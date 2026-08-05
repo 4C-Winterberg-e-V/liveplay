@@ -71,7 +71,10 @@
     "seconds": "SEKONDA",
     "clock": "Orë",
     "autosave": "Ruajtje automatike",
-    "unsavedChanges": "Ndryshime të paruajtura"
+    "unsavedChanges": "Ndryshime të paruajtura",
+    "masterLevel": "Niveli master",
+    "enterFullscreen": "Ekran i plotë",
+    "exitFullscreen": "Dil nga ekrani i plotë"
   },
   "playlist": {
     "title": "Lista e Luajtjes",

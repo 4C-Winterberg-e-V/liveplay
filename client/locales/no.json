@@ -71,7 +71,10 @@
     "seconds": "SEKUNDER",
     "clock": "Klokke",
     "autosave": "Autolagring",
-    "unsavedChanges": "Ulagrede endringer"
+    "unsavedChanges": "Ulagrede endringer",
+    "masterLevel": "Masternivå",
+    "enterFullscreen": "Fullskjerm",
+    "exitFullscreen": "Avslutt fullskjerm"
   },
   "playlist": {
     "title": "Spilleliste",

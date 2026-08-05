@@ -71,7 +71,10 @@
     "seconds": "SECONDI",
     "clock": "Orologio",
     "autosave": "Salvataggio automatico",
-    "unsavedChanges": "Modifiche non salvate"
+    "unsavedChanges": "Modifiche non salvate",
+    "masterLevel": "Livello master",
+    "enterFullscreen": "Schermo intero",
+    "exitFullscreen": "Esci da schermo intero"
   },
   "playlist": {
     "title": "Playlist",

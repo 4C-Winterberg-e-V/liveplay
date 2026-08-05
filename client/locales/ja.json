@@ -71,7 +71,10 @@
     "seconds": "秒",
     "clock": "時計",
     "autosave": "自動保存",
-    "unsavedChanges": "未保存の変更"
+    "unsavedChanges": "未保存の変更",
+    "masterLevel": "マスターレベル",
+    "enterFullscreen": "全画面",
+    "exitFullscreen": "全画面を終了"
   },
   "playlist": {
     "title": "プレイリスト",

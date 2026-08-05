@@ -71,7 +71,10 @@
     "seconds": "सेकंड",
     "clock": "घड़ी",
     "autosave": "स्वतः सहेजें",
-    "unsavedChanges": "असहेजे गए परिवर्तन"
+    "unsavedChanges": "असहेजे गए परिवर्तन",
+    "masterLevel": "मास्टर स्तर",
+    "enterFullscreen": "पूर्ण स्क्रीन",
+    "exitFullscreen": "पूर्ण स्क्रीन से बाहर"
   },
   "playlist": {
     "title": "प्लेलिस्ट",

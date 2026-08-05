@@ -71,7 +71,10 @@
     "seconds": "سیکنڈ",
     "clock": "گھڑی",
     "autosave": "خودکار محفوظ",
-    "unsavedChanges": "غیر محفوظ شدہ تبدیلیاں"
+    "unsavedChanges": "غیر محفوظ شدہ تبدیلیاں",
+    "masterLevel": "ماسٹر لیول",
+    "enterFullscreen": "فل اسکرین",
+    "exitFullscreen": "فل اسکرین بند کریں"
   },
   "playlist": {
     "title": "پلے لسٹ",

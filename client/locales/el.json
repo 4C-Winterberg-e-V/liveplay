@@ -71,7 +71,10 @@
     "seconds": "ΔΕΥΤΕΡΟΛΕΠΤΑ",
     "clock": "Ρολόι",
     "autosave": "Αυτόματη αποθήκευση",
-    "unsavedChanges": "Μη αποθηκευμένες αλλαγές"
+    "unsavedChanges": "Μη αποθηκευμένες αλλαγές",
+    "masterLevel": "Στάθμη master",
+    "enterFullscreen": "Πλήρης οθόνη",
+    "exitFullscreen": "Έξοδος από πλήρη οθόνη"
   },
   "playlist": {
     "title": "Λίστα Αναπαραγωγής",

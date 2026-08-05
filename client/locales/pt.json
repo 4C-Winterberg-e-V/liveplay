@@ -71,7 +71,10 @@
     "seconds": "SEGUNDOS",
     "clock": "Relógio",
     "autosave": "Salvamento automático",
-    "unsavedChanges": "Alterações não salvas"
+    "unsavedChanges": "Alterações não salvas",
+    "masterLevel": "Nível master",
+    "enterFullscreen": "Tela cheia",
+    "exitFullscreen": "Sair da tela cheia"
   },
   "playlist": {
     "title": "Lista de Reprodução",

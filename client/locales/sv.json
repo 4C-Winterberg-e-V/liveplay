@@ -71,7 +71,10 @@
     "seconds": "SEKUNDER",
     "clock": "Klocka",
     "autosave": "Autospara",
-    "unsavedChanges": "Osparade ändringar"
+    "unsavedChanges": "Osparade ändringar",
+    "masterLevel": "Masternivå",
+    "enterFullscreen": "Helskärm",
+    "exitFullscreen": "Avsluta helskärm"
   },
   "playlist": {
     "title": "Spellista",

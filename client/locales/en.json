@@ -126,7 +126,10 @@
     "seconds": "SECONDS",
     "clock": "Clock",
     "autosave": "Autosave",
-    "unsavedChanges": "Unsaved Changes"
+    "unsavedChanges": "Unsaved Changes",
+    "masterLevel": "Master level",
+    "enterFullscreen": "Full screen",
+    "exitFullscreen": "Exit full screen"
   },
   "playlist": {
     "title": "Playlist",
@@ -590,6 +593,7 @@
     "tunnelConfigEnv": "Configured via environment variables — read-only here.",
     "tunnelConfigSaved": "Saved. Active on the next tunnel start.",
     "tunnelConfigKeepToken": "Existing saved token is kept. Enter a new token to change it.",
-    "tunnelConfigPath": "Config file:"
+    "tunnelConfigPath": "Config file:",
+    "installHint": "Tip: on the phone, use the browser menu to install LivePlay / add it to the home screen — that hides the address bar and gives you a full screen."
   }
 }

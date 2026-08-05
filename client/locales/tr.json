@@ -71,7 +71,10 @@
     "seconds": "SANİYE",
     "clock": "Saat",
     "autosave": "Otomatik kaydet",
-    "unsavedChanges": "Kaydedilmemiş değişiklikler"
+    "unsavedChanges": "Kaydedilmemiş değişiklikler",
+    "masterLevel": "Master seviyesi",
+    "enterFullscreen": "Tam ekran",
+    "exitFullscreen": "Tam ekrandan çık"
   },
   "playlist": {
     "title": "Çalma Listesi",

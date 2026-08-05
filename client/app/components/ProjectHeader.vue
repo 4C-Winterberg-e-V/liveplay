@@ -71,6 +71,15 @@
                 <span class="autosave-toggle__thumb"></span>
               </span>
             </button>
+            <!-- The URL bar is 60-90px of cue list. Installing the app removes
+                 it, but the LAN share is plain http:// and can never be installed,
+                 so this is the only route to a full screen there. Hidden where the
+                 platform has no Fullscreen API (Safari on iPhone — there the
+                 answer is Add to Home Screen). -->
+            <button v-if="fullscreenSupported" type="button" @click="toggleFullscreen()">
+              <span class="material-symbols-rounded">{{ isFullscreen ? 'fullscreen_exit' : 'fullscreen' }}</span>
+              <span>{{ isFullscreen ? t('project.exitFullscreen') : t('project.enterFullscreen') }}</span>
+            </button>
             <!-- X18's primary path is the bottom deck tab; this is the fallback
                  for the detached-window case where no deck is mounted. -->
             <button type="button" @click="toggleX18(); showHeaderMenu = false">
@@ -111,8 +120,10 @@
         </span>
       </button>
 
-      <!-- Clock pair: wall clock + LTC timecode, always both visible -->
-      <div class="clock-pair">
+      <!-- Clock pair: wall clock + LTC timecode. On a phone the wall clock is
+           normally hidden because the system status bar already shows the time —
+           but fullscreen hides that bar too, so the app has to supply it. -->
+      <div class="clock-pair" :class="{ 'clock-pair--immersive': isFullscreen }">
         <div class="digital-clock clock--active">
           <span class="clock-label">{{ t('project.clock') }}</span>
           <span class="clock-value">{{ currentTime }}</span>
@@ -127,9 +138,12 @@
            phone playback bar to give the cue name its width back, so this is
            where "is anything actually coming out" lives. Two bare bars rather
            than a StereoMeter: that component reserves 24px of its 68px for a dB
-           scale, which is unreadable at chip size anyway. Compact-only, so
-           desktop opens no extra meter subscription. -->
-      <div v-if="isCompact" class="header-meter">
+           scale, which is unreadable at chip size anyway.
+           Only rendered while there IS signal — two flat bars beside the ⋯ button
+           read as a mystery icon, not as a meter, and an idle meter is 16px of
+           screen spent saying nothing. Compact-only, so desktop never opens the
+           extra subscription. -->
+      <div v-if="isCompact && masterHasSignal" class="header-meter" :title="t('project.masterLevel')">
         <LiveMeterBar source="master" :index="0" vertical :min-db="-60" :max-db="0" />
         <LiveMeterBar source="master" :index="1" vertical :min-db="-60" :max-db="0" />
       </div>
@@ -156,7 +170,8 @@ import WebShareModal from './WebShareModal.vue';
 import TransportButtons from './TransportButtons.vue';
 import Btn from './Btn.vue';
 import LiveMeterBar from './LiveMeterBar.vue';
-import { useCompactLayout } from '~/composables/useCompactLayout';
+import { useMasterMeter } from '~/composables/useLiveMeters';
+import { useCompactLayout, lpFullscreenSupported, lpToggleFullscreen } from '~/composables/useCompactLayout';
 import type { AudioItem } from '~/types/project';
 
 const { currentProject, findItemByUuid, findItemByIndex, autoSaveEnabled, hasUnsavedChanges, setAutoSave } = useProject();
@@ -164,7 +179,17 @@ const { t } = useLocalization();
 const { activeCues } = useAudioEngine();
 // Layout-only gate: decides whether the phone master meter is mounted and
 // whether the silence banner's placement maths is worth running at all.
-const { isCompact } = useCompactLayout();
+const { isCompact, isFullscreen } = useCompactLayout();
+const toggleFullscreen = lpToggleFullscreen;
+// Evaluated once on the client; document.fullscreenEnabled does not change.
+const fullscreenSupported = import.meta.client ? lpFullscreenSupported() : false;
+
+// Is the master bus actually producing anything? Used to keep the phone level
+// chip out of the header while the show is silent. -60 dB is the meter's own
+// floor, so this is "above the bottom of the scale", not an arbitrary threshold.
+const masterL = useMasterMeter(() => (isCompact.value ? 0 : null));
+const masterR = useMasterMeter(() => (isCompact.value ? 1 : null));
+const masterHasSignal = computed(() => masterL.peak.value > -60 || masterR.peak.value > -60);
 
 const showControlConfig = ref(false);
 const showProjectSettings = useState('showProjectSettings', () => false);
@@ -788,6 +813,8 @@ onMounted(() => {
   .clock-pair { display: flex; }
   .clock-pair .digital-clock:first-child { display: none; }
   .clock-pair .digital-clock.clock--inactive { display: none; }
+  /* Fullscreen took the system clock away — put ours back. */
+  .clock-pair--immersive .digital-clock:first-child { display: flex; }
   .digital-clock {
     min-width: 0;
     padding: 2px 6px;

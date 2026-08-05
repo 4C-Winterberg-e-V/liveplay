@@ -79,7 +79,10 @@
     "seconds": "SEKUNDEN",
     "clock": "Uhr",
     "autosave": "Automatisch speichern",
-    "unsavedChanges": "Ungespeicherte Änderungen"
+    "unsavedChanges": "Ungespeicherte Änderungen",
+    "masterLevel": "Master-Pegel",
+    "enterFullscreen": "Vollbild",
+    "exitFullscreen": "Vollbild beenden"
   },
   "playlist": {
     "title": "Wiedergabeliste",
@@ -590,6 +593,7 @@
     "tunnelConfigEnv": "Über Umgebungsvariablen konfiguriert — hier nur lesbar.",
     "tunnelConfigSaved": "Gespeichert. Beim nächsten Tunnel-Start aktiv.",
     "tunnelConfigKeepToken": "Bereits gespeicherter Token bleibt erhalten. Zum Ändern neuen Token eingeben.",
-    "tunnelConfigPath": "Konfigurationsdatei:"
+    "tunnelConfigPath": "Konfigurationsdatei:",
+    "installHint": "Tipp: Am Handy über das Browsermenü LivePlay installieren bzw. zum Startbildschirm hinzufügen — das blendet die Adressleiste aus und du bekommst den ganzen Bildschirm."
   }
 }

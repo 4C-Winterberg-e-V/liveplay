@@ -1,0 +1,35 @@
+{
+  "name": "LivePlay",
+  "short_name": "LivePlay",
+  "description": "Audio cue playback for live events — operate a show from a phone or tablet.",
+  "lang": "en",
+  "dir": "auto",
+  "start_url": ".",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#161616",
+  "theme_color": "#161616",
+  "categories": ["music", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "assets/icons/pwa/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/pwa/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/pwa/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
