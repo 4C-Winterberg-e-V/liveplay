@@ -7,6 +7,14 @@
 // Persisted per-device via localStorage (NOT in the project file) — the
 // same project may be open on an editing laptop and a touch tablet at
 // the same time, and each device should remember its own preference.
+//
+// This composable is the ONLY authority on Show Mode. Upstream additionally
+// synced it through the server (useShowControl), which made the sentence above
+// untrue: the first server snapshot overwrote whatever this device had
+// remembered, and flipping Show Mode on a phone flipped the laptop operating
+// it. That leg is removed — see the header of useShowControl.ts. The sync
+// below is between windows of the SAME machine only (the detached cart player),
+// which is a different thing and is wanted.
 // =====================================================================
 
 export type UiMode = 'edit' | 'playback';

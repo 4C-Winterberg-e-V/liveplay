@@ -4,29 +4,43 @@
 // Two-way sync for the operator UI state the SERVER owns:
 //
 //   * the selected playlist item   (ProjectState::selected_item_uuid)
-//   * Show Mode                    (ProjectState::show_mode)
 //   * the display locale           (ProjectState::ui_locale)
 //
-// These used to be purely local (selection in useProject, Show Mode in
-// localStorage, locale in localStorage). They moved server-side so that a
-// Bitfocus Companion surface, a touch tablet and the operator's laptop all
-// show the same selected cue and the same view mode — a control surface that
-// can't see what the operator has selected can't safely arm it.
+// These used to be purely local (selection in useProject, locale in
+// localStorage). They moved server-side so that a Bitfocus Companion surface,
+// a touch tablet and the operator's laptop agree on the selected cue — a
+// control surface that can't see what the operator has selected can't safely
+// arm it.
+//
+// Show Mode is deliberately NOT in that list, though upstream had it here.
+// Which cue is armed must be the same everywhere or the wrong thing fires;
+// whether a given screen is large-and-simplified or small-and-complete is a
+// property of THAT screen. Syncing it meant switching the phone into Show Mode
+// also switched the laptop it was being operated from — and it made
+// useUiMode's own per-device localStorage dead, because the first server
+// snapshot overwrote whatever this device had remembered. Show Mode is
+// per-device again and lives entirely in useUiMode (localStorage, plus
+// storage-event / Electron IPC sync between windows of the SAME machine, which
+// is what the detached cart player needs).
+//
+// The server still keeps a show_mode flag and still exposes set_show_mode over
+// REST/WS, so nothing external breaks — but a Companion "Show Mode" button no
+// longer moves these UIs. Re-wire here if that is ever wanted.
 //
 // This composable does NOT introduce a parallel store. It reads and writes
 // the very same useState keys the rest of the app already binds to
-// (`selectedItemUuid`, `useUiMode.uiMode`, `locale`), so no component needs
-// to change. Direction of travel:
+// (`selectedItemUuid`, `locale`), so no component needs to change. Direction
+// of travel:
 //
 //   server → client   playback_snapshot on (re)connect, then doc_patch ops
-//                     (selection_changed / show_mode_changed / locale_changed)
+//                     (selection_changed / locale_changed)
 //   client → server   watchers on those same refs
 //
 // Echo safety comes from both ends: the server only broadcasts when a value
 // actually changes, and `applying` suppresses the watcher while we write a
 // server value in. Pushes are also gated on `hydrated` so the locally
-// restored (localStorage) Show Mode and locale can't clobber a running show's
-// state in the fraction of a second before the first snapshot lands.
+// restored (localStorage) locale can't clobber a running show's state in the
+// fraction of a second before the first snapshot lands.
 //
 // Wired once per renderer from plugins/liveplay-server.client.ts.
 // =====================================================================
@@ -53,12 +67,9 @@ export const useShowControl = () => {
   const selectStep = (delta: number)       => server.stepSelection(delta);
   const selectNext = () => selectStep(1);
   const selectPrev = () => selectStep(-1);
-  const setShowMode    = (enabled: boolean) => server.setShowMode(enabled);
-  const toggleShowMode = () => server.setShowMode();
-
   if (_wired || !import.meta.client) {
     return { selectedItemUuid, showMode, currentLocale,
-             select, selectStep, selectNext, selectPrev, setShowMode, toggleShowMode };
+             select, selectStep, selectNext, selectPrev };
   }
   _wired = true;
 
@@ -87,15 +98,6 @@ export const useShowControl = () => {
     });
   };
 
-  const applyShowMode = (enabled: boolean) => {
-    const next: UiMode = enabled ? 'playback' : 'edit';
-    if (uiMode.value === next) return;
-    applyFromServer(() => { uiMode.value = next; });
-    // Mirror into this device's own persistence so a restart comes back in
-    // the mode the show ended in, matching the pre-server behaviour.
-    try { localStorage.setItem('liveplay-ui-mode', next); } catch { /* private browsing */ }
-  };
-
   const applyLocale = (code: string) => {
     if (!code || currentLocale.value === code) return;
     applyFromServer(() => { currentLocale.value = code; });
@@ -106,8 +108,8 @@ export const useShowControl = () => {
   server.onPlaybackSnapshot((snap: any) => {
     if (!snap) return;
     applySelection(snap.selected_item_uuid ?? null);
-    if (typeof snap.show_mode === 'boolean') applyShowMode(snap.show_mode);
-    if (typeof snap.locale === 'string')     applyLocale(snap.locale);
+    // snap.show_mode is deliberately ignored — see the header.
+    if (typeof snap.locale === 'string') applyLocale(snap.locale);
     // Only now may local changes travel outward.
     hydrated = true;
   });
@@ -117,9 +119,6 @@ export const useShowControl = () => {
     switch (patch.op) {
       case 'selection_changed':
         applySelection(patch.itemUuid ?? null);
-        break;
-      case 'show_mode_changed':
-        if (typeof patch.enabled === 'boolean') applyShowMode(patch.enabled);
         break;
       case 'locale_changed':
         if (typeof patch.locale === 'string') applyLocale(patch.locale);
@@ -136,16 +135,11 @@ export const useShowControl = () => {
     server.setSelection(uuid ?? null);
   });
 
-  watch(uiMode, (mode) => {
-    if (applying || !hydrated) return;
-    server.setShowMode(mode === 'playback');
-  });
-
   watch(currentLocale, (code) => {
     if (applying || !hydrated || !code) return;
     server.setServerLocale(code);
   });
 
   return { selectedItemUuid, showMode, currentLocale,
-           select, selectStep, selectNext, selectPrev, setShowMode, toggleShowMode };
+           select, selectStep, selectNext, selectPrev };
 };
