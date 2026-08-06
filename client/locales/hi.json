@@ -71,7 +71,10 @@
     "seconds": "सेकंड",
     "clock": "घड़ी",
     "autosave": "स्वतः सहेजें",
-    "unsavedChanges": "असहेजे गए परिवर्तन"
+    "unsavedChanges": "असहेजे गए परिवर्तन",
+    "masterLevel": "मास्टर स्तर",
+    "enterFullscreen": "पूर्ण स्क्रीन",
+    "exitFullscreen": "पूर्ण स्क्रीन से बाहर"
   },
   "playlist": {
     "title": "प्लेलिस्ट",
@@ -98,7 +101,8 @@
     "attach": "जोड़ें",
     "configureControls": "नियंत्रण कॉन्फ़िगर करें",
     "tabKeyboard": "कीबोर्ड",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "खाली स्लॉट दिखाएँ"
   },
   "properties": {
     "title": "गुण",
@@ -203,7 +207,9 @@
     "stopPreview": "पूर्वावलोकन बंद करें",
     "previewNoDevice": "कोई पूर्वावलोकन डिवाइस कॉन्फ़िगर नहीं — प्रोजेक्ट सेटिंग खोलने के लिए क्लिक करें",
     "confirmDelete": "«{name}» हटाएं?",
-    "clickToEdit": "मान टाइप करने के लिए क्लिक करें"
+    "clickToEdit": "मान टाइप करने के लिए क्लिक करें",
+    "moveUp": "ऊपर ले जाएँ",
+    "moveDown": "नीचे ले जाएँ"
   },
   "about": {
     "developedBy": "द्वारा विकसित",
@@ -386,7 +392,8 @@
     "default": "डिफ़ॉल्ट",
     "loading": "लोड हो रहा है…",
     "error": "त्रुटि",
-    "cancel": "रद्द करें"
+    "cancel": "रद्द करें",
+    "done": "पूर्ण"
   },
   "repair": {
     "title": "दूषित प्रोजेक्ट मिला",

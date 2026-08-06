@@ -1008,7 +1008,8 @@ if (import.meta.client && (window as any).electronAPI) {
   border: 1px solid var(--color-border);
   background: var(--color-background);
   color: var(--color-text-primary);
-  font-size: 14px;
+  font-size: max(14px, var(--lp-input-fs-min));
+  min-height: var(--lp-input-h);
 }
 .remote-field-input:focus {
   outline: none;
@@ -1126,7 +1127,8 @@ if (import.meta.client && (window as any).electronAPI) {
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-lg);
   padding: var(--spacing-xl);
-  min-width: 360px;
+  min-width: 0;
+  width: min(480px, 100vw - 24px);
   max-width: 480px;
   width: 90vw;
   display: flex;
@@ -1195,5 +1197,54 @@ if (import.meta.client && (window as any).electronAPI) {
   filter: brightness(1.1);
   background: var(--color-accent);
   border-color: var(--color-accent);
+}
+
+/* ---- Phone: the first screen has to fit ---------------------------------
+   `.welcome-container` is a flex item with the default min-width: auto, so its
+   min-content width won — a 486px box in a 393px viewport, cut off on BOTH
+   sides, with the Connect button and the version badge off-screen and no way to
+   scroll to them. */
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
+  .welcome-screen {
+    align-items: flex-start;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .welcome-container {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    padding:
+      calc(var(--spacing-lg) + env(safe-area-inset-top))
+      var(--spacing-md)
+      calc(var(--spacing-lg) + env(safe-area-inset-bottom));
+  }
+  /* Stacked, so the logo + wordmark no longer set a 390px min-content floor. */
+  .welcome-header {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+  }
+  .welcome-logo {
+    width: 56px;
+    height: 56px;
+  }
+  .welcome-title {
+    font-size: 34px;
+    letter-spacing: -1px;
+  }
+  .welcome-subtitle {
+    font-size: 15px;
+  }
+  /* Primary action nearest the thumb. */
+  .remote-actions {
+    flex-direction: column-reverse;
+  }
+  .remote-actions .welcome-button,
+  .welcome-actions .welcome-button {
+    width: 100%;
+    justify-content: center;
+    min-height: 48px;
+  }
 }
 </style>

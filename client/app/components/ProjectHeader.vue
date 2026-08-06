@@ -43,6 +43,7 @@
         <button
           type="button"
           class="header-overflow__btn"
+          :class="{ 'header-overflow__btn--alert': !autoSaveEnabled && hasUnsavedChanges }"
           aria-label="Menu"
           @click="showHeaderMenu = !showHeaderMenu"
         >
@@ -51,7 +52,41 @@
         <template v-if="showHeaderMenu">
           <div class="header-overflow__backdrop" @click="showHeaderMenu = false"></div>
           <div class="header-overflow__menu">
-            <!-- No X18 entry here: it has its own button in the bar. -->
+            <!-- Autosave lives here on a phone. The bar-level switch is hidden
+                 for width, and without this entry an operator who turned
+                 autosave off had no way to turn it back on. The dot on the ⋯
+                 button is what makes the off-plus-unsaved state visible while
+                 the menu is shut. -->
+            <button
+              type="button"
+              class="header-overflow__autosave"
+              role="switch"
+              :aria-checked="autoSaveEnabled"
+              :disabled="!currentProject"
+              @click="setAutoSave(!autoSaveEnabled)"
+            >
+              <span class="material-symbols-rounded">save</span>
+              <span>{{ t('project.autosave') }}</span>
+              <span class="autosave-toggle__track" :class="{ 'autosave-toggle__track--on': autoSaveEnabled }">
+                <span class="autosave-toggle__thumb"></span>
+              </span>
+            </button>
+            <!-- The URL bar is 60-90px of cue list. Installing the app removes
+                 it, but the LAN share is plain http:// and can never be installed,
+                 so this is the only route to a full screen there. Hidden where the
+                 platform has no Fullscreen API (Safari on iPhone — there the
+                 answer is Add to Home Screen). -->
+            <button v-if="fullscreenSupported" type="button" @click="toggleFullscreen()">
+              <span class="material-symbols-rounded">{{ isFullscreen ? 'fullscreen_exit' : 'fullscreen' }}</span>
+              <span>{{ isFullscreen ? t('project.exitFullscreen') : t('project.enterFullscreen') }}</span>
+            </button>
+            <!-- X18's primary path is the bottom deck tab; this is the fallback
+                 for the detached-window case where no deck is mounted. -->
+            <button type="button" @click="toggleX18(); showHeaderMenu = false">
+              <span class="material-symbols-rounded">equalizer</span>
+              <span>{{ t('x18.title') }}</span>
+              <span v-if="mainView === 'x18'" class="material-symbols-rounded">check</span>
+            </button>
             <button type="button" @click="showProjectSettings = true; showHeaderMenu = false">
               <span class="material-symbols-rounded">tune</span>
               <span>{{ t('settings.title') }}</span>
@@ -85,8 +120,10 @@
         </span>
       </button>
 
-      <!-- Clock pair: wall clock + LTC timecode, always both visible -->
-      <div class="clock-pair">
+      <!-- Clock pair: wall clock + LTC timecode. On a phone the wall clock is
+           normally hidden because the system status bar already shows the time —
+           but fullscreen hides that bar too, so the app has to supply it. -->
+      <div class="clock-pair" :class="{ 'clock-pair--immersive': isFullscreen }">
         <div class="digital-clock clock--active">
           <span class="clock-label">{{ t('project.clock') }}</span>
           <span class="clock-value">{{ currentTime }}</span>
@@ -95,6 +132,20 @@
           <span class="clock-label">LTC</span>
           <span class="clock-value">{{ ltcTimecode ?? '--:--:--:--' }}</span>
         </div>
+      </div>
+
+      <!-- Phone master level. The per-output StereoMeter is dropped from the
+           phone playback bar to give the cue name its width back, so this is
+           where "is anything actually coming out" lives. Two bare bars rather
+           than a StereoMeter: that component reserves 24px of its 68px for a dB
+           scale, which is unreadable at chip size anyway.
+           Only rendered while there IS signal — two flat bars beside the ⋯ button
+           read as a mystery icon, not as a meter, and an idle meter is 16px of
+           screen spent saying nothing. Compact-only, so desktop never opens the
+           extra subscription. -->
+      <div v-if="isCompact && masterHasSignal" class="header-meter" :title="t('project.masterLevel')">
+        <LiveMeterBar source="master" :index="0" vertical :min-db="-60" :max-db="0" />
+        <LiveMeterBar source="master" :index="1" vertical :min-db="-60" :max-db="0" />
       </div>
     </div>
   </div>
@@ -118,11 +169,27 @@ import ProjectSettingsModal from './ProjectSettingsModal.vue';
 import WebShareModal from './WebShareModal.vue';
 import TransportButtons from './TransportButtons.vue';
 import Btn from './Btn.vue';
+import LiveMeterBar from './LiveMeterBar.vue';
+import { useMasterMeter } from '~/composables/useLiveMeters';
+import { useCompactLayout, lpFullscreenSupported, lpToggleFullscreen } from '~/composables/useCompactLayout';
 import type { AudioItem } from '~/types/project';
 
 const { currentProject, findItemByUuid, findItemByIndex, autoSaveEnabled, hasUnsavedChanges, setAutoSave } = useProject();
 const { t } = useLocalization();
 const { activeCues } = useAudioEngine();
+// Layout-only gate: decides whether the phone master meter is mounted and
+// whether the silence banner's placement maths is worth running at all.
+const { isCompact, isFullscreen } = useCompactLayout();
+const toggleFullscreen = lpToggleFullscreen;
+// Evaluated once on the client; document.fullscreenEnabled does not change.
+const fullscreenSupported = import.meta.client ? lpFullscreenSupported() : false;
+
+// Is the master bus actually producing anything? Used to keep the phone level
+// chip out of the header while the show is silent. -60 dB is the meter's own
+// floor, so this is "above the bottom of the scale", not an arbitrary threshold.
+const masterL = useMasterMeter(() => (isCompact.value ? 0 : null));
+const masterR = useMasterMeter(() => (isCompact.value ? 1 : null));
+const masterHasSignal = computed(() => masterL.peak.value > -60 || masterR.peak.value > -60);
 
 const showControlConfig = ref(false);
 const showProjectSettings = useState('showProjectSettings', () => false);
@@ -172,7 +239,11 @@ const warningRef = ref<HTMLElement | null>(null);
 
 const warningMode = ref<'center' | 'gap' | 'left'>('center');
 const warningLeftPx = ref(0);
-const hideTitle = computed(() => !!silenceWarning.value && warningMode.value === 'left');
+// On a phone the banner is a full-width row of its own, so it never needs the
+// title's place. Without the isCompact guard the title was hidden there while
+// the banner itself was display:none — a countdown to dead air that manifested
+// as the project name vanishing.
+const hideTitle = computed(() => !!silenceWarning.value && warningMode.value === 'left' && !isCompact.value);
 
 const warningStyle = computed(() => ({
   left: `${warningLeftPx.value}px`,
@@ -182,6 +253,10 @@ const warningStyle = computed(() => ({
 const PLACEMENT_MARGIN = 12; // breathing room kept from neighbouring blocks
 
 function recomputeWarningPlacement() {
+  // The compact banner is a static full-width row — no measuring needed. Skip
+  // the geometry entirely rather than doing five getBoundingClientRect reads
+  // per resize on a battery-powered client.
+  if (isCompact.value) return;
   const header = headerRef.value;
   const warning = warningRef.value;
   const left = leftRef.value;
@@ -390,7 +465,9 @@ onMounted(() => {
     calc(var(--spacing-lg) + env(safe-area-inset-left));
   background-color: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
-  min-height: 60px;
+  // --lp-header-h is declared only inside the compact query, so this resolves
+  // to the same 60px it always did on desktop.
+  min-height: var(--lp-header-h, 60px);
 }
 
 .header-left {
@@ -586,6 +663,7 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  position: relative;
   width: 40px;
   height: 40px;
   border: 1px solid var(--color-border);
@@ -596,15 +674,31 @@ onMounted(() => {
 
   .material-symbols-rounded { font-size: 22px; }
 }
+
+/* The "Unsaved Changes" pill is dropped on a phone for width, so the ⋯ button
+   carries the state instead — otherwise autosave-off plus pending edits is
+   completely invisible on the surface where autosave now lives. */
+.header-overflow__btn--alert::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-warning);
+}
 .header-overflow__backdrop {
   position: fixed;
   inset: 0;
   z-index: 1000;
 }
 .header-overflow__menu {
-  // Fixed so it's never clipped by the header's horizontal overflow.
+  // Fixed so it's never clipped by the header's horizontal overflow. Anchored
+  // to the real header height token rather than a hardcoded 56px, which did not
+  // match the actual 62px header and opened the menu on top of the bar.
   position: fixed;
-  top: calc(env(safe-area-inset-top) + 56px);
+  top: calc(env(safe-area-inset-top) + var(--lp-header-h, 60px) + var(--spacing-xs));
   right: calc(env(safe-area-inset-right) + var(--spacing-md));
   z-index: 1001;
   min-width: 200px;
@@ -621,6 +715,7 @@ onMounted(() => {
     align-items: center;
     gap: var(--spacing-md);
     padding: var(--spacing-md);
+    min-height: var(--lp-tap, 44px);
     background: transparent;
     border: none;
     color: var(--color-text-primary);
@@ -628,8 +723,23 @@ onMounted(() => {
     text-align: left;
     cursor: pointer;
 
-    &:hover { background: var(--color-surface-hover); }
+    @media (any-hover: hover) and (any-pointer: fine) {
+      &:hover { background: var(--color-surface-hover); }
+    }
     .material-symbols-rounded { font-size: 20px; }
+  }
+}
+
+/* Autosave row inside the ⋯ menu: label left, switch right. */
+.header-overflow__autosave {
+  border-bottom: 1px solid var(--color-border) !important;
+
+  .autosave-toggle__track {
+    margin-inline-start: auto;
+  }
+
+  &:disabled {
+    opacity: 0.4;
   }
 }
 
@@ -638,83 +748,125 @@ onMounted(() => {
    so it stays hidden on desktop regardless of stylesheet order. */
 .header-right .header-transport { display: none; }
 
-@media (max-width: 768px) {
-  // C): fold Settings/Shortcuts into the ⋯ menu and drop the clock pair so the
-  // narrow header has room to breathe.
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
+  // The header is now identity + status only. Both time-critical controls moved
+  // to the bottom bar: the top-right corner is the worst one-handed thumb zone,
+  // and it was the reason this row kept running out of space.
   .header-action { display: none; }
   .header-overflow { display: block; }
-  .clock-pair { display: none; }
+  .header-right .header-transport { display: none; }
+  .autosave-toggle { display: none; }
+  .unsaved-pill { display: none; }
 
-  // X18 stays in the bar as an icon-only button, sized like the transport it
-  // sits next to. Its label is dropped for width; the aria-label carries it.
-  .header-action--x18 {
-    display: flex;
-    width: 46px;
-    height: 46px;
-    padding: 0;
-    justify-content: center;
-  }
-  .header-action--x18 :deep(.material-symbols-rounded) { font-size: 26px; }
-  .header-action--x18 :deep(span:not(.material-symbols-rounded)) { display: none; }
-
-  // Match the overflow button to the rest of the row: 40px was both visually
-  // odd next to the 46px buttons and under the 44px touch-target minimum.
+  // One shared icon-button rule instead of three hardcoded 46px pairs.
   .header-overflow__btn {
-    width: 46px;
-    height: 46px;
+    width: var(--lp-tap);
+    height: var(--lp-tap);
+  }
+  .header-overflow__btn .material-symbols-rounded {
+    font-size: var(--lp-tap-icon);
   }
 
   .project-header {
     gap: var(--spacing-sm);
+    // .main-workspace owns the horizontal insets now.
     padding:
       calc(var(--spacing-sm) + env(safe-area-inset-top))
-      calc(var(--spacing-md) + env(safe-area-inset-right))
+      var(--spacing-md)
       var(--spacing-sm)
-      calc(var(--spacing-md) + env(safe-area-inset-left));
-    min-height: 52px;
+      var(--spacing-md);
+    // Lets the silence banner take a full row of its own below.
+    flex-wrap: wrap;
   }
-  // The title yields before the buttons do — it already ellipsises, whereas a
-  // fourth action in the bar would otherwise push the ⋯ menu off-screen on a
-  // narrow phone.
+  // The show file name is the operator's orientation cue. Give it the row's
+  // slack instead of capping it at 30vw ("Sommerf…").
+  //
+  // flex-basis 0, NOT auto: with `flex-wrap: wrap` on the parent (which the
+  // silence banner needs) a basis of `auto` claims the untruncated title's full
+  // width, so at 360px the actions wrapped to a second line and the header grew
+  // to 105px. Basis 0 lets the title shrink and keeps the row single-line.
   .header-left {
-    flex-shrink: 1;
+    flex: 1 1 0;
     min-width: 0;
+    overflow: hidden;
   }
+  // One line, ellipsised. On a phone a wrapping title grows the header and
+  // pushes the LTC chip off the edge; the desktop header keeps its existing
+  // wrapping behaviour untouched.
   .project-name {
-    max-width: 30vw;
+    max-width: none;
+    flex: 1 1 auto;
+    min-width: 6ch;
+    font-size: 16px;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
   }
-  // Actions row shrinks to the remaining space and scrolls horizontally so no
-  // button is permanently cut off.
   .header-right {
     flex: 0 0 auto;
-    justify-content: flex-end;
     gap: var(--spacing-sm);
-
-    & > * {
-      flex-shrink: 0;
-    }
   }
 
-  // Transport moves into the title bar, icon-only to stay slim.
-  .header-right .header-transport { display: flex; }
-  .header-transport :deep(.control-btn__label) { display: none; }
-  .header-transport :deep(.control-btn) {
-    width: 46px;
-    height: 46px;
-    padding: 0;
-    justify-content: center;
+  // LTC comes back, but only as a chip and only while a cue is actually
+  // emitting timecode — the wall clock is on the phone's own status bar and the
+  // inactive LTC box was pure decoration.
+  .clock-pair { display: flex; }
+  .clock-pair .digital-clock:first-child { display: none; }
+  .clock-pair .digital-clock.clock--inactive { display: none; }
+  /* Fullscreen took the system clock away — put ours back. */
+  .clock-pair--immersive .digital-clock:first-child { display: flex; }
+  .digital-clock {
+    min-width: 0;
+    padding: 2px 6px;
+    border-width: 1px;
   }
-  .header-transport :deep(.control-btn .material-symbols-rounded) { font-size: 26px; }
-  .header-transport :deep(.control-btn .icon) { font-size: 24px; }
+  .clock-label { display: none; }
+  .clock-value { font-size: 14px; }
 
-  // Autosave toggle isn't needed in the phone title bar — drop it for space.
-  .autosave-toggle { display: none; }
+  .header-meter {
+    display: flex;
+    gap: 2px;
+    width: 16px;
+    height: 32px;
+    flex: 0 0 auto;
+    padding: 2px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    background: var(--color-background);
+  }
+  .header-meter :deep(.live-meter) {
+    flex: 1 1 0;
+    min-width: 0;
+  }
 
-  // The silence-warning banner would sit on top of the title-bar transport
-  // buttons on a narrow screen — hide it on phones.
-  .silence-warning { display: none; }
+  // The dead-air countdown was display:none here, so the one warning that a
+  // show is about to fall silent did not exist on the phone. It becomes a
+  // full-width row under the header instead of a floating banner that would
+  // have covered the buttons. The !important pair neutralises the inline
+  // placement style, which only makes sense for the desktop layout.
+  .silence-warning {
+    position: static;
+    left: auto !important;
+    transform: none !important;
+    display: block;
+    order: 99;
+    flex: 1 0 100%;
+    text-align: center;
+    border-radius: 0;
+    font-size: 15px;
+    padding: 4px var(--spacing-md);
+    margin: var(--spacing-sm) calc(-1 * var(--spacing-md)) calc(-1 * var(--spacing-sm));
+  }
+}
+
+/* Phone in landscape: every vertical pixel is a cue row. */
+@media (max-height: 559px) and (any-pointer: coarse) and (min-width: 600px) {
+  .project-header {
+    padding:
+      calc(var(--spacing-xs) + env(safe-area-inset-top))
+      var(--spacing-md)
+      var(--spacing-xs)
+      var(--spacing-md);
+  }
 }
 </style>

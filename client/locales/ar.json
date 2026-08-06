@@ -71,7 +71,10 @@
     "seconds": "ثواني",
     "clock": "ساعة",
     "autosave": "حفظ تلقائي",
-    "unsavedChanges": "تغييرات غير محفوظة"
+    "unsavedChanges": "تغييرات غير محفوظة",
+    "masterLevel": "مستوى الماستر",
+    "enterFullscreen": "شاشة كاملة",
+    "exitFullscreen": "إنهاء الشاشة الكاملة"
   },
   "playlist": {
     "title": "قائمة التشغيل",
@@ -98,7 +101,8 @@
     "attach": "إرفاق",
     "configureControls": "تكوين الضوابط",
     "tabKeyboard": "لوحة المفاتيح",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "إظهار الفتحات الفارغة"
   },
   "properties": {
     "title": "الخصائص",
@@ -203,7 +207,9 @@
     "stopPreview": "إيقاف المعاينة",
     "previewNoDevice": "لم يتم تكوين جهاز معاينة — انقر لفتح إعدادات المشروع",
     "confirmDelete": "حذف «{name}»؟",
-    "clickToEdit": "انقر لكتابة قيمة"
+    "clickToEdit": "انقر لكتابة قيمة",
+    "moveUp": "نقل لأعلى",
+    "moveDown": "نقل لأسفل"
   },
   "about": {
     "developedBy": "تم التطوير بواسطة",
@@ -386,7 +392,8 @@
     "default": "افتراضي",
     "loading": "جاري التحميل…",
     "error": "خطأ",
-    "cancel": "إلغاء"
+    "cancel": "إلغاء",
+    "done": "تم"
   },
   "repair": {
     "title": "تم اكتشاف مشروع تالف",

@@ -4,10 +4,20 @@
          (ProjectHeader) so the active-cue list gets the full width. -->
     <TransportButtons class="controls-left" />
 
-    <div class="active-cues">
-      <div v-if="activeCues.size === 0 && !previewingItem" class="no-cues">
-        {{ t('playback.noActiveCues') }}
-      </div>
+    <div class="active-cues lp-scroll-fade">
+      <!-- Idle. The bar keeps a fixed height at every moment so it can never
+           move the playlist under a descending thumb; on a phone that reserved
+           space carries the next cue instead of the words "No active cues".
+           One wrapper, so the v-else below still pairs with the idle test. -->
+      <template v-if="activeCues.size === 0 && !previewingItem">
+        <div v-if="isCompact" class="lp-upnext">
+          <span class="lp-upnext__pill">{{ t('status.upNext') }}</span>
+          <span class="lp-upnext__name">{{ nextItem?.displayName ?? '—' }}</span>
+        </div>
+        <div v-else class="no-cues">
+          {{ t('playback.noActiveCues') }}
+        </div>
+      </template>
 
       <div v-else class="cue-list">
         <!-- Preview card: styled identically to ActiveCueItem, with a green
@@ -33,9 +43,15 @@
                 <span>{{ formatPreviewTime(previewCurrentTime) }}</span>
                 <span>-{{ formatPreviewTime(previewDuration - previewCurrentTime) }}</span>
               </div>
-              <div class="preview-progress-bar" @click="handlePreviewSeek">
-                <div class="preview-progress-fill" :style="{ width: previewProgressPct + '%' }"></div>
-                <div class="preview-progress-handle" :style="{ left: previewProgressPct + '%' }"></div>
+              <div
+                class="preview-progress-bar seek-hit"
+                @pointerdown="onPreviewSeekDown"
+                @pointermove="onPreviewSeekMove"
+                @pointerup="onPreviewSeekUp"
+                @pointercancel="onPreviewSeekUp"
+              >
+                <div class="preview-progress-fill" :style="{ width: (previewScrubPct ?? previewProgressPct) + '%' }"></div>
+                <div class="preview-progress-handle" :style="{ left: (previewScrubPct ?? previewProgressPct) + '%' }"></div>
               </div>
             </div>
           </div>
@@ -91,12 +107,16 @@ import { useLiveplayServer } from '~/composables/useLiveplayServer';
 import { useCueMeters } from '~/composables/useLiveMeters';
 import VolumeSlider from './VolumeSlider.vue';
 import TransportButtons from './TransportButtons.vue';
+import { useCompactLayout } from '~/composables/useCompactLayout';
 
 const { activeCues, panicStop, nextItemOverrideUuid, autoNextItemUuid, setNextItem, playCue, triggerGroup } = useAudioEngine();
 const { findItemByUuid, previewItemUuid, previewCueId, stopPreview, currentProject } = useProject();
 const { playbackMappings } = useCartHotkeys();
 const { t } = useLocalization();
 const server = useLiveplayServer();
+// isCompact: layout (which idle row renders). isCoarse: scrub semantics, because
+// a preview seek is audible on the headphone bus.
+const { isCompact, isCoarse } = useCompactLayout();
 
 // ---- Preview seek / time --------------------------------------------------
 // Subscribe to the preview cue's per-item meter stream so we can display an
@@ -121,14 +141,59 @@ function formatPreviewTime(seconds: number): string {
   return `${m}:${(s % 60).toString().padStart(2, '0')}`;
 }
 
-function handlePreviewSeek(e: MouseEvent) {
+// Same deferred-commit scrub as ActiveCueItem: desktop seeks on press exactly as
+// before, touch follows the finger and only commits on release after real
+// travel, so a stray tap cannot jump the preview.
+const previewScrubPct = ref<number | null>(null);
+// See ActiveCueItem: `pointermove` also fires on buttonless mouse hover, so the
+// scrub must be scoped to the pointer that actually pressed the bar.
+let previewScrubPointerId: number | null = null;
+let previewScrubStartX = 0;
+let previewScrubMoved = false;
+
+function commitPreviewSeek(clientX: number, el: HTMLElement) {
   if (!previewCueId.value || !previewDuration.value) return;
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  const pct = (e.clientX - rect.left) / rect.width;
+  const rect = el.getBoundingClientRect();
+  const pct = (clientX - rect.left) / rect.width;
   const seekTo = pct * previewDuration.value;
   const item = previewingItem.value as any;
   const inPoint = item?.inPoint ?? 0;
   server.seekCueId(previewCueId.value, Math.max(0, seekTo + inPoint));
+}
+
+function onPreviewSeekDown(e: PointerEvent) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  const el = e.currentTarget as HTMLElement;
+  // Fine pointer: seek on press, enter no scrub state, so a drag cannot fire a
+  // second seek on release.
+  if (!isCoarse.value) { commitPreviewSeek(e.clientX, el); return; }
+  try { el.setPointerCapture(e.pointerId); } catch { /* not fatal */ }
+  previewScrubPointerId = e.pointerId;
+  previewScrubStartX = e.clientX;
+  previewScrubMoved = false;
+}
+
+function onPreviewSeekMove(e: PointerEvent) {
+  if (previewScrubPointerId !== e.pointerId) return;
+  if (previewScrubPct.value === null && !previewScrubMoved) {
+    if (Math.abs(e.clientX - previewScrubStartX) < 6) return;
+    previewScrubMoved = true;
+  }
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  previewScrubPct.value = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+}
+
+function onPreviewSeekUp(e: PointerEvent) {
+  if (previewScrubPointerId !== e.pointerId) return;
+  previewScrubPointerId = null;
+  if (previewScrubPct.value !== null && previewDuration.value) {
+    const item = previewingItem.value as any;
+    const inPoint = item?.inPoint ?? 0;
+    const seekTo = (previewScrubPct.value / 100) * previewDuration.value;
+    if (previewCueId.value) server.seekCueId(previewCueId.value, Math.max(0, seekTo + inPoint));
+  }
+  previewScrubPct.value = null;
+  previewScrubMoved = false;
 }
 
 // Dynamic per-output meters. Main (0/1) is always shown. Preview (30/31)
@@ -171,6 +236,12 @@ const previewingItem = computed(() => {
 });
 
 const effectiveNextUuid = computed(() => nextItemOverrideUuid.value ?? autoNextItemUuid.value);
+
+// What the phone shows in the reserved bar height while nothing is playing.
+const nextItem = computed(() => {
+  const u = effectiveNextUuid.value;
+  return u ? findItemByUuid(u) : null;
+});
 
 const playNextTooltip = computed(() => {
   const binding = playbackMappings.value['play-next'];
@@ -244,11 +315,13 @@ const handlePlayNext = () => {
   border-radius: var(--border-radius-md);
   font-weight: 500;
   
-  &:hover:not(:disabled) {
-    background-color: var(--color-surface-hover);
-    border-color: var(--color-accent);
+  @media (any-hover: hover) and (any-pointer: fine) {
+    &:hover:not(:disabled) {
+      background-color: var(--color-surface-hover);
+      border-color: var(--color-accent);
+    }
   }
-  
+
   &:disabled {
     opacity: 0.5;
   }
@@ -263,10 +336,12 @@ const handlePlayNext = () => {
     color: black;
     font-weight: 600;
 
-    &:hover:not(:disabled) {
-      background-color: var(--color-warning);
-      border-color: var(--color-warning);
-      filter: brightness(0.88);
+    @media (any-hover: hover) and (any-pointer: fine) {
+      &:hover:not(:disabled) {
+        background-color: var(--color-warning);
+        border-color: var(--color-warning);
+        filter: brightness(0.88);
+      }
     }
   }
 }
@@ -277,10 +352,12 @@ const handlePlayNext = () => {
   color: white;
   font-weight: 600;
 
-  &:hover:not(:disabled) {
-    background-color: var(--color-danger);
-    border-color: var(--color-danger);
-    filter: brightness(0.85);
+  @media (any-hover: hover) and (any-pointer: fine) {
+    &:hover:not(:disabled) {
+      background-color: var(--color-danger);
+      border-color: var(--color-danger);
+      filter: brightness(0.85);
+    }
   }
 }
 
@@ -303,6 +380,17 @@ const handlePlayNext = () => {
   color: var(--color-text-secondary);
   font-style: italic;
   padding: var(--spacing-md);
+}
+
+/* Phone-only "up next" row that fills the reserved bar height with information
+   instead of the words "No active cues". Renders nothing on desktop. */
+.lp-upnext {
+  display: none;
+}
+
+/* Hit wrapper for the preview seek bar — no extra geometry at base. */
+.seek-hit {
+  padding-block: 0;
 }
 
 .cue-list {
@@ -387,8 +475,10 @@ const handlePlayNext = () => {
   cursor: pointer;
   border: none;
 
-  &:hover {
-    opacity: 0.8;
+  @media (any-hover: hover) and (any-pointer: fine) {
+    &:hover {
+      opacity: 0.8;
+    }
   }
 }
 
@@ -439,8 +529,10 @@ const handlePlayNext = () => {
   cursor: pointer;
   direction: ltr;
 
-  &:hover .preview-progress-handle {
-    opacity: 1;
+  @media (any-hover: hover) and (any-pointer: fine) {
+    &:hover .preview-progress-handle {
+      opacity: 1;
+    }
   }
 }
 
@@ -465,69 +557,148 @@ const handlePlayNext = () => {
   pointer-events: none;
 }
 
-/* Mobile: the transport moves into the title bar (ProjectHeader), so hide it
-   here and let the active-cue list use the full width. */
-@media (max-width: 768px) {
+/* Phone: the transport lives in the bottom bar (MainWorkspace), so it is hidden
+   here. The bar keeps its FIXED height — that is the design, not an oversight:
+   a bar that vanishes when a cue ends, or grows when a second one starts, moves
+   the playlist by one to five rows at exactly the moment a thumb is already
+   descending on a chosen row. */
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
   .playback-controls {
-    gap: var(--spacing-md);
-    padding: 0 var(--spacing-md);
-    overflow-x: hidden;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-md);
+    align-items: stretch;
+    overflow: hidden;
   }
-  /* Higher specificity than the component's own .transport-buttons{display:flex}
-     so the desktop-location transport stays hidden on phones. */
+  /* Higher specificity than the component's own .transport-buttons{display:flex}. */
   .playback-controls .controls-left {
     display: none;
   }
-  /* Split the row in the cue card's favour. Both sides used to compete for the
-     same space with the meters refusing to shrink (flex-shrink: 0), so every
-     extra output pair — and a device-routed project now shows one per output —
-     ate into the card until its transport buttons were squeezed under the
-     meter. The card holds the controls you have to hit during a show; the
-     meters are glanceable and can scroll instead. */
   .active-cues {
-    /* Zero basis plus a hard floor. The meters keep their natural width for as
-       long as the cue card still clears 55% of the row; past that the floor
-       wins and the meters shrink into their own scroll strip. Splitting by
-       fixed percentages instead left the meters a few pixels short of their
-       content and showed a scrollbar even when nothing was clipped. */
-    flex: 1 1 0;
-    min-width: 55%;
-  }
-  .output-meters {
-    flex: 0 1 auto;
+    flex: 1 1 auto;
     min-width: 0;
-    overflow-x: auto;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  /* The two-cue fix. A horizontal row let cards divide the width until the name
+     went to 0px; a column of non-shrinking cards scrolls instead, so every card
+     always keeps its name, its remaining time and its level — which is exactly
+     what decides which Stop to press when a bed and a sting are both running. */
+  .cue-list {
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    gap: 6px;
+  }
+
+  .lp-upnext {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    height: 100%;
+    min-width: 0;
+  }
+  .lp-upnext__pill {
+    flex: 0 0 auto;
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    background: var(--color-warning);
+    color: black;
+  }
+  .lp-upnext__name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 16px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The master trim survives and becomes usable; its StereoMeter does not.
+     Per-cue level now comes from each card's own bar and master level from the
+     header mini-meter, so the 102px this column used to reserve goes back to
+     the cue name — but "too loud" must still have an answer other than PANIC. */
+  .output-meters {
+    flex: 0 0 auto;
+    align-self: stretch;
+    height: auto;
+    min-width: 0;
+    overflow: visible;
     padding-left: var(--spacing-sm);
     gap: var(--spacing-xs);
   }
-  /* Let a running cue fit the available width instead of the fixed 400px. */
-  .cue-list {
-    min-width: 0;
-    width: 100%;
+  .output-pair {
+    gap: 0;
   }
+  .output-pair > :first-child {
+    display: none;
+  }
+
+  /* Preview card. Still a hand-copy of ActiveCueItem (merging them is a
+     follow-up — that refactor would change desktop rendering of the most
+     safety-critical live component), so its compact rules are parallel here. */
   .preview-cue-card {
     min-width: 0;
     max-width: 100%;
     width: 100%;
     padding: var(--spacing-sm);
-    gap: var(--spacing-xs);
+    /* Replaces the PREVIEW pill, which cost the name ~70px to say what a green
+       edge says for free. */
+    border-left: 3px solid var(--color-success);
   }
-  /* Same finger-sized transport as ActiveCueItem — the preview card is the
-     other place a cue gets stopped from. */
+  .preview-status-pill {
+    display: none;
+  }
+  .preview-cue-meter {
+    display: none;
+  }
+  .preview-cue-name {
+    mask-image: none;
+    -webkit-mask-image: none;
+    text-overflow: ellipsis;
+    font-size: 16px;
+    font-weight: 600;
+  }
   .preview-cue-actions {
-    gap: var(--spacing-sm);
+    gap: var(--lp-sep);
   }
   .preview-stop-btn {
-    width: 44px;
-    height: 44px;
+    width: var(--lp-tap-lg);
+    height: var(--lp-tap-lg);
+    margin-inline-start: auto;
     flex-shrink: 0;
-    font-size: 28px;
+    font-size: 34px;
+  }
+  .seek-hit {
+    padding-block: 15px;
+    /* pan-y, NOT none: this 44px strip sits inside a vertically scrolling cue
+       list, and `none` meant a finger landing on it could not scroll to the
+       second running cue. The browser keeps the vertical axis; the pointer
+       handlers own horizontal drags. */
+    touch-action: pan-y;
   }
   .preview-progress-bar {
     height: 14px;
   }
   .preview-progress-handle {
     opacity: 1;
+    width: 28px;
+    height: 28px;
+  }
+}
+
+/* Phone in landscape: the bar is 72px, so the card has to give up a little. */
+@media (max-height: 559px) and (any-pointer: coarse) and (min-width: 600px) {
+  .time-info {
+    font-size: 11px;
+  }
+  .preview-progress-bar {
+    height: 8px;
   }
 }
 </style>

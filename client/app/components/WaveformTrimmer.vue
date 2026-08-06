@@ -83,14 +83,14 @@
         <canvas
           ref="waveformCanvas"
           class="waveform-canvas"
-          @mousedown="handleCanvasMouseDown"
+          @pointerdown="handleCanvasMouseDown"
         ></canvas>
 
         <!-- Trim Handles -->
         <div
           class="trim-handle trim-handle-in"
           :style="{ left: inPointPosition + 'px' }"
-          @mousedown.prevent="startDragHandle('in', $event)"
+          @pointerdown.prevent="startDragHandle('in', $event)"
         >
           <div class="trim-line"></div>
           <div class="trim-grip">
@@ -101,7 +101,7 @@
         <div 
           class="trim-handle trim-handle-out"
           :style="{ left: outPointPosition + 'px' }"
-          @mousedown.prevent="startDragHandle('out', $event)"
+          @pointerdown.prevent="startDragHandle('out', $event)"
         >
           <div class="trim-line"></div>
           <div class="trim-grip">
@@ -126,7 +126,7 @@
             v-if="playFade > 0"
             class="fade-handle fade-handle-play"
             :style="{ left: playFadePosition + 'px' }"
-            @mousedown.prevent="startDragFade('play', $event)"
+            @pointerdown.prevent="startDragFade('play', $event)"
             :title="t('waveform.playFadeTitle', { seconds: playFade.toFixed(1) })"
           >
             <div class="fade-line fade-line-red"></div>
@@ -140,7 +140,7 @@
             v-if="stopFade > 0"
             class="fade-handle fade-handle-stop"
             :style="{ left: stopFadePosition + 'px' }"
-            @mousedown.prevent="startDragFade('stop', $event)"
+            @pointerdown.prevent="startDragFade('stop', $event)"
             :title="t('waveform.stopFadeTitle', { seconds: stopFade.toFixed(1) })"
           >
             <div class="fade-line fade-line-red"></div>
@@ -154,7 +154,7 @@
             v-if="crossFade > 0"
             class="fade-handle fade-handle-cross"
             :style="{ left: crossFadePosition + 'px' }"
-            @mousedown.prevent="startDragFade('cross', $event)"
+            @pointerdown.prevent="startDragFade('cross', $event)"
             :title="t('waveform.crossFadeTitle', { seconds: crossFade.toFixed(1) })"
           >
             <div class="fade-line fade-line-yellow"></div>
@@ -555,14 +555,16 @@ const dragState = ref<{ handle: 'in' | 'out' | 'play' | 'stop' | 'cross' | null;
   startValue: 0
 });
 
-const startDragHandle = (handle: 'in' | 'out', event: MouseEvent) => {
+const startDragHandle = (handle: 'in' | 'out', event: PointerEvent) => {
+  if (event.pointerType === 'mouse' && event.button !== 0) return;
+  try { (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId); } catch { /* not fatal */ }
   dragState.value = {
     handle,
     startX: event.clientX,
     startValue: handle === 'in' ? inPoint.value : outPoint.value
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = (e: PointerEvent) => {
     if (!dragState.value.handle) return;
 
     const deltaX = e.clientX - dragState.value.startX;
@@ -581,16 +583,21 @@ const startDragHandle = (handle: 'in' | 'out', event: MouseEvent) => {
       emit('change');
     }
     dragState.value.handle = null;
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
+    document.removeEventListener('pointermove', handleMouseMove);
+    document.removeEventListener('pointerup', handleMouseUp);
+    document.removeEventListener('pointercancel', handleMouseUp);
   };
 
-  document.addEventListener('mousemove', handleMouseMove);
-  document.addEventListener('mouseup', handleMouseUp);
+  document.addEventListener('pointermove', handleMouseMove);
+  document.addEventListener('pointerup', handleMouseUp);
+  // Without pointercancel an OS-interrupted drag strands the move listener.
+  document.addEventListener('pointercancel', handleMouseUp);
 };
 
 // Handle fade dragging
-const startDragFade = (fadeType: 'play' | 'stop' | 'cross', event: MouseEvent) => {
+const startDragFade = (fadeType: 'play' | 'stop' | 'cross', event: PointerEvent) => {
+  if (event.pointerType === 'mouse' && event.button !== 0) return;
+  try { (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId); } catch { /* not fatal */ }
   const currentValue = fadeType === 'play' ? playFade.value : fadeType === 'stop' ? stopFade.value : crossFade.value;
   
   dragState.value = {
@@ -599,7 +606,7 @@ const startDragFade = (fadeType: 'play' | 'stop' | 'cross', event: MouseEvent) =
     startValue: currentValue
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = (e: PointerEvent) => {
     if (!dragState.value.handle) return;
 
     const deltaX = e.clientX - dragState.value.startX;
@@ -625,16 +632,20 @@ const startDragFade = (fadeType: 'play' | 'stop' | 'cross', event: MouseEvent) =
       emit('change');
     }
     dragState.value.handle = null;
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
+    document.removeEventListener('pointermove', handleMouseMove);
+    document.removeEventListener('pointerup', handleMouseUp);
+    document.removeEventListener('pointercancel', handleMouseUp);
   };
 
-  document.addEventListener('mousemove', handleMouseMove);
-  document.addEventListener('mouseup', handleMouseUp);
+  document.addEventListener('pointermove', handleMouseMove);
+  document.addEventListener('pointerup', handleMouseUp);
+  // Without pointercancel an OS-interrupted drag strands the move listener.
+  document.addEventListener('pointercancel', handleMouseUp);
 };
 
 // Handle canvas click for setting trim points
-const handleCanvasMouseDown = (event: MouseEvent) => {
+const handleCanvasMouseDown = (event: PointerEvent) => {
+  if (event.pointerType === 'mouse' && event.button !== 0) return;
   if (dragState.value.handle) return;
 
   const rect = waveformCanvas.value?.getBoundingClientRect();
@@ -1376,8 +1387,9 @@ onUnmounted(() => {
   border-radius: var(--border-radius-sm);
   color: var(--color-text-primary);
   font-family: 'Courier New', monospace;
-  font-size: 11px;
+  font-size: max(11px, var(--lp-input-fs-min));
   text-align: center;
+  min-height: var(--lp-input-h);
 }
 
 .fade-input:focus {
@@ -1548,6 +1560,7 @@ onUnmounted(() => {
 
 /* Trim Handles */
 .trim-handle {
+  touch-action: none;
   position: absolute;
   top: 0;
   bottom: 0;
@@ -1613,6 +1626,7 @@ onUnmounted(() => {
 
 /* Fade Handles */
 .fade-handle {
+  touch-action: none;
   position: absolute;
   top: 0;
   bottom: 0;
@@ -1825,10 +1839,11 @@ onUnmounted(() => {
   border-radius: var(--border-radius-sm);
   color: var(--color-text-primary);
   font-family: 'Courier New', monospace;
-  font-size: 11px;
+  font-size: max(11px, var(--lp-input-fs-min));
   text-align: center;
   flex: 1;
   min-width: 0;
+  min-height: var(--lp-input-h);
 }
 
 .time-input:focus {
@@ -1839,5 +1854,41 @@ onUnmounted(() => {
 .time-input:read-only {
   opacity: 0.6;
   cursor: default;
+}
+
+/* ---- Phone: the trimmer becomes a column ------------------------------
+   Today this is a fixed-height row of ~520px of fixed-width siblings inside a
+   345px panel with overflow: hidden — so on a phone the in/out fields and the
+   fade controls were simply cut off, and the drag handles were mouse-only. */
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
+  .waveform-trimmer {
+    flex-direction: column;
+    max-height: none;
+    overflow: visible;
+  }
+  .volume-control-section {
+    min-width: 0;
+    flex-direction: row;
+    align-items: center;
+  }
+  .time-display-section,
+  .fade-controls-section {
+    width: 100%;
+    min-width: 0;
+  }
+  .waveform-container {
+    height: 160px;
+  }
+  /* The 2px trim line stays the visual position marker; the grip around it
+     becomes a real target. */
+  .trim-grip,
+  .fade-grip {
+    width: var(--lp-tap);
+    height: var(--lp-tap);
+  }
+  .time-display-section input,
+  .fade-controls-section input {
+    padding: 0 4px;
+  }
 }
 </style>

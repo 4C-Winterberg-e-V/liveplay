@@ -45,6 +45,10 @@
       @click="handleSelect"
       :draggable="true"
       @dragstart="handleDragStart"
+      @pointerdown="onRowPointerDown"
+      @pointermove="onRowPointerMove"
+      @pointerup="onRowPointerUp"
+      @pointercancel="onRowPointerUp"
     >
       <!-- Progress bar for playing items (audio and groups) - only in header -->
       <div v-if="(isPlaying && item.type === 'audio') || (isGroupPlaying && item.type === 'group')" class="item-progress" :style="progressStyle"></div>
@@ -73,50 +77,69 @@
           @click.stop
         >bomb</span>
 
+        <!-- Exactly one pill, by priority. Playing and previewing could both
+             render before, and two pills on a narrow row cost the cue name
+             ~18 characters. -->
         <span v-if="isPlaying" class="status-pill playing">{{ t('status.playing') }}</span>
+        <span v-else-if="isPreviewing" class="status-pill preview">{{ t('status.previewing') }}</span>
         <span v-else-if="isQueuedNext" class="status-pill up-next">{{ t('status.upNext') }}</span>
-        <span v-if="isPreviewing" class="status-pill preview">{{ t('status.previewing') }}</span>
 
         <div class="item-actions">
+          <!-- Class-only additions: no DOM reordering in this component. On a
+               phone Play becomes a wide labelled landmark via `order: -1`, and
+               everything that is destructive (delete) or silently re-arms what
+               fires next (set-as-next) leaves the row for the properties sheet,
+               where it cannot be a thumb-slip away from Play. -->
           <ActionButton
             v-if="item.type === 'audio'"
             :icon="'headphones'"
             :highlight-color="isPreviewing ? 'var(--color-accent)' : 'var(--color-success)'"
             :is-active="isPreviewing"
+            class="pl-act--hide-compact"
             :class="{ 'no-device': !hasPreviewDevice }"
             context="Playlist"
             @click.stop="isPreviewing ? handleStopPreview() : handleStartPreview()"
             :title="isPreviewing ? t('actions.stopPreview') : (hasPreviewDevice ? t('actions.preview') : t('actions.previewNoDevice'))"
+            :aria-label="isPreviewing ? t('actions.stopPreview') : t('actions.preview')"
           />
           <ActionButton
             :icon="isPlaying ? 'stop' : 'play_arrow'"
             :highlight-color="isPlaying ? 'var(--color-danger)' : 'var(--color-success)'"
+            :label="isPlaying ? t('actions.stop') : t('actions.play')"
+            class="pl-act--play"
             context="Playlist"
             @click.stop="isPlaying ? handleStop() : handlePlay()"
             :title="isPlaying ? t('actions.stop') : t('actions.play')"
+            :aria-label="isPlaying ? t('actions.stop') : t('actions.play')"
           />
           <ActionButton
             icon="fast_forward"
             highlight-color="var(--color-warning)"
             active-text-color="black"
             :is-active="isManuallyQueued"
+            class="pl-act--hide-compact"
             context="Playlist"
             @click.stop="handleSetAsNext"
             :title="t('actions.setAsNext')"
+            :aria-label="t('actions.setAsNext')"
           />
           <ActionButton
             icon="settings"
             highlight-color="var(--color-accent)"
+            class="pl-act--edit"
             context="Playlist"
             @click.stop="handleEdit"
             :title="t('actions.edit')"
+            :aria-label="t('actions.edit')"
           />
           <ActionButton
             icon="delete"
             highlight-color="var(--color-danger)"
+            class="pl-act--hide-compact"
             context="Playlist"
             @click.stop="handleDelete"
             :title="t('actions.delete')"
+            :aria-label="t('actions.delete')"
           />
         </div>
         
@@ -190,6 +213,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { AudioItem, GroupItem, BaseItem } from '~/types/project';
 import ActionButton from './ActionButton.vue';
+import { useCompactLayout } from '~/composables/useCompactLayout';
 import { useOutputTarget, METER_COLORS } from '~/composables/useOutputTarget';
 import { calculatePerceivedLoudness } from '~/utils/audio';
 
@@ -199,6 +223,40 @@ const props = defineProps<{
 }>();
 
 const { selectedItem, selectedItems, toggleItemSelection, openItemProperties, removeItem, requestDeleteFromButton, findItemByUuid, currentProject, waveformUpdateKey, triggerWaveformUpdate } = useProject();
+// Gates the long-press gesture. Deliberately isCoarse and not isCompact: a
+// narrow mouse-driven window must keep click-to-select semantics.
+const { isCoarse } = useCompactLayout();
+
+// Long-press to add to the selection. Ctrl+click is the desktop path and has no
+// touch equivalent, so multi-selecting cues was impossible on a phone. Reuses
+// the existing additive branch in toggleItemSelection unchanged.
+let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+let longPressStartX = 0;
+let longPressStartY = 0;
+
+function clearLongPress() {
+  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+}
+
+function onRowPointerDown(e: PointerEvent) {
+  if (!isCoarse.value) return;
+  longPressStartX = e.clientX;
+  longPressStartY = e.clientY;
+  longPressTimer = setTimeout(() => {
+    longPressTimer = null;
+    toggleItemSelection(props.item.uuid, true, false);
+  }, 500);
+}
+
+function onRowPointerMove(e: PointerEvent) {
+  if (!longPressTimer) return;
+  // A scroll is not a long press.
+  if (Math.abs(e.clientX - longPressStartX) > 6 || Math.abs(e.clientY - longPressStartY) > 6) clearLongPress();
+}
+
+function onRowPointerUp() {
+  clearLongPress();
+}
 const { levels: outputTargetLevels } = useOutputTarget();
 const { playCue, stopCue, activeCues, activeGroups, triggerGroup, nextItemOverrideUuid, autoNextItemUuid, setNextItem } = useAudioEngine();
 const { t } = useLocalization();
@@ -383,6 +441,9 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  // A row can disappear mid-press (deleted, or the deck switches panels), and a
+  // surviving timer would then toggle the selection of an item that is gone.
+  clearLongPress();
   if (resizeObserver) {
     resizeObserver.disconnect();
     resizeObserver = null;
@@ -476,7 +537,9 @@ const hexToRgba = (hex: string, alpha: number) => {
 
 const itemStyle = computed(() => {
   const styles: any = {
-    marginLeft: `${props.depth * 24}px`,
+    // Tokenised so the phone can indent 8px per level instead of 24px — three
+    // levels deep used to cost 72px of a 360px row.
+    marginLeft: `calc(var(--lp-indent) * ${props.depth})`,
   };
   
   if (isPlaying.value || isGroupPlaying.value) {
@@ -549,13 +612,11 @@ const handleSetAsNext = () => {
 };
 
 const handleDelete = () => {
-  // When this item is part of a multi-selection, defer to the confirm dialog
-  // (Delete N Selected / Delete Only this / Cancel). Otherwise fall back to
-  // the simple single-item confirmation.
-  if (requestDeleteFromButton(props.item.uuid)) return;
-  if (confirm(t('actions.confirmDelete', { name: props.item.displayName }))) {
-    removeItem(props.item.uuid);
-  }
+  // The app's own dialog owns every delete now — single item or multi-selection.
+  // The old fallback was a blocking native confirm(), which freezes the renderer
+  // (meters, transport, the lot) behind an OS modal; on a phone that is a
+  // full-screen system sheet dropped over a running show.
+  requestDeleteFromButton(props.item.uuid);
 };
 
 const toggleExpand = () => {
@@ -874,10 +935,12 @@ const findItemByIndex = (index: number[]): AudioItem | GroupItem | null => {
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-sm) var(--spacing-md);
-  min-height: 44px;
+  /* --lp-row-h is declared only inside the compact query, so desktop keeps 44px. */
+  min-height: var(--lp-row-h, 44px);
   position: relative;
   z-index: 5;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .item-left {
@@ -897,9 +960,11 @@ const findItemByIndex = (index: number[]): AudioItem | GroupItem | null => {
   justify-content: center;
   font-size: 12px;
   color: var(--color-text-secondary);
-  
-  &:hover {
-    color: var(--color-text-primary);
+
+  @media (any-hover: hover) and (any-pointer: fine) {
+    &:hover {
+      color: var(--color-text-primary);
+    }
   }
 }
 
@@ -940,7 +1005,6 @@ const findItemByIndex = (index: number[]): AudioItem | GroupItem | null => {
   font-size: 18px;
   color: #ff3b5c;
   flex-shrink: 0;
-  cursor: help;
   line-height: 1;
 }
 
@@ -956,7 +1020,7 @@ const findItemByIndex = (index: number[]): AudioItem | GroupItem | null => {
   display: flex;
   gap: 2px;
   align-items: center;
-  margin-left: auto;
+  margin-inline-start: auto;
   
   .behavior-icon {
     font-size: 14px;
@@ -1010,33 +1074,186 @@ const findItemByIndex = (index: number[]): AudioItem | GroupItem | null => {
   padding-left: var(--spacing-md);
 }
 
-/* ---- Phones: stack name over actions ---------------------------------- */
-/* On a narrow screen the index + large name + 4–5 action buttons can't share
-   one line — the buttons end up covering the (especially group) name. Let the
-   row wrap: the name keeps the full first line and the buttons drop to their
-   own line as comfortable touch targets. */
-@media (max-width: 768px) {
+/* ---- Phones: one cue, one line ----------------------------------------
+   The previous approach let the row wrap and pushed the five action buttons onto
+   their own line, with the duration wrapping to a third — ~133px per row, so a
+   393x852 phone showed two cues out of a forty-cue show file. Cutting the on-row
+   controls to the two that belong there (Play, and the gear that opens
+   everything else) buys a single 56px line instead. */
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
   .item-left {
-    flex-wrap: wrap;
-    row-gap: 6px;
+    flex-wrap: nowrap;
+    /* Belt and braces: nothing in this row may escape the panel. */
+    min-width: 0;
+    overflow: hidden;
   }
-  /* flex-basis:100% forces the action cluster onto its own line below the name. */
+  /* Explicit running order via `order` rather than DOM edits, so the transport
+     ends up at the row's right edge where a thumb lands, and the metadata that
+     can be clipped sits before it. Left to source order, Play landed in the
+     middle of the row and pushed the duration off-screen. */
+  .item-name           { order: 10; }
+  /* The clip warning stays next to the name, ahead of the transport — a 15px
+     glyph is worth the width, and pushed to the end it would have been the one
+     thing rendered half-clipped past the gear. */
+  .peak-warning-icon   { order: 15; }
+  .status-pill         { order: 20; }
+  .behavior-indicators { order: 30; }
+  .item-duration       { order: 40; }
+  .item-actions        { order: 50; }
   .item-actions {
-    flex-basis: 100%;
-    gap: 8px;
-    margin-top: 2px;
+    flex-basis: auto;
+    flex-shrink: 0;
+    gap: var(--lp-gap-tap);
+    margin-top: 0;
+    margin-inline-start: auto;
   }
-  .item-actions :deep(.action-btn) {
-    width: 40px;
-    height: 40px;
+  .item-content {
+    padding: 4px var(--spacing-sm);
+  }
+  /* 8px x 6 gaps was 48px of the row. 6px reads the same and buys back 12. */
+  .item-left {
+    gap: 6px;
+  }
+  /* The list supplies the gap; keeping both doubled it. */
+  .playlist-item {
+    margin-bottom: 0;
+  }
+
+  /* A floor on the name, so it can no longer ellipsise to nothing exactly when
+     a status pill appears — i.e. while the cue is playing. 8ch rather than a
+     wider guarantee because the row also has to hold a 72px Play, a 44px gear
+     and the duration at 360px; a floor the row cannot honour would overflow
+     instead of truncating, which is strictly worse. */
+  .item-name {
+    font-size: 17px;
+    font-weight: 700;
+    /* 6ch measured: at 360px the row is exactly at capacity with index +
+       behaviours + duration + a 64px Play + a 44px gear, and a floor the row
+       cannot honour overflows instead of truncating. */
+    flex: 1 1 6ch;
+    min-width: 6ch;
+  }
+  .item-index {
+    font-size: 13px;
+    min-width: 18px;
+    flex-shrink: 0;
+  }
+  /* Shrinkable with no floor, so the row can always resolve: in the worst case
+     the duration truncates rather than pushing the transport off-screen. */
+  .item-duration {
+    font-size: 12px;
+    margin-left: 0;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+  /* "Up next" and "previewing" are genuine news. "Playing" is not: the row's own
+     button already reads STOP and the progress overlay is right there — and at
+     5ch the word was truncated anyway. Dropping it returns ~50px to the name. */
+  .status-pill {
+    font-size: 11px;
+    height: 20px;
+    padding: 0 6px;
+    max-width: 9ch;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .status-pill.playing {
+    display: none;
+  }
+  .peak-warning-icon {
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+
+  /* Behaviour indicators stay visible. They were dropped on mobile, but "this
+     cue auto-fires the next one" is exactly what an operator needs to know
+     before pressing Play — and on one line they cost width, not a whole row.
+     They are also the first thing allowed to shrink away. */
+  .behavior-indicators {
+    display: flex;
+    margin-left: 0;
+    gap: 2px;
+    max-width: 20px;
+    overflow: hidden;
+    flex-shrink: 1;
+  }
+  .behavior-indicators .behavior-icon {
+    font-size: 14px;
+    opacity: 1;
+  }
+
+  /* Preview, set-as-next and delete move to the properties sheet. Delete sat 8px
+     from Play; set-as-next silently changes what fires next, which is not the
+     same risk class as Play and should not be a thumb-slip away from it. */
+  .pl-act--hide-compact {
+    display: none;
+  }
+  /* order:-1 rather than moving the node, so desktop DOM order is untouched. */
+  .item-actions :deep(.pl-act--play) {
+    order: -1;
+    width: 56px;
+    height: 48px;
+    border-width: 2px;
+    flex-direction: column;
+    gap: 0;
+  }
+  .item-actions :deep(.pl-act--play .action-btn__label) {
+    display: block;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    /* "ABSPIELEN" just fits 56px; "ВОСПРОИЗВЕСТИ" does not. Truncate rather
+       than overflow — the glyph above still carries the meaning. */
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .item-actions :deep(.pl-act--edit) {
+    width: var(--lp-tap);
+    height: var(--lp-tap);
   }
   .item-actions :deep(.action-btn .material-symbols-rounded) {
-    font-size: 22px;
+    font-size: var(--lp-tap-icon);
   }
-  /* Decorative behaviour icons aren't needed on the touch layout — drop them so
-     they don't crowd the duration/name. */
-  .behavior-indicators {
+
+  /* 20x20 was the smallest control in the app, inside a row that also wanted the
+     tap for selection. */
+  .expand-btn {
+    width: var(--lp-tap);
+    height: var(--lp-tap);
+    margin-left: -6px;
+    flex-shrink: 0;
+  }
+  .expand-btn .material-symbols-rounded {
+    font-size: var(--lp-tap-icon);
+  }
+  /* The folder glyph is redundant on a group row: the 44px chevron next to it and
+     the indented, rule-bordered children already say "group". Dropping it gives
+     the 28px back to the name — without it a group row overflowed at 360px. */
+  .item-icon {
     display: none;
+  }
+
+  /* A rule reads the hierarchy in 2px where 16px of padding cost real name width
+     at every nesting level. */
+  .group-children {
+    padding-left: 8px;
+    border-left: 2px solid var(--color-border);
+  }
+}
+
+/* Phone in landscape: reclaim the row padding, but NOT the button height.
+   Shrinking Play to 40px would buy one more visible row and cost the 44px floor
+   on the single most important control in the app — the wrong trade. On a
+   ~393px-tall viewport two full rows is simply what fits once the running-cue
+   card and a reachable transport keep their space. */
+@media (max-height: 559px) and (any-pointer: coarse) and (min-width: 600px) {
+  .item-content {
+    padding-block: 2px;
   }
 }
 </style>

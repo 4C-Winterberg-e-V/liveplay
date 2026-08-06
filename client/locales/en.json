@@ -112,7 +112,8 @@
     "loading": "Loading…",
     "error": "Error",
     "cancel": "Cancel",
-    "delete": "Delete"
+    "delete": "Delete",
+    "done": "Done"
   },
   "project": {
     "enterName": "Enter Project Name",
@@ -125,7 +126,10 @@
     "seconds": "SECONDS",
     "clock": "Clock",
     "autosave": "Autosave",
-    "unsavedChanges": "Unsaved Changes"
+    "unsavedChanges": "Unsaved Changes",
+    "masterLevel": "Master level",
+    "enterFullscreen": "Full screen",
+    "exitFullscreen": "Exit full screen"
   },
   "playlist": {
     "title": "Playlist",
@@ -152,7 +156,8 @@
     "resetDefaults": "Reset to Defaults",
     "close": "Close",
     "detach": "Detach",
-    "attach": "Attach"
+    "attach": "Attach",
+    "showEmptySlots": "Show empty slots"
   },
   "behaviors": {
     "startPlayNext": "Start: Play Next",
@@ -324,7 +329,9 @@
     "stopPreview": "Stop preview",
     "previewNoDevice": "No preview device configured — click to open Project Settings",
     "clickToEdit": "Click to type a value",
-    "confirmDelete": "Delete \"{name}\"?"
+    "confirmDelete": "Delete \"{name}\"?",
+    "moveUp": "Move up",
+    "moveDown": "Move down"
   },
   "about": {
     "developedBy": "Developed by",
@@ -586,6 +593,7 @@
     "tunnelConfigEnv": "Configured via environment variables — read-only here.",
     "tunnelConfigSaved": "Saved. Active on the next tunnel start.",
     "tunnelConfigKeepToken": "Existing saved token is kept. Enter a new token to change it.",
-    "tunnelConfigPath": "Config file:"
+    "tunnelConfigPath": "Config file:",
+    "installHint": "Tip: on the phone, use the browser menu to install LivePlay / add it to the home screen — that hides the address bar and gives you a full screen."
   }
 }

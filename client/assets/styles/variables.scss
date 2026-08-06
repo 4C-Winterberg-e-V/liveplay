@@ -13,3 +13,37 @@ $border-radius-lg: 8px;
 $transition-fast: 150ms ease;
 $transition-base: 250ms ease;
 $transition-slow: 350ms ease;
+
+// ---- Compact (phone / touch) layout breakpoints -------------------------
+// These SCSS variables are documentation of record. The component
+// stylesheets deliberately carry the LITERAL query strings below rather
+// than an @include, because 34 of the 46 style blocks in the app are plain
+// `<style scoped>` with native CSS nesting — a mixin would force them all
+// through sass for no reviewable benefit. `pnpm lp:bp-check` verifies every
+// `@media` line in the client is byte-identical to one of these.
+//
+//   compact    : (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse)
+//   wide-short : (max-height: 559px) and (any-pointer: coarse) and (min-width: 600px)
+//   coarse     : (any-pointer: coarse)
+//   hoverable  : (any-hover: hover) and (any-pointer: fine)
+//
+// Three arms, and each earns its place:
+//   * `max-width: 767px` — a genuinely narrow viewport, mouse or finger.
+//   * `max-width: 1024px and any-pointer: coarse` — a tablet in portrait. An
+//     iPad is 768 CSS px wide, and the desktop header does not fit there (its
+//     clock pair runs ~70px off the edge). How narrow counts as narrow may
+//     legitimately depend on whether you are pointing with a finger; a 768px
+//     desktop WINDOW keeps the desktop layout because its pointer is fine.
+//   * `max-height: 559px and any-pointer: coarse` — a phone in landscape.
+//     The pointer qualifier matters: the detached cart window, which Electron
+//     lets shrink to 380x400 (client/electron/main.js), must not get phone
+//     chrome on a desktop with a mouse.
+// Layout follows size; behaviour always follows pointer.
+//
+// Never write `@media #{$compact} and (...)`: the compact query is a comma
+// list, so the `and` would bind to its second arm only and silently apply a
+// landscape refinement to every portrait phone. Write landscape out in full.
+$bp-phone:          767px;
+$bp-short:          559px;
+$bp-tablet:         1024px;
+$bp-wide-short-min: 600px;

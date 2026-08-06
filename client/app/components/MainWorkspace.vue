@@ -4,8 +4,10 @@
     <PlaybackControls />
     
     <!-- v-show (not v-if) so CartPlayer stays mounted across view switches —
-         it owns the global keyboard-hotkey listener lifecycle. -->
-    <div v-show="mainView === 'workspace'" class="workspace-content">
+         it owns the global keyboard-hotkey listener lifecycle. On phones the
+         deck class decides which of the two panels is on screen; both stay
+         mounted for the same reason. -->
+    <div v-show="mainView === 'workspace'" class="workspace-content" :class="'lp-deck--' + deckPane">
       <div v-if="!cartFullscreen" class="playlist-section" :class="{ 'playlist-collapsed': playlistCollapsed }" :style="{ width: (cartClosed || cartDetached) ? '100%' : `calc(100% - ${cartWidth}px)` }">
         <PlaylistView />
       </div>
@@ -14,7 +16,7 @@
         v-if="!cartDetached"
         class="resize-handle"
         :class="{ 'collapsed-left': cartFullscreen, 'collapsed-right': cartClosed }"
-        @mousedown="startResize"
+        @pointerdown="startResize"
       ></div>
 
       <div v-if="!cartClosed && !cartDetached" class="cart-section" :class="{ 'cart-collapsed': cartCollapsed }" :style="{ width: cartFullscreen ? '100%' : `${cartWidth}px` }">
@@ -24,6 +26,44 @@
 
     <!-- X18 control board: a full main view, mounted only when active. -->
     <X18View v-if="mainView === 'x18'" />
+
+    <!-- Phone bottom bar: which surface you are on, and the two controls that
+         must never be more than one thumb away. A flex SIBLING of the content
+         rather than position:fixed, so "content hidden under the bar" is
+         structurally impossible instead of avoided by a padding number that
+         drifts. Hidden outright on desktop. -->
+    <div ref="bottomBarRef" class="lp-bottom-bar">
+      <nav class="lp-deck-tabs" :aria-label="t('playlist.title')">
+        <button
+          type="button"
+          class="lp-deck-tab"
+          :class="{ 'lp-deck-tab--active': mainView === 'workspace' && deckPane === 'playlist' }"
+          @click="selectDeck('playlist')"
+        >
+          <span class="lp-deck-tab__label">{{ t('playlist.title') }}</span>
+          <span class="lp-deck-tab__count">{{ cueCount }}</span>
+        </button>
+        <button
+          type="button"
+          class="lp-deck-tab"
+          :class="{ 'lp-deck-tab--active': mainView === 'workspace' && deckPane === 'cart' }"
+          @click="selectDeck('cart')"
+        >
+          <span class="lp-deck-tab__label">{{ t('cart.title') }}</span>
+          <span class="lp-deck-tab__count">{{ cartCount }}</span>
+        </button>
+        <button
+          type="button"
+          class="lp-deck-tab"
+          :class="{ 'lp-deck-tab--active': mainView === 'x18' }"
+          @click="selectX18()"
+        >
+          <span class="lp-deck-tab__label">{{ t('x18.title') }}</span>
+          <span class="lp-deck-tab__count">{{ x18Count }}</span>
+        </button>
+      </nav>
+      <TransportButtons class="lp-transport-bar" />
+    </div>
 
     <PropertiesPanel v-if="propertiesPanelOpen && selectedItem" />
 
@@ -62,6 +102,7 @@
 <script setup lang="ts">
 import LocationChoiceModal from './LocationChoiceModal.vue';
 import ServerFilePickerModal from './ServerFilePickerModal.vue';
+import TransportButtons from './TransportButtons.vue';
 
 const {
   selectedItem,
@@ -110,52 +151,98 @@ const cartCollapsed = useState('cart.collapsed', () => false);
 // X18 control board. Shared via useState so the header nav button can toggle it.
 const mainView = useState<'workspace' | 'x18'>('mainView', () => 'workspace');
 
-const startResize = (e: MouseEvent) => {
+// ---------------------------------------------------------------------------
+// Phone shell: one surface at a time, plus a permanent transport row.
+// ---------------------------------------------------------------------------
+// The deck is driven entirely by CSS media queries — no JS gate is needed here,
+// which is the point: where the transport bar sits must not depend on a
+// listener having fired.
+//
+// Which panel the phone deck is showing. On desktop this class is present but
+// has no declarations attached, so the side-by-side split is untouched.
+const deckPane = useState<'playlist' | 'cart'>('lp.deckPane', () => 'playlist');
+const { buttons: x18Buttons } = useX18Board();
+
+// Live counts on the deck tabs. One-panel-at-a-time only costs the operator
+// something if the hidden surface is opaque — the count is what makes it
+// legible, and it is information neither panel header ever carried.
+const cueCount  = computed(() => currentProject.value?.items.length ?? 0);
+// Counts pads that actually RESOLVE to an item, not raw cartItems entries — a
+// tab that claims 6 while the grid can only show 4 is worse than no count.
+const cartCount = computed(() =>
+  Array.from({ length: 16 }, (_, i) => i).filter(i => !!getCartItem(i)).length);
+const x18Count  = computed(() => x18Buttons.value.length);
+
+function selectDeck(pane: 'playlist' | 'cart') {
+  mainView.value = 'workspace';
+  deckPane.value = pane;
+}
+function selectX18() {
+  mainView.value = 'x18';
+}
+
+// The bar's real height, published so the properties sheet can stop above it.
+// Measured rather than hand-maintained: a drifted constant is exactly how a
+// control ends up underneath the bar.
+const bottomBarRef = ref<HTMLElement | null>(null);
+
+// Pointer events rather than mouse events: PointerEvent extends MouseEvent, so
+// every clientX calculation and both snap zones below are unchanged, but the
+// handle now also works under a finger or a pen.
+const startResize = (e: PointerEvent) => {
+  // Reproduces the old implicit left-button-only behaviour without rejecting
+  // touch, which reports button 0 anyway.
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
   isResizing.value = true;
   e.preventDefault();
-  
-  const handleMouseMove = (e: MouseEvent) => {
+  try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* not fatal */ }
+
+  const handlePointerMove = (e: PointerEvent) => {
     if (!isResizing.value) return;
-    
+
     const container = document.querySelector('.workspace-content');
     if (!container) return;
-    
+
     const rect = container.getBoundingClientRect();
     const newWidth = rect.right - e.clientX;
-    
+
     // Snap zones
     const snapThreshold = 100; // pixels from edge to trigger snap
     const minWidth = 300;
     const maxWidth = rect.width * 0.95; // Allow up to 95% to trigger fullscreen
-    
+
     // Check for close snap (dragging very close to right edge)
     if (newWidth < snapThreshold) {
       cartClosed.value = true;
       cartFullscreen.value = false;
       return;
     }
-    
+
     // Check for fullscreen snap (dragging very close to left edge)
     if (newWidth > rect.width - snapThreshold) {
       cartFullscreen.value = true;
       cartClosed.value = false;
       return;
     }
-    
+
     // Normal resize
     cartClosed.value = false;
     cartFullscreen.value = false;
     cartWidth.value = Math.max(minWidth, Math.min(maxWidth, newWidth));
   };
-  
-  const handleMouseUp = () => {
+
+  const handlePointerUp = () => {
     isResizing.value = false;
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
+    document.removeEventListener('pointermove', handlePointerMove);
+    document.removeEventListener('pointerup', handlePointerUp);
+    document.removeEventListener('pointercancel', handlePointerUp);
   };
-  
-  document.addEventListener('mousemove', handleMouseMove);
-  document.addEventListener('mouseup', handleMouseUp);
+
+  document.addEventListener('pointermove', handlePointerMove);
+  document.addEventListener('pointerup', handlePointerUp);
+  // Without pointercancel a drag interrupted by the OS (a system gesture, an
+  // incoming call) would strand the move listener.
+  document.addEventListener('pointercancel', handlePointerUp);
 };
 
 // Listen for menu events
@@ -450,15 +537,31 @@ const handleKeydown = (e: KeyboardEvent) => {
   }
 };
 
+let bottomBarObserver: ResizeObserver | null = null;
+
 onMounted(() => {
   if (import.meta.client) {
     window.addEventListener('keydown', handleKeydown);
+
+    // Publish the bar's measured height. `display: none` on desktop means the
+    // box is 0x0 there, so --lp-bottom-h stays 0px and no sheet arithmetic
+    // changes outside the compact query.
+    if (bottomBarRef.value && typeof ResizeObserver !== 'undefined') {
+      bottomBarObserver = new ResizeObserver(() => {
+        const h = bottomBarRef.value?.getBoundingClientRect().height ?? 0;
+        document.documentElement.style.setProperty('--lp-bottom-h', `${h}px`);
+      });
+      bottomBarObserver.observe(bottomBarRef.value);
+    }
   }
 });
 
 onUnmounted(() => {
   if (import.meta.client) {
     window.removeEventListener('keydown', handleKeydown);
+    bottomBarObserver?.disconnect();
+    bottomBarObserver = null;
+    document.documentElement.style.setProperty('--lp-bottom-h', '0px');
   }
 });
 </script>
@@ -474,6 +577,17 @@ onUnmounted(() => {
      playlist/cart are collapsed on mobile) stays in the app's dark tone
      instead of showing the page's default white. */
   background-color: var(--color-background);
+  /* The shell owns the horizontal safe-area insets so individual bars don't
+     each have to remember them. env() is 0 where there is no inset, so this is
+     a genuine no-op on desktop and in Electron. */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Phone bottom bar. Renders nothing outside the compact query — both the deck
+   tabs and the second TransportButtons instance are inert on desktop. */
+.lp-bottom-bar {
+  display: none;
 }
 
 .workspace-content {
@@ -564,15 +678,18 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-// ---- Mobile: stack the panels vertically -------------------------------
-// On phones the side-by-side playlist|cart layout overflows horizontally and
-// squeezes the playlist into a sliver. Stack them and split the height; each
-// panel keeps its own internal scroll. The JS-driven inline widths are
-// overridden with !important. Desktop (>768px) is unaffected.
-@media (max-width: 768px) {
+// ---- Phone: one surface at a time, transport always in reach -------------
+// Splitting the height 50/50 gave neither panel a workable amount of room —
+// two visible cue rows out of a 40-cue show file — and left rows whose Play
+// button was bisected by the panel boundary. The deck shows one panel at full
+// height instead, and the surface you are not looking at is legible through the
+// count on its tab.
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
   .workspace-content {
     flex-direction: column;
   }
+  // The JS-driven inline widths at :style must be overridden, and no selector
+  // specificity beats an inline style — hence !important.
   .playlist-section,
   .cart-section {
     width: 100% !important;
@@ -580,18 +697,130 @@ onUnmounted(() => {
     flex: 1 1 0;
     min-height: 0;
   }
-  // Collapsed playlist: shrink to its header row so the cart player expands
-  // into the freed height. More specific than the rule above, so it wins.
-  .playlist-section.playlist-collapsed,
-  .cart-section.cart-collapsed {
-    flex: 0 0 auto;
+  // Only the selected deck is on screen. display:none rather than v-if keeps
+  // CartPlayer mounted — it owns the global cart-hotkey listener lifecycle.
+  .lp-deck--playlist .cart-section {
+    display: none;
   }
-  // Keep the bottom panel's content clear of the iOS home indicator in PWA mode.
-  .cart-section {
-    padding-bottom: env(safe-area-inset-bottom);
+  .lp-deck--cart .playlist-section {
+    display: none;
   }
   .resize-handle {
     display: none;
+  }
+
+  .lp-bottom-bar {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 1600;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    padding: var(--spacing-xs) var(--spacing-md)
+      calc(var(--spacing-xs) + env(safe-area-inset-bottom));
+  }
+
+  .lp-deck-tabs {
+    display: flex;
+    gap: var(--spacing-xs);
+    /* Dead space between navigation and transport. Mis-tapping CARTS costs
+       nothing; mis-tapping STOP ALL CUES ends the number. */
+    margin-bottom: 20px;
+  }
+
+  .lp-deck-tab {
+    flex: 1 1 0;
+    min-height: var(--lp-tap-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    background: var(--color-background);
+    color: var(--color-text-secondary);
+  }
+
+  .lp-deck-tab--active {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+
+  .lp-deck-tab__label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .lp-deck-tab__count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    opacity: 0.8;
+  }
+
+  .lp-transport-bar :deep(.transport-buttons) {
+    gap: var(--lp-sep);
+  }
+  .lp-transport-bar :deep(.control-btn) {
+    flex: 1 1 0;
+    min-height: var(--lp-tap-lg);
+    justify-content: center;
+    padding: 0 var(--spacing-sm);
+  }
+  // Stop-All gets the larger share: it is the one control that must be hit
+  // without looking.
+  .lp-transport-bar :deep(.panic-btn) {
+    flex: 1.4 1 0;
+  }
+  .lp-transport-bar :deep(.control-btn__label) {
+    display: inline;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: normal;
+    line-height: 1.05;
+  }
+}
+
+// ---- Phone in landscape: spend the width, don't hide a panel ------------
+// There really are ~850px here, and refusing to use them is what made
+// landscape unusable. The deck tab becomes a 2:1 weight switch, so the control
+// means the same thing in both orientations and nothing relocates on rotation.
+@media (max-height: 559px) and (any-pointer: coarse) and (min-width: 600px) {
+  .workspace-content {
+    flex-direction: row;
+  }
+  .playlist-section,
+  .cart-section {
+    display: block !important;
+    width: auto !important;
+    min-width: 0;
+  }
+  .lp-deck--playlist .playlist-section { flex: 2 1 0; }
+  .lp-deck--playlist .cart-section     { flex: 1 1 0; }
+  .lp-deck--cart .playlist-section     { flex: 1 1 0; }
+  .lp-deck--cart .cart-section         { flex: 2 1 0; }
+  .resize-handle {
+    display: none;
+  }
+  // One row: vertical space is the scarce axis here.
+  .lp-bottom-bar {
+    flex-direction: row;
+    align-items: stretch;
+    gap: var(--lp-sep);
+  }
+  .lp-deck-tabs {
+    flex: 1 1 auto;
+    margin-bottom: 0;
+  }
+  .lp-transport-bar {
+    flex: 0 0 auto;
   }
 }
 </style>

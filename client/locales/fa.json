@@ -71,7 +71,10 @@
     "seconds": "ثانیه",
     "clock": "ساعت",
     "autosave": "ذخیره خودکار",
-    "unsavedChanges": "تغییرات ذخیره‌نشده"
+    "unsavedChanges": "تغییرات ذخیره‌نشده",
+    "masterLevel": "سطح مستر",
+    "enterFullscreen": "تمام‌صفحه",
+    "exitFullscreen": "خروج از تمام‌صفحه"
   },
   "playlist": {
     "title": "لیست پخش",
@@ -98,7 +101,8 @@
     "attach": "ضمیمه",
     "configureControls": "پیکربندی کنترل‌ها",
     "tabKeyboard": "صفحه‌کلید",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "نمایش اسلات‌های خالی"
   },
   "properties": {
     "title": "خصوصیات",
@@ -203,7 +207,9 @@
     "stopPreview": "توقف پیش‌نمایش",
     "previewNoDevice": "دستگاه پیش‌نمایش تنظیم نشده — برای باز کردن تنظیمات پروژه کلیک کنید",
     "confirmDelete": "«{name}» حذف شود؟",
-    "clickToEdit": "برای تایپ یک مقدار کلیک کنید"
+    "clickToEdit": "برای تایپ یک مقدار کلیک کنید",
+    "moveUp": "انتقال به بالا",
+    "moveDown": "انتقال به پایین"
   },
   "about": {
     "developedBy": "توسعه یافته توسط",
@@ -386,7 +392,8 @@
     "default": "پیش‌فرض",
     "loading": "در حال بارگذاری…",
     "error": "خطا",
-    "cancel": "لغو"
+    "cancel": "لغو",
+    "done": "انجام شد"
   },
   "repair": {
     "title": "پروژه آسیب‌دیده شناسایی شد",

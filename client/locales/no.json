@@ -71,7 +71,10 @@
     "seconds": "SEKUNDER",
     "clock": "Klokke",
     "autosave": "Autolagring",
-    "unsavedChanges": "Ulagrede endringer"
+    "unsavedChanges": "Ulagrede endringer",
+    "masterLevel": "Masternivå",
+    "enterFullscreen": "Fullskjerm",
+    "exitFullscreen": "Avslutt fullskjerm"
   },
   "playlist": {
     "title": "Spilleliste",
@@ -98,7 +101,8 @@
     "attach": "Fest",
     "configureControls": "Konfigurer kontroller",
     "tabKeyboard": "Tastatur",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "Vis tomme plasser"
   },
   "properties": {
     "title": "Egenskaper",
@@ -203,7 +207,9 @@
     "stopPreview": "Stopp forhåndsvisning",
     "previewNoDevice": "Ingen forhåndsvisningsenhet konfigurert — klikk for å åpne Prosjektinnstillinger",
     "confirmDelete": "Slett «{name}»?",
-    "clickToEdit": "Klikk for å skrive inn en verdi"
+    "clickToEdit": "Klikk for å skrive inn en verdi",
+    "moveUp": "Flytt opp",
+    "moveDown": "Flytt ned"
   },
   "about": {
     "developedBy": "Utviklet av",
@@ -386,7 +392,8 @@
     "default": "standard",
     "loading": "Laster…",
     "error": "Feil",
-    "cancel": "Avbryt"
+    "cancel": "Avbryt",
+    "done": "Ferdig"
   },
   "repair": {
     "title": "Skadet prosjekt oppdaget",

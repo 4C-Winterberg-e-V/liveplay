@@ -39,18 +39,43 @@
           <span>{{ formatTime(cue.currentTime) }}</span>
           <span>-{{ formatTime(cue.duration - cue.currentTime) }}</span>
         </div>
-        
-        <div class="progress-bar" @click="handleSeek">
-          <div class="progress-fill" :style="progressStyle"></div>
-          <div 
-            class="progress-handle" 
-            :style="{ 
-              left: `${progress}%`,
-              borderColor: cue.color || 'var(--color-accent)'
-            }"
-          ></div>
+
+        <!-- The hit wrapper is what makes a 14px bar a 44px target without
+             drawing a 44px bar. On touch the seek is only committed on release
+             and only after real travel, so a stray tap can no longer jump a
+             live cue on the PA. -->
+        <div
+          class="seek-hit"
+          @pointerdown="onSeekDown"
+          @pointermove="onSeekMove"
+          @pointerup="onSeekUp"
+          @pointercancel="onSeekUp"
+        >
+          <div class="progress-bar">
+            <div class="progress-fill" :style="scrubPct !== null ? { width: scrubPct + '%' } : progressStyle"></div>
+            <div
+              class="progress-handle"
+              :style="{
+                left: `${scrubPct ?? progress}%`,
+                borderColor: cue.color || 'var(--color-accent)'
+              }"
+            ></div>
+          </div>
         </div>
       </div>
+
+      <!-- Per-cue level. Costs 6px of height rather than the 77px of width the
+           StereoMeter took from the cue name, so it survives at every phone
+           width — and with two cues running it is the only thing that says
+           which card is actually making sound. -->
+      <LiveMeterBar
+        v-if="isCompact"
+        class="lp-cue-meter"
+        source="cue"
+        :cue-id="serverCueId"
+        :min-db="-60"
+        :max-db="0"
+      />
     </div>
     
     <!-- VU Meter — drawn from the server's live meter stream so it tracks
@@ -76,6 +101,9 @@
 </template>
 
 <script setup lang="ts">
+import LiveMeterBar from './LiveMeterBar.vue';
+import { useCompactLayout } from '~/composables/useCompactLayout';
+
 // Projection of the server's view of an active cue. Owned by useAudioEngine
 // which rebuilds it from cue_state / playback_snapshot / meters broadcasts.
 // No client-side playback state lives here.
@@ -97,6 +125,10 @@ const props = defineProps<{
 
 const { stopCue, pauseCue, resumeCue, seekCue } = useAudioEngine();
 const { t } = useLocalization();
+// isCompact gates layout (the inline meter). isCoarse gates the SCRUB
+// SEMANTICS, because a seek is audible on the PA — that must follow the input
+// device, never the window width.
+const { isCompact, isCoarse } = useCompactLayout();
 
 // Server engine cue ID — populated in onload once the server registers the
 // cue and returns its ID. Used by StereoMeter to subscribe to the right
@@ -163,14 +195,63 @@ const handleResume = () => {
   resumeCue(props.cue.uuid);
 };
 
-const handleSeek = (e: MouseEvent) => {
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const percent = x / rect.width;
+// ---- Seek / scrub ---------------------------------------------------------
+// Desktop keeps today's behaviour exactly: a click seeks immediately on press.
+// Touch gets a real scrub instead — the position follows the finger and is only
+// committed on release, and only once the finger has actually travelled. A
+// stationary tap therefore does nothing, which removes the entire class of
+// "brushed the progress bar and jumped a live cue" mistakes.
+const scrubPct = ref<number | null>(null);
+// The id of the pointer currently pressing the bar, or null. Load-bearing:
+// `pointermove` fires on plain mouse HOVER, with no button down, so without
+// this the desktop progress fill would follow the cursor and the next click
+// would seek twice — once on press, once on release from the phantom scrub.
+let scrubPointerId: number | null = null;
+let scrubStartX = 0;
+let scrubMoved = false;
+
+const commitSeek = (clientX: number, el: HTMLElement) => {
+  const rect = el.getBoundingClientRect();
+  const percent = (clientX - rect.left) / rect.width;
   // Trimmed → absolute file time.
   const absoluteSeekTime = percent * props.cue.duration + (props.cue.inPoint || 0);
   seekCue(props.cue.uuid, absoluteSeekTime);
 };
+
+function onSeekDown(e: PointerEvent) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  const el = e.currentTarget as HTMLElement;
+  // Fine pointer: seek on press and stop there. No scrub state is entered at
+  // all, so a drag cannot produce a second seek and the scrub preview never
+  // shows on desktop.
+  if (!isCoarse.value) { commitSeek(e.clientX, el); return; }
+  try { el.setPointerCapture(e.pointerId); } catch { /* not fatal */ }
+  scrubPointerId = e.pointerId;
+  scrubStartX = e.clientX;
+  scrubMoved = false;
+}
+
+function onSeekMove(e: PointerEvent) {
+  if (scrubPointerId !== e.pointerId) return;
+  if (scrubPct.value === null && !scrubMoved) {
+    // Travel gate: ignore the jitter of a finger landing on the bar.
+    if (Math.abs(e.clientX - scrubStartX) < 6) return;
+    scrubMoved = true;
+  }
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  scrubPct.value = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+}
+
+function onSeekUp(e: PointerEvent) {
+  if (scrubPointerId !== e.pointerId) return;
+  scrubPointerId = null;
+  if (scrubPct.value !== null) {
+    const t = (scrubPct.value / 100) * props.cue.duration + (props.cue.inPoint || 0);
+    seekCue(props.cue.uuid, t);
+  }
+  scrubPct.value = null;
+  scrubMoved = false;
+}
 
 const formatTime = (seconds: number): string => {
   const mins = Math.floor(seconds / 60);
@@ -288,10 +369,18 @@ const formatTime = (seconds: number): string => {
   &.stop-btn {
     background-color: var(--color-danger);
   }
-  
-  &:hover {
-    opacity: 0.8;
+
+  @media (any-hover: hover) and (any-pointer: fine) {
+    &:hover {
+      opacity: 0.8;
+    }
   }
+}
+
+/* Hit wrapper for the seek bar. Zero extra geometry at base — the padding that
+   turns it into a 44px target is added only inside the compact query. */
+.seek-hit {
+  padding-block: 0;
 }
 
 .cue-progress {
@@ -315,10 +404,12 @@ const formatTime = (seconds: number): string => {
   cursor: pointer;
   /* Force LTR direction for progress bars in RTL languages */
   direction: ltr;
-  
-  &:hover {
-    .progress-handle {
-      opacity: 1;
+
+  @media (any-hover: hover) and (any-pointer: fine) {
+    &:hover {
+      .progress-handle {
+        opacity: 1;
+      }
     }
   }
 }
@@ -344,32 +435,31 @@ const formatTime = (seconds: number): string => {
   pointer-events: none;
 }
 
-/* Phones: the fixed 400px card overflows the screen. Fit it to the available
-   width instead (the MAIN meter keeps its size to the right). */
-@media (max-width: 768px) {
+/* Phones: the card owns the full row width and stacks in a column, so it never
+   competes with a sibling card for space. */
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
   .active-cue-item {
     min-width: 0;
     max-width: 100%;
     width: 100%;
-    padding: var(--spacing-sm);
-    gap: var(--spacing-xs);
-  }
-
-  /* The transport must never give up room to the name or the meter. Both of
-     those sit next to it in a card that can get very narrow, and because the
-     actions could shrink they ended up overflowing the content column with the
-     Stop button half-covered by the meter — unhittable exactly when you need
-     it. Pinning them keeps the squeeze on the name, which has an ellipsis. */
-  .cue-actions {
-    flex-shrink: 0;
+    /* The load-bearing declaration. Cards used to be flex children of a row
+       that let them shrink, so two running cues divided the width between them
+       and the name — the only shrinkable element left — went to 0px. Pinning
+       the basis means 2+ cues SCROLL as full-size cards instead. */
+    flex: 0 0 auto;
+    padding: var(--spacing-xs) var(--spacing-sm);
     gap: var(--spacing-sm);
   }
 
-  .action-btn {
-    width: 44px;
-    height: 44px;
-    flex-shrink: 0;
-    font-size: 28px;
+  /* The gradient mask faded the last 20% of the name ON TOP of the ellipsis, so
+     a truncated name lost two signals' worth of characters and it was
+     impossible to tell truncation from fade. Ellipsis alone is the honest one. */
+  .cue-name {
+    mask-image: none;
+    -webkit-mask-image: none;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.25;
   }
 
   .cue-header {
@@ -377,25 +467,60 @@ const formatTime = (seconds: number): string => {
     margin-bottom: var(--spacing-xs);
   }
 
-  /* Fatter seek bar with a permanently visible handle. The desktop handle only
-     appears on :hover, which touch devices never fire — so on a phone there was
-     no playhead marker at all and the 8px bar was a hard target to hit. */
+  /* Stop is the largest target in the card, pinned to the far edge where a
+     thumb naturally lands, with 24px of dead space before Pause. Stopping a cue
+     you meant to pause is audible; the geometry now makes that mis-tap hard. */
+  .cue-actions {
+    flex-shrink: 0;
+    gap: var(--lp-sep);
+  }
+
+  .action-btn {
+    width: var(--lp-tap);
+    height: var(--lp-tap);
+    flex-shrink: 0;
+    font-size: 26px;
+  }
+
+  .stop-btn {
+    width: var(--lp-tap-lg);
+    height: var(--lp-tap-lg);
+    margin-inline-start: auto;
+    font-size: 34px;
+  }
+
+  /* 14px bar + 2×15px padding = a 44px target that still looks like a 14px bar. */
+  .seek-hit {
+    padding-block: 15px;
+    /* pan-y, NOT none: this 44px strip sits inside a vertically scrolling cue
+       list, and `none` meant a finger landing on it could not scroll to the
+       second running cue. The browser keeps the vertical axis; the pointer
+       handlers own horizontal drags. */
+    touch-action: pan-y;
+  }
+
   .progress-bar {
     height: 14px;
   }
 
+  /* The handle is a visual playhead marker, never the target — .seek-hit is.
+     On desktop it only appears on :hover, which touch never fires, so a phone
+     had no playhead indication at all. */
   .progress-handle {
     opacity: 1;
+    width: 28px;
+    height: 28px;
   }
-}
 
-/* Narrow phones in portrait: name + finger-sized transport + a 68px meter do
-   not all fit, and the meter is the one the operator needs least here — the
-   per-output meters sit right beside this card. Dropping it takes the cue name
-   from ~11px (nothing readable) to ~92px on a 393px-wide screen. */
-@media (max-width: 480px) {
+  /* The vertical StereoMeter took 77px of a ~330px row from the cue name. The
+     inline LiveMeterBar replaces it for 6px of height. */
   .cue-meter {
     display: none;
+  }
+
+  .lp-cue-meter {
+    height: 6px;
+    margin-top: 4px;
   }
 }
 </style>

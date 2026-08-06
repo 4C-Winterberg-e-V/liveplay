@@ -9,17 +9,24 @@
     v-bind="$attrs"
   >
     <span class="material-symbols-rounded">{{ icon }}</span>
+    <!-- Rendered only when a caller passes one, and hidden by default. Touch has
+         no tooltips, so the one control that must never be mis-tapped needs to be
+         readable by someone who has not memorised the glyph set — the compact
+         rules in PlaylistItem reveal it. -->
+    <span v-if="label" class="action-btn__label">{{ label }}</span>
   </button>
 </template>
 
 <script setup lang="ts">
 const props = withDefaults(defineProps<{
   icon: string;
+  label?: string;
   highlightColor?: string;
   activeTextColor?: string;
   context?: 'Playlist' | 'Cart';
   isActive?: boolean;
 }>(), {
+  label: '',
   highlightColor: 'var(--color-accent)',
   activeTextColor: 'white',
   context: 'Playlist',
@@ -50,16 +57,24 @@ const computedStyle = computed(() => {
   transition: all var(--transition-fast);
   cursor: pointer;
 
-  &:hover:not(:disabled) {
-    background-color: var(--action-highlight, var(--color-accent));
-    border-color: var(--action-highlight, var(--color-accent));
-    color: var(--action-text, white);
+  @media (any-hover: hover) and (any-pointer: fine) {
+    &:hover:not(:disabled) {
+      background-color: var(--action-highlight, var(--color-accent));
+      border-color: var(--action-highlight, var(--color-accent));
+      color: var(--action-text, white);
+    }
   }
 
   &:disabled {
     opacity: 0.4;
     cursor: not-allowed;
   }
+}
+
+/* Hidden unless a host opts in. Zero declarations outside a compact query
+   anywhere, so no desktop button gains a label. */
+.action-btn__label {
+  display: none;
 }
 
 .action-btn--playlist {

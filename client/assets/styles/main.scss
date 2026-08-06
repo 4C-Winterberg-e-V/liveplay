@@ -84,6 +84,85 @@
   /* Default accent colors so components without an explicit data-theme inherit a usable value */
   --color-accent: #da1e28;
   --color-accent-hover: #b71c22;
+
+  // ---- Compact-layout tokens: neutral defaults --------------------------
+  // Each default is exactly what desktop computes today, so substituting the
+  // var() changes nothing outside the compact query below. The touch scale
+  // (--lp-tap*) is deliberately NOT declared here: it exists only inside the
+  // compact block, which is what makes "desktop is untouched" checkable by
+  // grep rather than by argument.
+
+  /* Real height of the phone bottom bar (deck tabs + transport), published by
+     MainWorkspace's ResizeObserver. 0px keeps desktop and the detached cart
+     window unaffected, and keeps sheet arithmetic honest instead of a
+     hand-maintained constant that drifts. */
+  --lp-bottom-h: 0px;
+  /* Top edge of a phone sheet — i.e. the phone header height. */
+  --lp-sheet-top: 0px;
+  /* Playlist nesting step. 24px == the depth indent used on desktop today. */
+  --lp-indent: 24px;
+  /* iOS focus-zoom floor. 0px means max(13px, 0px) stays 13px on desktop. */
+  --lp-input-fs-min: 0px;
+  --lp-input-h: auto;
+}
+
+// ---- Compact layout: the one place the phone scale is defined -----------
+// First media query in this file. Everything here is either a token or a
+// mobile-only property, so nothing can reach a desktop rule.
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
+  :root {
+    // Chrome heights. Reusing --playback-controls-height means
+    // PlaybackControls' `calc(var(--playback-controls-height) - 16px)` on the
+    // meter column follows automatically.
+    --playback-controls-height: 104px;
+    --lp-header-h: 52px;
+    --lp-panel-header-h: 44px;
+    --lp-sheet-top: 52px; // == --lp-header-h
+
+    // Touch scale — four sizes, no fifth. The app currently ships nine
+    // (20/24/26/28/32/36/40/44/46), which is why nothing reads as deliberate.
+    --lp-tap-lg: 56px;   // unrecoverable or show-critical
+    --lp-tap: 44px;      // every other tappable control
+    --lp-tap-sm: 40px;   // chrome only, never destructive
+    --lp-tap-icon: 24px; // the only icon size
+
+    // Spacing by consequence, not by taste.
+    --lp-gap-tap: 12px;  // peers of equal risk
+    --lp-sep: 24px;      // recoverable | unrecoverable — mandatory
+
+    // Density.
+    --lp-row-h: 56px;    // one playlist cue == one line
+    --lp-cart-row-h: 124px;
+    --lp-indent: 8px;
+
+    // Forms.
+    --lp-input-fs-min: 16px;
+    --lp-input-h: 44px;
+  }
+
+  // dvh tracks mobile browser chrome showing/hiding. Gated to compact so
+  // Electron keeps height: 100% byte-for-byte. The 100vh line is the
+  // pre-dvh fallback.
+  #__nuxt {
+    height: 100vh;
+    height: 100dvh;
+  }
+}
+
+// ---- Phone in landscape ------------------------------------------------
+// Written out standalone on purpose. `@media #{$compact} and (min-width: 600px)`
+// would bind the `and` to the compact query's second arm only and apply these
+// values to every portrait phone.
+@media (max-height: 559px) and (any-pointer: coarse) and (min-width: 600px) {
+  :root {
+    /* 84 not 72: at 72 the cue card clipped its own progress row. */
+    --playback-controls-height: 84px;
+    --lp-header-h: 44px;
+    --lp-panel-header-h: 40px;
+    --lp-sheet-top: 44px;
+    /* Height is the scarce axis here, and there is width to spare for the name. */
+    --lp-row-h: 44px;
+  }
 }
 
 // Light theme
@@ -126,11 +205,25 @@
 }
 
 html,
-body,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  // Stops Android Chrome's pull-to-refresh from reloading the SPA — which on
+  // a phone means losing the open project mid-show. Inert in Electron, which
+  // does not rubber-band.
+  overscroll-behavior: none;
+}
+
 #__nuxt {
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+html {
+  // Mobile-only property: kills the grey flash box on every tap.
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -176,22 +269,47 @@ span {
   color: inherit;
 }
 
-// Scrollbar styling
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+// Scrollbar styling. `(any-pointer: fine)` is true for every desktop and for
+// Electron, so this block compiles to the same thing it always did there.
+@media (any-pointer: fine) {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--color-surface);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: var(--border-radius-sm);
+
+    &:hover,
+    &:active {
+      background: var(--color-text-secondary);
+    }
+  }
 }
 
-::-webkit-scrollbar-track {
-  background: var(--color-surface);
-}
+// On touch, an 8px always-on scrollbar is 8px of stolen content width that
+// also looks draggable and is not. Hide it and signal "more below" with a
+// fade instead, applied per-scroller via .lp-scroll-fade.
+@media (any-pointer: coarse) {
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: var(--border-radius-sm);
+  * {
+    scrollbar-width: none;
+  }
 
-  &:hover {
-    background: var(--color-text-secondary);
+  .lp-scroll-fade {
+    mask-image: linear-gradient(to bottom, transparent 0, black 12px,
+        black calc(100% - 12px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 12px,
+        black calc(100% - 12px), transparent 100%);
   }
 }
 
@@ -216,10 +334,40 @@ button {
   cursor: pointer;
   color: var(--color-text-primary);
   transition: all var(--transition-fast);
+  // Removes the 300ms double-tap-zoom wait before a tap registers. Several
+  // desktop hover states animate filter/transform, so `transition: all` is
+  // deliberately left alone — the :active rule below carries its own 0ms.
+  touch-action: manipulation;
 
   &:disabled {
     cursor: not-allowed;
     opacity: 0.5;
+  }
+}
+
+// Press feedback. The app has ~109 :hover rules and almost no :active ones,
+// so touch got no acknowledgement at all — and mobile WebKit leaves the hover
+// state latched on the last button tapped, which reads as "armed". Gated on
+// the pointer rather than the width so a narrow mouse-driven window (the
+// detached cart player) never gets scale-on-click.
+// brightness()/scale() only: this introduces no colour of its own, so the
+// theme keeps producing every actual hue.
+@media (any-pointer: coarse) {
+  button:active:not(:disabled),
+  .cart-slot:active,
+  .x18-tile:active {
+    transform: scale(0.96);
+    filter: brightness(1.35);
+    transition-duration: 0ms;
+  }
+}
+
+// Keep the brightness acknowledgement, drop the movement.
+@media (prefers-reduced-motion: reduce) {
+  button:active:not(:disabled),
+  .cart-slot:active,
+  .x18-tile:active {
+    transform: none;
   }
 }
 
@@ -298,6 +446,93 @@ select {
 
 .gap-lg {
   gap: var(--spacing-lg);
+}
+
+// ---- Phone sheet contract ----------------------------------------------
+// Every dialog in the app is a centred box with a hard `min-width` (420-500px)
+// and no media query, so on a 360px phone they hang off BOTH screen edges with
+// no way to pan — including the confirm dialogs where a mis-tap loses work.
+// Opting a dialog in is two class names: `.lp-sheet-backdrop` on the overlay
+// and `.lp-sheet` on the box, plus `.lp-sheet__scroll` / `.lp-sheet__bar` if it
+// has a fixed header or action row.
+//
+// Declared ONLY inside the compact query: grep for `lp-sheet` and every hit is
+// inside this block. That is the whole desktop-safety argument for all of them.
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
+  // Raise every text field to the iOS focus-zoom floor. Scoped component
+  // rules out-specify this one, so those are patched in place with
+  // `max(<literal>, var(--lp-input-fs-min))`; this covers the rest.
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+    min-height: var(--lp-input-h);
+  }
+
+  .lp-sheet-backdrop {
+    // Bottom-anchored so the action row lands in thumb reach rather than
+    // centred where it competes with the notch.
+    align-items: flex-end;
+    padding: 0;
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .lp-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    // Stops above the bottom bar so PANIC stays visible and tappable behind
+    // every sheet in the app.
+    bottom: var(--lp-bottom-h);
+    top: auto;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    max-height: calc(100dvh - var(--lp-sheet-top) - var(--lp-bottom-h) - env(safe-area-inset-top));
+    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .lp-sheet__scroll {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    // Keeps a flick inside the sheet instead of chaining into the page.
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .lp-sheet__bar {
+    position: sticky;
+    z-index: 1;
+    background: var(--color-surface);
+    min-height: var(--lp-tap-lg);
+    flex-shrink: 0;
+  }
+
+  .lp-sheet__bar--top {
+    top: 0;
+  }
+
+  .lp-sheet__bar--bottom {
+    bottom: 0;
+    padding-bottom: max(var(--spacing-sm), env(safe-area-inset-bottom));
+  }
+
+  // Dismiss control. Today these range from 15x23 to 40x40 across dialogs.
+  .lp-close {
+    width: var(--lp-tap);
+    height: var(--lp-tap);
+    min-width: var(--lp-tap);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
 }
 
 // RTL Support

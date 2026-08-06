@@ -71,7 +71,10 @@
     "seconds": "سیکنڈ",
     "clock": "گھڑی",
     "autosave": "خودکار محفوظ",
-    "unsavedChanges": "غیر محفوظ شدہ تبدیلیاں"
+    "unsavedChanges": "غیر محفوظ شدہ تبدیلیاں",
+    "masterLevel": "ماسٹر لیول",
+    "enterFullscreen": "فل اسکرین",
+    "exitFullscreen": "فل اسکرین بند کریں"
   },
   "playlist": {
     "title": "پلے لسٹ",
@@ -98,7 +101,8 @@
     "attach": "منسلک کریں",
     "configureControls": "کنٹرولز ترتیب دیں",
     "tabKeyboard": "کی بورڈ",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "خالی سلاٹ دکھائیں"
   },
   "properties": {
     "title": "خصوصیات",
@@ -203,7 +207,9 @@
     "stopPreview": "پیش نظارہ روکیں",
     "previewNoDevice": "کوئی پیش نظارہ ڈیوائس ترتیب نہیں — پروجیکٹ سیٹنگز کھولنے کے لیے کلک کریں",
     "confirmDelete": "«{name}» حذف کریں؟",
-    "clickToEdit": "قدر ٹائپ کرنے کے لیے کلک کریں"
+    "clickToEdit": "قدر ٹائپ کرنے کے لیے کلک کریں",
+    "moveUp": "اوپر لے جائیں",
+    "moveDown": "نیچے لے جائیں"
   },
   "about": {
     "developedBy": "تیار کردہ",
@@ -386,7 +392,8 @@
     "default": "پہلے سے طے شدہ",
     "loading": "لوڈ ہو رہا ہے…",
     "error": "خرابی",
-    "cancel": "منسوخ کریں"
+    "cancel": "منسوخ کریں",
+    "done": "مکمل"
   },
   "repair": {
     "title": "خراب پروجیکٹ ملا",

@@ -71,7 +71,10 @@
     "seconds": "SEKONDA",
     "clock": "Orë",
     "autosave": "Ruajtje automatike",
-    "unsavedChanges": "Ndryshime të paruajtura"
+    "unsavedChanges": "Ndryshime të paruajtura",
+    "masterLevel": "Niveli master",
+    "enterFullscreen": "Ekran i plotë",
+    "exitFullscreen": "Dil nga ekrani i plotë"
   },
   "playlist": {
     "title": "Lista e Luajtjes",
@@ -98,7 +101,8 @@
     "attach": "Bashko",
     "configureControls": "Konfiguro kontrollet",
     "tabKeyboard": "Tastierë",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "Shfaq slotet e zbrazhët"
   },
   "properties": {
     "title": "Vetitë",
@@ -203,7 +207,9 @@
     "stopPreview": "Ndalo paraparimin",
     "previewNoDevice": "Asnjë pajisje paraparimi e konfiguruar — kliko për të hapur Cilësimet e Projektit",
     "confirmDelete": "Fshi «{name}»?",
-    "clickToEdit": "Kliko për të shkruar një vlerë"
+    "clickToEdit": "Kliko për të shkruar një vlerë",
+    "moveUp": "Zhvendos lart",
+    "moveDown": "Zhvendos poshtë"
   },
   "about": {
     "developedBy": "Zhvilluar nga",
@@ -386,7 +392,8 @@
     "default": "e paracaktuar",
     "loading": "Po ngarkohet…",
     "error": "Gabim",
-    "cancel": "Anulo"
+    "cancel": "Anulo",
+    "done": "U krye"
   },
   "repair": {
     "title": "Projekt i korruptuar i zbuluar",

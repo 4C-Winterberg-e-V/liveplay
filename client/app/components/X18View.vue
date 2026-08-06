@@ -5,8 +5,10 @@
         <span class="material-symbols-rounded">equalizer</span>
         <h2>{{ t('x18.title') }}</h2>
       </div>
-      <div class="x18-header-actions">
-        <span v-if="!x18Configured" class="x18-warn">{{ t('x18.boardRequiresIp') }}</span>
+      <!-- The warning is a direct child of the header, so hiding the (Electron
+           only) editor actions can never hide "no X18 IP configured" with them. -->
+      <span v-if="!x18Configured" class="x18-warn">{{ t('x18.boardRequiresIp') }}</span>
+      <div v-if="hasElectron" class="x18-header-actions">
         <button
           v-if="hasElectron"
           type="button"
@@ -29,7 +31,7 @@
       <p>{{ hasElectron ? t('x18.emptyDesktop') : t('x18.emptyViewer') }}</p>
     </div>
 
-    <div v-else class="x18-grid">
+    <div v-else class="x18-grid lp-scroll-fade">
       <button
         v-for="b in buttons"
         :key="b.id"
@@ -405,7 +407,9 @@ onUnmounted(() => {
   cursor: pointer;
   font-size: 13px;
 }
-.x18-btn:hover { background: var(--color-surface-hover); }
+@media (any-hover: hover) and (any-pointer: fine) {
+  .x18-btn:hover { background: var(--color-surface-hover); }
+}
 .x18-btn--active { color: var(--color-accent); border-color: var(--color-accent); }
 .x18-btn--small { padding: 6px 10px; }
 .x18-btn--danger { color: #e53e3e; border-color: #e53e3e; }
@@ -450,7 +454,9 @@ onUnmounted(() => {
   text-align: left;
   transition: transform 0.05s ease, box-shadow 0.1s ease;
 }
-.x18-tile:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25); }
+@media (any-hover: hover) and (any-pointer: fine) {
+  .x18-tile:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25); }
+}
 .x18-tile:active { transform: scale(0.98); }
 .x18-tile--active {
   background: color-mix(in srgb, var(--tile-color, var(--color-accent)) 55%, var(--color-surface));
@@ -508,7 +514,8 @@ onUnmounted(() => {
   color: var(--color-text-primary);
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  font-size: 14px;
+  font-size: max(14px, var(--lp-input-fs-min));
+  min-height: var(--lp-input-h);
 }
 .x18-field input[type="number"] { width: 90px; }
 
@@ -529,4 +536,48 @@ onUnmounted(() => {
 }
 .x18-key-capture.capturing { border-color: var(--color-accent); color: var(--color-accent); }
 .x18-error { color: #e53e3e; font-size: 12px; margin: 0; }
+
+/* ---- Phone: less chrome, readable tiles -------------------------------- */
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
+  .x18-header {
+    padding: var(--spacing-sm) var(--spacing-md);
+    gap: var(--spacing-sm);
+    min-height: var(--lp-panel-header-h);
+    flex-wrap: wrap;
+  }
+  .x18-title h2 {
+    font-size: 16px;
+  }
+  /* Full-width own row, so hiding the editor actions can never hide the
+     "no IP configured" warning with them. */
+  .x18-warn {
+    flex: 1 0 100%;
+    order: 2;
+  }
+  .x18-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm);
+    overscroll-behavior: contain;
+  }
+  .x18-tile {
+    min-height: 88px;
+    justify-content: flex-start;
+    gap: 2px;
+    touch-action: manipulation;
+  }
+  .x18-tile__label {
+    font-size: 17px;
+  }
+  .x18-tile__summary {
+    font-size: 13px;
+  }
+  /* A PC-keyboard badge competing with the label for the one glance you get. */
+  .x18-tile__key {
+    display: none;
+  }
+  .x18-btn {
+    min-height: var(--lp-tap);
+  }
+}
 </style>
