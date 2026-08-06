@@ -179,7 +179,8 @@
     "close": "Close",
     "detach": "Detach",
     "attach": "Attach",
-    "showEmptySlots": "Show empty slots"
+    "showEmptySlots": "Show empty slots",
+    "tapAgain": "Tap again to fire"
   },
   "behaviors": {
     "startPlayNext": "Start: Play Next",

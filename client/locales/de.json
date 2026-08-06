@@ -110,7 +110,8 @@
     "configureControls": "Steuerung konfigurieren",
     "tabKeyboard": "Tastatur",
     "tabMidi": "MIDI",
-    "showEmptySlots": "Leere Slots anzeigen"
+    "showEmptySlots": "Leere Slots anzeigen",
+    "tapAgain": "Nochmal tippen"
   },
   "properties": {
     "title": "Eigenschaften",
