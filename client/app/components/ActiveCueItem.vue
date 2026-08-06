@@ -202,6 +202,11 @@ const handleResume = () => {
 // stationary tap therefore does nothing, which removes the entire class of
 // "brushed the progress bar and jumped a live cue" mistakes.
 const scrubPct = ref<number | null>(null);
+// The id of the pointer currently pressing the bar, or null. Load-bearing:
+// `pointermove` fires on plain mouse HOVER, with no button down, so without
+// this the desktop progress fill would follow the cursor and the next click
+// would seek twice — once on press, once on release from the phantom scrub.
+let scrubPointerId: number | null = null;
 let scrubStartX = 0;
 let scrubMoved = false;
 
@@ -216,13 +221,18 @@ const commitSeek = (clientX: number, el: HTMLElement) => {
 function onSeekDown(e: PointerEvent) {
   if (e.pointerType === 'mouse' && e.button !== 0) return;
   const el = e.currentTarget as HTMLElement;
+  // Fine pointer: seek on press and stop there. No scrub state is entered at
+  // all, so a drag cannot produce a second seek and the scrub preview never
+  // shows on desktop.
+  if (!isCoarse.value) { commitSeek(e.clientX, el); return; }
   try { el.setPointerCapture(e.pointerId); } catch { /* not fatal */ }
+  scrubPointerId = e.pointerId;
   scrubStartX = e.clientX;
   scrubMoved = false;
-  if (!isCoarse.value) commitSeek(e.clientX, el);
 }
 
 function onSeekMove(e: PointerEvent) {
+  if (scrubPointerId !== e.pointerId) return;
   if (scrubPct.value === null && !scrubMoved) {
     // Travel gate: ignore the jitter of a finger landing on the bar.
     if (Math.abs(e.clientX - scrubStartX) < 6) return;
@@ -233,6 +243,8 @@ function onSeekMove(e: PointerEvent) {
 }
 
 function onSeekUp(e: PointerEvent) {
+  if (scrubPointerId !== e.pointerId) return;
+  scrubPointerId = null;
   if (scrubPct.value !== null) {
     const t = (scrubPct.value / 100) * props.cue.duration + (props.cue.inPoint || 0);
     seekCue(props.cue.uuid, t);

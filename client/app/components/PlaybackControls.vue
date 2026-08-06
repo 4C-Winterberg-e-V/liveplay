@@ -145,6 +145,9 @@ function formatPreviewTime(seconds: number): string {
 // before, touch follows the finger and only commits on release after real
 // travel, so a stray tap cannot jump the preview.
 const previewScrubPct = ref<number | null>(null);
+// See ActiveCueItem: `pointermove` also fires on buttonless mouse hover, so the
+// scrub must be scoped to the pointer that actually pressed the bar.
+let previewScrubPointerId: number | null = null;
 let previewScrubStartX = 0;
 let previewScrubMoved = false;
 
@@ -161,13 +164,17 @@ function commitPreviewSeek(clientX: number, el: HTMLElement) {
 function onPreviewSeekDown(e: PointerEvent) {
   if (e.pointerType === 'mouse' && e.button !== 0) return;
   const el = e.currentTarget as HTMLElement;
+  // Fine pointer: seek on press, enter no scrub state, so a drag cannot fire a
+  // second seek on release.
+  if (!isCoarse.value) { commitPreviewSeek(e.clientX, el); return; }
   try { el.setPointerCapture(e.pointerId); } catch { /* not fatal */ }
+  previewScrubPointerId = e.pointerId;
   previewScrubStartX = e.clientX;
   previewScrubMoved = false;
-  if (!isCoarse.value) commitPreviewSeek(e.clientX, el);
 }
 
 function onPreviewSeekMove(e: PointerEvent) {
+  if (previewScrubPointerId !== e.pointerId) return;
   if (previewScrubPct.value === null && !previewScrubMoved) {
     if (Math.abs(e.clientX - previewScrubStartX) < 6) return;
     previewScrubMoved = true;
@@ -177,6 +184,8 @@ function onPreviewSeekMove(e: PointerEvent) {
 }
 
 function onPreviewSeekUp(e: PointerEvent) {
+  if (previewScrubPointerId !== e.pointerId) return;
+  previewScrubPointerId = null;
   if (previewScrubPct.value !== null && previewDuration.value) {
     const item = previewingItem.value as any;
     const inPoint = item?.inPoint ?? 0;
