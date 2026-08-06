@@ -142,4 +142,24 @@ function cancelEdit() {
   -webkit-appearance: none;
   margin: 0;
 }
+
+/* Match the fader's new touch width and make the exact-value label tappable. */
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
+  .volume-slider {
+    width: var(--lp-tap);
+  }
+  .volume-slider__label-wrap {
+    height: 32px;
+  }
+  .volume-slider__label {
+    font-size: 13px;
+    min-height: 32px;
+    padding: 6px 8px;
+  }
+  .volume-slider__input {
+    width: 60px;
+    height: 32px;
+    font-size: max(10px, var(--lp-input-fs-min));
+  }
+}
 </style>

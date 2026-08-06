@@ -79,7 +79,10 @@
     "seconds": "SEKUNDEN",
     "clock": "Uhr",
     "autosave": "Automatisch speichern",
-    "unsavedChanges": "Ungespeicherte Änderungen"
+    "unsavedChanges": "Ungespeicherte Änderungen",
+    "masterLevel": "Master-Pegel",
+    "enterFullscreen": "Vollbild",
+    "exitFullscreen": "Vollbild beenden"
   },
   "playlist": {
     "title": "Wiedergabeliste",
@@ -106,7 +109,8 @@
     "attach": "Einbetten",
     "configureControls": "Steuerung konfigurieren",
     "tabKeyboard": "Tastatur",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "Leere Slots anzeigen"
   },
   "properties": {
     "title": "Eigenschaften",
@@ -265,7 +269,9 @@
     "stopPreview": "Vorschau stoppen",
     "previewNoDevice": "Kein Vorschaugerät konfiguriert — klicken, um Projekteinstellungen zu öffnen",
     "confirmDelete": "«{name}» löschen?",
-    "clickToEdit": "Klicken, um einen Wert einzugeben"
+    "clickToEdit": "Klicken, um einen Wert einzugeben",
+    "moveUp": "Nach oben",
+    "moveDown": "Nach unten"
   },
   "about": {
     "developedBy": "Entwickelt von",
@@ -478,7 +484,8 @@
     "loading": "Wird geladen…",
     "error": "Fehler",
     "cancel": "Abbrechen",
-    "delete": "Löschen"
+    "delete": "Löschen",
+    "done": "Fertig"
   },
   "repair": {
     "title": "Beschädigtes Projekt erkannt",
@@ -625,7 +632,8 @@
     "tunnelConfigEnv": "Über Umgebungsvariablen konfiguriert — hier nur lesbar.",
     "tunnelConfigSaved": "Gespeichert. Beim nächsten Tunnel-Start aktiv.",
     "tunnelConfigKeepToken": "Bereits gespeicherter Token bleibt erhalten. Zum Ändern neuen Token eingeben.",
-    "tunnelConfigPath": "Konfigurationsdatei:"
+    "tunnelConfigPath": "Konfigurationsdatei:",
+    "installHint": "Tipp: Am Handy über das Browsermenü LivePlay installieren bzw. zum Startbildschirm hinzufügen — das blendet die Adressleiste aus und du bekommst den ganzen Bildschirm."
   },
   "showMode": {
     "toggle": "Show-Modus",

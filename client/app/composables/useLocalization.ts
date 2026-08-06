@@ -70,30 +70,27 @@ export const useLocalization = () => {
     loadLocales();
   }
 
-  // Walk a dotted key through one locale's tree. Returns null when the key
-  // isn't there, so the caller can decide what to fall back to.
-  const lookup = (locale: any, keys: string[]): string | null => {
-    let value: any = locale;
-    if (!value) return null;
+  // Walk a dotted path through one locale's object. Returns undefined on a miss
+  // rather than the key, so the caller can decide what to fall back to.
+  const lookup = (locale: string, keys: string[]): string | undefined => {
+    let value: any = locales.value[locale];
+    if (!value) return undefined;
     for (const k of keys) {
-      if (value && typeof value === 'object' && k !== '_metadata') {
-        value = value[k];
-      } else {
-        return null;
-      }
+      if (value && typeof value === 'object' && k !== '_metadata') value = value[k];
+      else return undefined;
     }
-    return typeof value === 'string' ? value : null;
+    return typeof value === 'string' ? value : undefined;
   };
 
   const t = (key: string, params?: Record<string, string | number>): string => {
     const keys = key.split('.');
-    // Fall back to English rather than showing the raw key: a string added
-    // ahead of its translations should still read as English everywhere,
-    // not as "connectionLost.locked".
-    const translated = lookup(locales.value[currentLocale.value], keys)
-                    ?? lookup(locales.value.en, keys);
+    // Fall back to English before falling back to the raw key path. Several
+    // locales are missing whole sections (the X18 feature is only translated in
+    // de/en), and a UI that prints "X18.TITLE" at the user is strictly worse
+    // than one that prints "X18 Mixer".
+    const value = lookup(currentLocale.value, keys) ?? lookup('en', keys);
 
-    let result = translated ?? key;
+    let result = value ?? key;
     if (params) {
       for (const [param, val] of Object.entries(params)) {
         result = result.replace(`{${param}}`, String(val));

@@ -13,15 +13,20 @@
         <span class="material-symbols-rounded">{{ playlistCollapsed ? 'expand_more' : 'expand_less' }}</span>
       </button>
       <h2 @click="onTitleClick">{{ t('playlist.title') }}</h2>
-      <!-- Import / add-group are edit actions — hidden in Show Mode. -->
+      <!-- Import / add-group are edit actions — hidden in Show Mode.
+           SHOW-MODE/MOBILE OVERLAP: the phone shell already keeps these off the
+           thumb path; this gate is what also removes them on a tablet or desktop
+           running Show Mode. Drop the v-if if you decide the shell should own it. -->
       <div v-if="!showMode" class="playlist-actions">
-        <Btn icon="audio_file" :text="t('playlist.importAudio')" :disabled="!currentProject" @click="handleImport" />
-        <Btn v-if="hasElectron" icon="youtube_activity" :text="t('youtube.importFromYouTube')" bg-style="youtube" :disabled="!currentProject" @click="showYouTubeModal = true" />
-        <Btn icon="folder" :text="t('playlist.addGroup')" :disabled="!currentProject" @click="handleAddGroup" />
+        <Btn icon="audio_file" :text="t('playlist.importAudio')" :aria-label="t('playlist.importAudio')" :disabled="!currentProject" @click="handleImport" />
+        <Btn v-if="hasElectron" icon="youtube_activity" :text="t('youtube.importFromYouTube')" :aria-label="t('youtube.importFromYouTube')" bg-style="youtube" :disabled="!currentProject" @click="showYouTubeModal = true" />
+        <Btn icon="folder" :text="t('playlist.addGroup')" :aria-label="t('playlist.addGroup')" :disabled="!currentProject" @click="handleAddGroup" />
       </div>
     </div>
-    
-    <div ref="scrollContainer" class="playlist-content" @drop="handleDrop" @dragover.prevent>
+
+    <!-- ref is load-bearing: scrollItemIntoView() (upstream's reveal-selection
+         feature) resolves rows through this container. -->
+    <div ref="scrollContainer" class="playlist-content lp-scroll-fade" @drop="handleDrop" @dragover.prevent>
       <div v-if="currentProject?.items.length === 0" class="empty-state">
         <p>{{ t('playlist.noItems') }}</p>
         <p class="hint">{{ t('playlist.importHint') }}</p>
@@ -59,6 +64,7 @@ import { ref } from 'vue';
 import YouTubeImportModal from './YouTubeImportModal.vue';
 import AudioImportModal from './AudioImportModal.vue';
 import Btn from './Btn.vue';
+import { useCompactLayout } from '~/composables/useCompactLayout';
 import { triggerRef } from 'vue';
 import type { AudioItem, GroupItem } from '~/types/project';
 import { DEFAULT_AUDIO_ITEM, DEFAULT_GROUP_ITEM, transitionDefaultsForImport, anchorStartNextMarker } from '~/types/project';
@@ -84,12 +90,12 @@ const scrollContainer = ref<HTMLElement | null>(null);
 // the phone media query).
 const playlistCollapsed = useState('playlist.collapsed', () => false);
 
-// Tapping the title toggles collapse, but only on the phone layout — on desktop
-// the header has no collapse affordance, so the title click is a no-op there.
+// Kept for the (now hidden) collapse affordance so no state is stranded; the
+// deck tabs in the shell replaced collapse as the way to switch surfaces.
+const { isCompact } = useCompactLayout();
 function onTitleClick() {
-  if (import.meta.client && window.matchMedia?.('(max-width: 768px)').matches) {
-    playlistCollapsed.value = !playlistCollapsed.value;
-  }
+  if (!isCompact.value) return;
+  playlistCollapsed.value = !playlistCollapsed.value;
 }
 
 // Auto-process only items that were just imported this session (marked by
@@ -679,7 +685,8 @@ const handleDrop = async (e: DragEvent) => {
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-md) var(--spacing-lg);
-  min-height: 56px;
+  /* --lp-panel-header-h is compact-only, so desktop keeps 56px. */
+  min-height: var(--lp-panel-header-h, 56px);
   box-sizing: border-box;
   border-bottom: 1px solid var(--color-border);
   background-color: var(--color-surface);
@@ -713,23 +720,50 @@ const handleDrop = async (e: DragEvent) => {
   .material-symbols-rounded { font-size: 22px; }
 }
 
-/* Phones: enable the collapse affordance and fold the content away. */
-@media (max-width: 768px) {
-  /* Slimmer header to reclaim vertical space. */
+/* Phones: the deck tab is the panel's label and carries its cue count, so the
+   title row is pure duplication — dropping it and the collapse chevron hands the
+   whole width to the actions. That is what finally makes "Add Group" reachable:
+   it used to sit 15px off the right edge of a 360px screen. */
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
   .playlist-header {
-    min-height: 44px;
-    padding: var(--spacing-xs) var(--spacing-md);
+    min-height: var(--lp-panel-header-h);
+    padding: 0 var(--spacing-sm);
+    flex-wrap: nowrap;
+    gap: var(--spacing-sm);
   }
-  .playlist-header h2 { font-size: 16px; }
-  .playlist-collapse-toggle { display: inline-flex; width: 32px; height: 32px; }
-  .playlist-header h2 { cursor: pointer; flex: 1; }
-  /* Collapsed: drop to the header's natural height (don't stretch to 100%) so
-     the section above can shrink and hand the height to the cart player. */
-  .playlist-view.collapsed { height: auto; }
-  .playlist-view.collapsed .playlist-content { display: none; }
-  /* Collapsed: actions would wrap awkwardly with no list below — keep just the
-     toggle + title so the row stays a slim bar. */
-  .playlist-view.collapsed .playlist-actions { display: none; }
+  .playlist-collapse-toggle,
+  .playlist-header h2 {
+    display: none;
+  }
+  .playlist-actions {
+    flex: 0 0 auto;
+    margin-inline-start: auto;
+    gap: var(--spacing-sm);
+  }
+  /* Icon-only, uniform 44px squares: 3 x 44 + 2 x 8 = 148px inside 344px. */
+  .playlist-actions :deep(.btn) {
+    width: var(--lp-tap);
+    height: var(--lp-tap);
+    min-height: var(--lp-tap);
+    padding: 0;
+    justify-content: center;
+  }
+  .playlist-actions :deep(.btn > span:not(.material-symbols-rounded)) {
+    display: none;
+  }
+  .playlist-actions :deep(.btn .material-symbols-rounded) {
+    font-size: var(--lp-tap-icon);
+  }
+  .playlist-content {
+    padding: 6px 8px;
+    /* Keeps a flick inside the list instead of chaining into the document,
+       where Android Chrome would turn it into a pull-to-refresh. */
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .item-list {
+    gap: 6px;
+  }
 }
 
 

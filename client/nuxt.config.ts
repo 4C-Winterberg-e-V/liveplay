@@ -49,14 +49,31 @@ export default defineNuxtConfig({
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
         { name: 'apple-mobile-web-app-title', content: 'LivePlay' },
-        { name: 'theme-color', content: '#1a1a1a' }
+        // Matches --color-background and the manifest's theme_color/background_color.
+        // It was #1a1a1a, which drew a visible band against the app's #161616.
+        { name: 'theme-color', content: '#161616' }
       ],
       // Relative hrefs so they resolve under any base path (web '/', sub-path,
       // or Electron file://). Providing an explicit icon also stops the browser
       // from requesting /favicon.ico and logging a 404.
       link: [
         { rel: 'icon', type: 'image/png', href: 'assets/icons/1x/liveplay-icon-darkmode@1x.png' },
-        { rel: 'apple-touch-icon', href: 'assets/icons/2x/liveplay-icon-darkmode@2x.png' }
+        // iOS uses this for the home-screen icon and ignores the manifest's
+        // icons entirely. It must be SQUARE — the @2x asset is 4:3 and iOS
+        // letterboxes it, so point at the generated PWA icon instead.
+        { rel: 'apple-touch-icon', href: 'assets/icons/pwa/icon-192.png' },
+        // Installability. Relative so it resolves under '/', a sub-path base, or
+        // Electron's file:// (where it is simply ignored). The manifest's own
+        // start_url/scope/icon paths are relative to the manifest, so they follow
+        // the base automatically.
+        //
+        // crossorigin=use-credentials is load-bearing, not boilerplate: browsers
+        // fetch a manifest with credentials OMITTED by default, even same-origin.
+        // The web-share proxy gates every request behind a PIN (BasicAuth or the
+        // lp_auth session cookie), so without this the manifest request comes back
+        // 401 and the app silently stops being installable — which is the whole
+        // point of shipping it. See electron/web-share.js `_authGate`.
+        { rel: 'manifest', href: 'manifest.webmanifest', crossorigin: 'use-credentials' }
       ]
     },
     // Electron: relative paths for file://. Web: absolute base (see weiche above).

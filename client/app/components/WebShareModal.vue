@@ -9,9 +9,9 @@
   (electron/web-share.js). In the browser build this modal is never reachable.
 -->
 <template>
-  <div class="modal-overlay" @click.self="close">
-    <div class="modal-content web-share-modal">
-      <button class="modal-close" @click="close" :title="t('actions.close')">
+  <div class="modal-overlay lp-sheet-backdrop" @click.self="close">
+    <div class="modal-content web-share-modal lp-sheet">
+      <button class="modal-close lp-close" @click="close" :title="t('actions.close')">
         <span class="material-symbols-rounded">close</span>
       </button>
 
@@ -49,6 +49,14 @@
               </button>
             </div>
             <p class="ws-hint">{{ t('webShare.lanScanHint') }}</p>
+            <!-- The install/Add-to-Home-Screen step is what removes the browser's
+                 URL bar, which is worth an extra cue row or two on a phone. Nobody
+                 discovers that on their own, so it is said here, next to the QR
+                 code they are about to scan. -->
+            <p class="ws-hint ws-hint--install">
+              <span class="material-symbols-rounded">install_mobile</span>
+              {{ t('webShare.installHint') }}
+            </p>
           </div>
         </div>
       </section>
@@ -330,7 +338,7 @@ onUnmounted(() => { if (unsub) unsub(); });
   position: relative;
   width: 560px;
   max-width: 92vw;
-  max-height: 88vh;
+  max-height: 88dvh;
   overflow-y: auto;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -562,5 +570,16 @@ onUnmounted(() => { if (unsub) unsub(); });
 .ws-config__path {
   margin-top: var(--spacing-sm);
   code { font-family: var(--font-mono); font-size: 11px; word-break: break-all; }
+}
+
+.ws-hint--install {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-primary);
+}
+.ws-hint--install .material-symbols-rounded {
+  font-size: 18px;
+  flex-shrink: 0;
 }
 </style>

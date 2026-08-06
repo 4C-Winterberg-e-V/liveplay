@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="modal-backdrop" @click.self="close">
-      <div class="modal">
+    <div v-if="open" class="modal-backdrop lp-sheet-backdrop" @click.self="close">
+      <div class="modal lp-sheet">
         <header>
           <h2>{{ t('importAudio.title') }}</h2>
           <button class="x" @click="close">✕</button>
@@ -256,6 +256,8 @@ async function pickAndUpload() {
   z-index: 9000;
 }
 .modal {
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px);
+  overflow-y: auto;
   width: min(720px, 92vw);
   background: #1a1a1a;
   border: 1px solid #2a2a2a;
@@ -314,5 +316,17 @@ async function pickAndUpload() {
     }
   }
   .list-footer { display: flex; justify-content: flex-end; }
+}
+
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
+  .uploaded li {
+    padding: 12px 10px;
+    min-height: var(--lp-tap);
+  }
+  .list-footer .btn {
+    width: 100%;
+    min-height: 48px;
+    justify-content: center;
+  }
 }
 </style>

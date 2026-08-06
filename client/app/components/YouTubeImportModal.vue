@@ -417,7 +417,8 @@ const closeModal = () => {
   border-radius: 4px;
   background: var(--color-surface);
   color: var(--color-text-primary);
-  font-size: 14px;
+  font-size: max(14px, var(--lp-input-fs-min));
+  min-height: var(--lp-input-h);
 }
 
 .search-btn {

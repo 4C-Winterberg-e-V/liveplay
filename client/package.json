@@ -16,7 +16,8 @@
     "generate:web": "cross-env NODE_ENV=production BUILD_TARGET=web nuxt generate",
     "preview": "nuxt preview",
     "typecheck": "nuxt typecheck",
-    "test": "vitest run"
+    "lp:bp-check": "node scripts/lp-bp-check.mjs",
+    "test": "node scripts/lp-bp-check.mjs && vitest run"
   },
   "keywords": [
     "electron",

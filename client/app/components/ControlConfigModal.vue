@@ -1,11 +1,11 @@
 <template>
-  <div class="control-config-overlay" @click.self="$emit('close')">
-    <div class="control-config-panel">
+  <div class="control-config-overlay lp-sheet-backdrop" @click.self="$emit('close')">
+    <div class="control-config-panel lp-sheet">
       <div class="config-header">
         <div class="header-left">
           <h3>{{ t('controls.title') }}</h3>
         </div>
-        <button class="close-btn" @click="$emit('close')">&times;</button>
+        <button class="close-btn lp-close" @click="$emit('close')">&times;</button>
       </div>
 
       <div class="tab-bar">
@@ -499,8 +499,8 @@ onUnmounted(() => {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  width: 560px;
-  max-height: 82vh;
+  width: min(560px, 100vw - 16px);
+  max-height: 82dvh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
@@ -676,12 +676,13 @@ onUnmounted(() => {
 /* Master-volume multiplier input */
 .multiplier-input {
   width: 80px;
-  font-size: 12px;
+  font-size: max(12px, var(--lp-input-fs-min));
   padding: 4px 8px;
   border-radius: 4px;
   border: 1px solid var(--color-border);
   background: var(--color-background);
   color: var(--color-text-primary);
+  min-height: var(--lp-input-h);
 }
 
 .multiplier-hint {
@@ -710,13 +711,14 @@ onUnmounted(() => {
 
 .device-select {
   flex: 1;
-  font-size: 12px;
+  font-size: max(12px, var(--lp-input-fs-min));
   padding: 4px 8px;
   border-radius: 4px;
   border: 1px solid var(--color-border);
   background: var(--color-background);
   color: var(--color-text-primary);
   cursor: pointer;
+  min-height: var(--lp-input-h);
 }
 
 .no-device-hint {
@@ -803,5 +805,23 @@ onUnmounted(() => {
   background: var(--color-accent, #3b82f6);
   color: white;
   border-color: transparent;
+}
+
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
+  .action-row {
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    min-height: var(--lp-tap);
+  }
+  .action-label {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+  .learn-btn,
+  .clear-btn,
+  .clear-key-btn {
+    min-height: 36px;
+    padding: 6px 12px;
+  }
 }
 </style>

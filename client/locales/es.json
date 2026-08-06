@@ -71,7 +71,10 @@
     "seconds": "SEGUNDOS",
     "clock": "Reloj",
     "autosave": "Autoguardado",
-    "unsavedChanges": "Cambios sin guardar"
+    "unsavedChanges": "Cambios sin guardar",
+    "masterLevel": "Nivel máster",
+    "enterFullscreen": "Pantalla completa",
+    "exitFullscreen": "Salir de pantalla completa"
   },
   "playlist": {
     "title": "Lista de Reproducción",
@@ -98,7 +101,8 @@
     "attach": "Integrar",
     "configureControls": "Configurar controles",
     "tabKeyboard": "Teclado",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "Mostrar espacios vacíos"
   },
   "properties": {
     "title": "Propiedades",
@@ -207,7 +211,9 @@
     "stopPreview": "Detener vista previa",
     "previewNoDevice": "No hay dispositivo de vista previa configurado — haga clic para abrir Configuración del Proyecto",
     "confirmDelete": "¿Eliminar «{name}»?",
-    "clickToEdit": "Haga clic para escribir un valor"
+    "clickToEdit": "Haga clic para escribir un valor",
+    "moveUp": "Subir",
+    "moveDown": "Bajar"
   },
   "about": {
     "developedBy": "Desarrollado por",
@@ -412,7 +418,8 @@
     "default": "predeterminado",
     "loading": "Cargando…",
     "error": "Error",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "done": "Hecho"
   },
   "repair": {
     "title": "Proyecto dañado detectado",

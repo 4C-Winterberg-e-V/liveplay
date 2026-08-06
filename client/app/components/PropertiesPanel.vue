@@ -13,6 +13,8 @@
         v-for="tab in availableTabs" 
         :key="tab.id"
         :class="['tab-btn', { active: activeTab === tab.id }]"
+        :title="tab.label"
+        :aria-label="tab.label"
         @click="activeTab = tab.id"
       >
         <span class="material-symbols-rounded">{{ tab.icon }}</span>
@@ -409,6 +411,37 @@
           {{ t('x18.addAction') }}
         </button>
       </div>
+
+      <!-- Home for everything taken off the playlist row and the cart pad. On a
+           phone these are full-width labelled rows rather than glyph squares,
+           and the destructive one sits behind 24px of dead space. Compact-only
+           on both the markup and the CSS. -->
+      <div v-if="isCompact && selectedItem" class="lp-props-actions">
+        <button v-if="selectedItem.type === 'audio'" type="button" @click="sheetTogglePreview">
+          <span class="material-symbols-rounded">headphones</span>
+          <span>{{ isSheetPreviewing ? t('actions.stopPreview') : t('actions.preview') }}</span>
+        </button>
+        <button type="button" @click="sheetSetAsNext">
+          <span class="material-symbols-rounded">fast_forward</span>
+          <span>{{ t('actions.setAsNext') }}</span>
+        </button>
+        <button type="button" @click="moveItemBy(selectedItem.uuid, -1)">
+          <span class="material-symbols-rounded">arrow_upward</span>
+          <span>{{ t('actions.moveUp') }}</span>
+        </button>
+        <button type="button" @click="moveItemBy(selectedItem.uuid, 1)">
+          <span class="material-symbols-rounded">arrow_downward</span>
+          <span>{{ t('actions.moveDown') }}</span>
+        </button>
+        <button type="button" class="lp-props-actions__danger" @click="sheetDelete">
+          <span class="material-symbols-rounded">delete</span>
+          <span>{{ selectionContext === 'cart' ? t('actions.remove') : t('actions.delete') }}</span>
+        </button>
+      </div>
+    </div>
+
+    <div v-if="isCompact" class="lp-props-done lp-sheet__bar lp-sheet__bar--bottom">
+      <button type="button" @click="handleClose">{{ t('common.done') }}</button>
     </div>
   </div>
 </template>
@@ -419,19 +452,51 @@ import { PRESET_COLORS } from '~/types/project';
 import { calculatePerceivedLoudness } from '~/utils/audio';
 import { useOutputChannels } from '~/composables/useOutputChannels';
 import { useOutputTarget } from '~/composables/useOutputTarget';
+import { useCompactLayout } from '~/composables/useCompactLayout';
 
-const {
-  selectedItem,
-  selectedItems,
-  propertiesPanelOpen,
-  getSelectedItems,
-  saveProject,
-  currentProject,
-  beginItemBatch,
-  endItemBatch,
-  formatItemIndex,
-  parseItemIndexInput,
-} = useProject();
+// formatItemIndex / parseItemIndexInput come from upstream's configurable
+// playlist numbering; the rest drive the phone properties sheet.
+const { selectedItem, selectedItems, propertiesPanelOpen, getSelectedItems, saveProject, currentProject, beginItemBatch, endItemBatch,
+        formatItemIndex, parseItemIndexInput,
+        moveItemBy, requestDeleteFromButton, selectionContext,
+        previewItemUuid, startPreview, stopPreview } = useProject();
+const { nextItemOverrideUuid, setNextItem } = useAudioEngine();
+// Layout-only: decides whether the phone action rows and the Done bar exist.
+const { isCompact } = useCompactLayout();
+
+// ---- Phone-sheet actions --------------------------------------------------
+// These are the controls that were removed from the playlist row and the cart
+// pad, where they sat a thumb-slip away from Play. Same code paths as before.
+const isSheetPreviewing = computed(() => !!selectedItem.value && previewItemUuid.value === selectedItem.value.uuid);
+const showProjectSettingsFromSheet = useState('showProjectSettings', () => false);
+
+function sheetTogglePreview() {
+  const item = selectedItem.value;
+  if (!item || item.type !== 'audio') return;
+  if (isSheetPreviewing.value) { stopPreview(); return; }
+  // No preview device configured: send the operator where they can pick one
+  // rather than failing silently, exactly as the playlist row does.
+  if (!(currentProject.value as any)?.settings?.previewDevice) {
+    showProjectSettingsFromSheet.value = true;
+    return;
+  }
+  startPreview(item.uuid);
+}
+
+function sheetSetAsNext() {
+  const item = selectedItem.value;
+  if (!item) return;
+  setNextItem(nextItemOverrideUuid.value === item.uuid ? null : item.uuid);
+}
+
+function sheetDelete() {
+  const item = selectedItem.value;
+  if (!item) return;
+  // Routes through the app's own confirm dialog, on the cart path when the
+  // selection came from a cart pad so the slot is unassigned rather than the
+  // cue being pulled out of the playlist.
+  requestDeleteFromButton(item.uuid, selectionContext.value);
+}
 const { t } = useLocalization();
 const { levels: outputTargetLevels } = useOutputTarget();
 
@@ -813,6 +878,15 @@ watch(selectedItem, (newItem, oldItem) => {
     originalSnapshot.value = null;
   }
 }, { immediate: true });
+
+// With eight tabs in a scrolling strip, a retained activeTab could sit
+// off-screen — leaving a panel body with no visible highlighted tab.
+function scrollActiveTabIntoView() {
+  document.querySelector('.properties-tabs .tab-btn.active')
+    ?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+}
+onMounted(() => nextTick(scrollActiveTabIntoView));
+watch(activeTab, () => nextTick(scrollActiveTabIntoView));
 
 const handleClose = () => {
   // Close the panel but leave the current selection intact so the highlighted
@@ -1282,7 +1356,11 @@ const formatTime = (seconds: number): string => {
   border: 1px solid var(--color-border);
   border-radius: 4px;
   color: var(--color-text);
-  font-size: 13px;
+  /* --lp-input-fs-min is 0px outside the compact query, so desktop keeps 13px.
+     Anything under 16px makes mobile Safari zoom the whole layout on focus —
+     and inside a fixed sheet the operator cannot scroll the zoom back. */
+  font-size: max(13px, var(--lp-input-fs-min));
+  min-height: var(--lp-input-h);
   
   &:focus {
     outline: none;
@@ -1514,6 +1592,13 @@ const formatTime = (seconds: number): string => {
   font-size: 14px;
 }
 
+/* Phone-only blocks. Hidden here AND v-if="isCompact" in the template, so
+   neither the markup nor these rules reach desktop. */
+.lp-props-actions,
+.lp-props-done {
+  display: none;
+}
+
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -1523,34 +1608,159 @@ const formatTime = (seconds: number): string => {
   }
 }
 
-/* ---- Phones: full-screen properties ----------------------------------- */
-/* On a phone the bottom-docked panel is too small to edit in. It's dismissed
-   with the X anyway, so make it a full-screen overlay. dvh tracks the dynamic
-   mobile viewport (browser chrome show/hide); env() keeps the header/footer
-   clear of the notch and home indicator. */
-@media (max-width: 768px) {
+/* ---- Phone: a sheet, not a blindfold ----------------------------------
+   The old rule was `position: fixed; inset: 0` — a full-screen overlay that
+   covered the phone's only Play-Next and STOP ALL CUES while a cue was being
+   edited, escapable through one corner X. It now stops below the header and
+   above the bottom bar (which sits at z-index 1600), so the transport stays
+   visible and tappable throughout. */
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
   .properties-panel {
     position: fixed;
-    inset: 0;
+    left: 0;
+    right: 0;
+    top: calc(var(--lp-sheet-top) + env(safe-area-inset-top));
+    bottom: var(--lp-bottom-h);
+    height: auto;
     width: 100%;
-    height: 100vh;
-    height: 100dvh;
     z-index: 1500;
-    border-top: none;
     box-sizing: border-box;
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
+    border-top: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+    overflow: hidden;
   }
 
-  /* Bigger touch target for the close button. */
+  .properties-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--color-surface);
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+  /* The untruncated title used to wrap and squeeze the close button down to
+     ~24px wide. */
+  .properties-header h3 {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .close-btn {
-    width: 40px;
-    height: 40px;
+    flex: 0 0 auto;
+    width: var(--lp-tap);
+    height: var(--lp-tap);
   }
   .close-btn .material-symbols-rounded {
-    font-size: 24px;
+    font-size: var(--lp-tap-icon);
+  }
+
+  /* All eight tabs reachable. Five of them used to sit off-screen with no scroll
+     affordance at all. Icon-only except the ACTIVE tab, which keeps its word —
+     touch has no tooltips, so eight unlabelled glyphs would be unlearnable. */
+  .properties-tabs {
+    padding: 0 var(--spacing-sm);
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tab-btn {
+    min-width: var(--lp-tap);
+    min-height: var(--lp-tap);
+    padding: 0 var(--spacing-sm);
+    scroll-snap-align: start;
+    /* The strip is at capacity with eight tabs, so the default flex-shrink let
+       the active tab shrink below its own label — which then painted straight
+       over the next two icons. Let the strip scroll instead. */
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .tab-btn > span:not(.material-symbols-rounded) {
+    display: none;
+  }
+  .tab-btn.active > span:not(.material-symbols-rounded) {
+    display: inline;
+  }
+  .tab-btn .material-symbols-rounded {
+    font-size: var(--lp-tap-icon);
+  }
+  /* A permanent right-edge fade, so the clip is never silent. */
+  .properties-tabs::after {
+    content: '';
+    position: sticky;
+    inset-inline-end: 0;
+    flex: 0 0 24px;
+    align-self: stretch;
+    /* to-right is correct for LTR; RTL flips it below. */
+    background: linear-gradient(to right, transparent, var(--color-surface));
+  }
+  [dir='rtl'] .properties-tabs::after {
+    background: linear-gradient(to left, transparent, var(--color-surface));
+  }
+
+  .properties-content {
+    padding: var(--spacing-md);
+    overscroll-behavior: contain;
+  }
+  .tab-panel {
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+  /* min-width: 250px left a ~95px dead gutter in a 345px panel and shrank the
+     colour swatches; a phone field should just use the width. */
+  .property-field {
+    min-width: 0;
+    width: 100%;
+    flex: 1 1 auto;
+  }
+  /* Six ~52px swatches over three rows: all 16 presets visible, each clearing
+     the 44px minimum. */
+  .color-picker {
+    grid-template-columns: repeat(6, 1fr);
+    gap: var(--spacing-sm);
+  }
+
+  .lp-props-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-lg);
+  }
+  .lp-props-actions button {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    width: 100%;
+    min-height: 48px;
+    padding: 0 var(--spacing-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    background: var(--color-background);
+    color: var(--color-text-primary);
+    font-size: 16px;
+    text-align: left;
+  }
+  /* 24px of dead space before the only unrecoverable action in the sheet. */
+  .lp-props-actions__danger {
+    margin-top: var(--lp-sep);
+    color: var(--color-danger);
+    border-color: var(--color-danger);
+  }
+
+  .lp-props-done {
+    display: flex;
+  }
+  .lp-props-done button {
+    width: 100%;
+    min-height: 48px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    background: var(--color-background);
+    color: var(--color-text-primary);
+    font-size: 16px;
+    font-weight: 600;
   }
 }
+
 </style>
 
 

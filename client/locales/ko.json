@@ -71,7 +71,10 @@
     "seconds": "초",
     "clock": "시계",
     "autosave": "자동 저장",
-    "unsavedChanges": "저장되지 않은 변경 사항"
+    "unsavedChanges": "저장되지 않은 변경 사항",
+    "masterLevel": "마스터 레벨",
+    "enterFullscreen": "전체 화면",
+    "exitFullscreen": "전체 화면 종료"
   },
   "playlist": {
     "title": "재생 목록",
@@ -98,7 +101,8 @@
     "attach": "통합",
     "configureControls": "컨트롤 설정",
     "tabKeyboard": "키보드",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "빈 슬롯 표시"
   },
   "properties": {
     "title": "속성",
@@ -207,7 +211,9 @@
     "stopPreview": "미리 듣기 중지",
     "previewNoDevice": "미리 듣기 장치 미설정 — 프로젝트 설정을 열려면 클릭하세요",
     "confirmDelete": "'{name}'을(를) 삭제하시겠습니까?",
-    "clickToEdit": "클릭하여 값 입력"
+    "clickToEdit": "클릭하여 값 입력",
+    "moveUp": "위로 이동",
+    "moveDown": "아래로 이동"
   },
   "about": {
     "developedBy": "개발자",
@@ -412,7 +418,8 @@
     "default": "기본값",
     "loading": "불러오는 중…",
     "error": "오류",
-    "cancel": "취소"
+    "cancel": "취소",
+    "done": "완료"
   },
   "repair": {
     "title": "손상된 프로젝트 감지",

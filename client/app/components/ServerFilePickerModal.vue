@@ -1,9 +1,14 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="picker-backdrop" @click.self="cancel">
-      <div class="picker">
+    <div v-if="open" class="picker-backdrop lp-sheet-backdrop" @click.self="cancel">
+      <div class="picker lp-sheet">
         <!-- Top toolbar: navigation + breadcrumb path -->
-        <header class="toolbar">
+        <header class="toolbar lp-sheet__bar lp-sheet__bar--top">
+          <!-- This modal had no dismiss control at all. Label hardcoded to match the
+               rest of this component, which is not wired to useLocalization. -->
+          <button type="button" class="nav-btn neutral lp-close" aria-label="Close" title="Close" @click="cancel">
+            <span class="material-symbols-rounded">close</span>
+          </button>
           <button class="nav-btn neutral" :disabled="historyBack.length === 0" @click="goBack" title="Back">←</button>
           <button class="nav-btn neutral" :disabled="!canGoUp" @click="goUp" title="Up one level">↑</button>
           <input
@@ -397,8 +402,9 @@ watch(() => props.open, (o) => {
     flex: 1;
     background: #1d1d1d; border: 1px solid #333;
     border-radius: 4px; padding: 4px 10px;
-    color: #eee; font-family: var(--font-mono); font-size: 12px;
-  }
+    color: #eee; font-family: var(--font-mono); font-size: max(12px, var(--lp-input-fs-min));
+  min-height: var(--lp-input-h);
+}
 }
 .breadcrumb {
   padding: 6px 12px; font-size: 11px; color: #aaa;
@@ -492,6 +498,33 @@ watch(() => props.open, (o) => {
     &:hover:not(:disabled) { background: #353535; }
     &:disabled { opacity: 0.5; cursor: not-allowed; }
     &.primary { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+  }
+}
+
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
+  .filter-row {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .filter-row .spacer {
+    display: none;
+  }
+  .filter-row .btn {
+    flex: 1 1 45%;
+    min-height: var(--lp-tap);
+    justify-content: center;
+  }
+  .filter-row .filter {
+    flex: 1 1 100%;
+    min-height: var(--lp-tap);
+  }
+  .entry {
+    padding: 12px 14px;
+    min-height: var(--lp-tap);
+  }
+  .toolbar .nav-btn {
+    min-width: var(--lp-tap);
+    min-height: var(--lp-tap);
   }
 }
 </style>

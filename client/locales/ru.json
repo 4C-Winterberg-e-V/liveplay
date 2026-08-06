@@ -71,7 +71,10 @@
     "seconds": "СЕКУНД",
     "clock": "Часы",
     "autosave": "Автосохранение",
-    "unsavedChanges": "Несохранённые изменения"
+    "unsavedChanges": "Несохранённые изменения",
+    "masterLevel": "Уровень мастера",
+    "enterFullscreen": "Полный экран",
+    "exitFullscreen": "Выйти из полного экрана"
   },
   "playlist": {
     "title": "Плейлист",
@@ -98,7 +101,8 @@
     "attach": "Прикрепить",
     "configureControls": "Настройка управления",
     "tabKeyboard": "Клавиатура",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "Показать пустые слоты"
   },
   "properties": {
     "title": "Свойства",
@@ -207,7 +211,9 @@
     "stopPreview": "Остановить предпросмотр",
     "previewNoDevice": "Устройство предпросмотра не настроено — нажмите для открытия Настроек проекта",
     "confirmDelete": "Удалить «{name}»?",
-    "clickToEdit": "Нажмите, чтобы ввести значение"
+    "clickToEdit": "Нажмите, чтобы ввести значение",
+    "moveUp": "Переместить вверх",
+    "moveDown": "Переместить вниз"
   },
   "about": {
     "developedBy": "Разработано",
@@ -412,7 +418,8 @@
     "default": "по умолчанию",
     "loading": "Загрузка…",
     "error": "Ошибка",
-    "cancel": "Отмена"
+    "cancel": "Отмена",
+    "done": "Готово"
   },
   "repair": {
     "title": "Обнаружен повреждённый проект",

@@ -71,7 +71,10 @@
     "seconds": "SEKUNDER",
     "clock": "Klocka",
     "autosave": "Autospara",
-    "unsavedChanges": "Osparade ändringar"
+    "unsavedChanges": "Osparade ändringar",
+    "masterLevel": "Masternivå",
+    "enterFullscreen": "Helskärm",
+    "exitFullscreen": "Avsluta helskärm"
   },
   "playlist": {
     "title": "Spellista",
@@ -98,7 +101,8 @@
     "attach": "Koppla in",
     "configureControls": "Konfigurera kontroller",
     "tabKeyboard": "Tangentbord",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "Visa tomma platser"
   },
   "properties": {
     "title": "Egenskaper",
@@ -207,7 +211,9 @@
     "stopPreview": "Stoppa förhandsgranskning",
     "previewNoDevice": "Ingen förhandsgranskningsenhet konfigurerad — klicka för att öppna Projektinställningar",
     "confirmDelete": "Ta bort «{name}»?",
-    "clickToEdit": "Klicka för att skriva ett värde"
+    "clickToEdit": "Klicka för att skriva ett värde",
+    "moveUp": "Flytta upp",
+    "moveDown": "Flytta ner"
   },
   "about": {
     "developedBy": "Utvecklad av",
@@ -412,7 +418,8 @@
     "default": "standard",
     "loading": "Laddar…",
     "error": "Fel",
-    "cancel": "Avbryt"
+    "cancel": "Avbryt",
+    "done": "Klar"
   },
   "repair": {
     "title": "Skadat projekt upptäckt",

@@ -71,7 +71,10 @@
     "seconds": "SECONDES",
     "clock": "Horloge",
     "autosave": "Sauvegarde auto",
-    "unsavedChanges": "Modifications non enregistrées"
+    "unsavedChanges": "Modifications non enregistrées",
+    "masterLevel": "Niveau master",
+    "enterFullscreen": "Plein écran",
+    "exitFullscreen": "Quitter le plein écran"
   },
   "playlist": {
     "title": "Liste de Lecture",
@@ -98,7 +101,8 @@
     "attach": "Rattacher",
     "configureControls": "Configurer les contrôles",
     "tabKeyboard": "Clavier",
-    "tabMidi": "MIDI"
+    "tabMidi": "MIDI",
+    "showEmptySlots": "Afficher les emplacements vides"
   },
   "properties": {
     "title": "Propriétés",
@@ -207,7 +211,9 @@
     "stopPreview": "Arrêter l'aperçu",
     "previewNoDevice": "Aucun périphérique d'aperçu configuré — cliquez pour ouvrir les Paramètres du Projet",
     "confirmDelete": "Supprimer « {name} » ?",
-    "clickToEdit": "Cliquez pour saisir une valeur"
+    "clickToEdit": "Cliquez pour saisir une valeur",
+    "moveUp": "Monter",
+    "moveDown": "Descendre"
   },
   "about": {
     "developedBy": "Développé par",
@@ -412,7 +418,8 @@
     "default": "défaut",
     "loading": "Chargement…",
     "error": "Erreur",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "done": "Terminé"
   },
   "repair": {
     "title": "Projet corrompu détecté",

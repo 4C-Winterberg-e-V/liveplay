@@ -1,11 +1,11 @@
 <template>
   <!-- Note: NOT inside <Teleport> — Vue scoped styles don't reach teleported
        nodes, which would leave the modal unstyled in production builds. -->
-  <div v-if="open" class="project-settings-backdrop" @click.self="close">
-    <div class="project-settings-modal">
-        <header class="modal-header">
+  <div v-if="open" class="project-settings-backdrop lp-sheet-backdrop" @click.self="close">
+    <div class="project-settings-modal lp-sheet">
+        <header class="modal-header lp-sheet__bar lp-sheet__bar--top">
           <h2>{{ t('settings.title') }}</h2>
-          <button class="close-x" @click="close">✕</button>
+          <button class="close-x lp-close" @click="close">✕</button>
         </header>
 
         <!-- Tab Navigation (styled to match the Properties panel) -->
@@ -21,7 +21,7 @@
           </button>
         </div>
 
-        <div class="modal-body">
+        <div class="modal-body lp-sheet__scroll">
           <!-- ================= Audio Routing ================= -->
           <template v-if="activeTab === 'audio'">
             <!-- Audio device (default for cue playback) -->
@@ -364,7 +364,7 @@
           </template>
         </div>
 
-      <footer class="modal-footer">
+      <footer class="modal-footer lp-sheet__bar lp-sheet__bar--bottom">
         <button class="modal-btn" @click="close">{{ t('settings.close') }}</button>
       </footer>
     </div>
@@ -566,7 +566,10 @@ function close() {
   border: 1px solid var(--color-border);
   border-radius: 10px;
   width: min(560px, 92vw);
-  max-height: 90vh;
+  /* dvh, not vh: on a phone the browser chrome would otherwise push the footer
+     off-screen. overflow:hidden because with tabs the .modal-body is the
+     scroller, not the modal shell. */
+  max-height: 90dvh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -662,7 +665,8 @@ function close() {
   color: var(--color-text-primary);
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  font-size: 14px;
+  font-size: max(14px, var(--lp-input-fs-min));
+  min-height: var(--lp-input-h);
 }
 .settings-select:focus,
 .settings-input:focus {
@@ -690,7 +694,8 @@ function close() {
 }
 .settings-channels .settings-select {
   padding: 6px 10px;
-  font-size: 13px;
+  font-size: max(13px, var(--lp-input-fs-min));
+  min-height: var(--lp-input-h);
 }
 .settings-label--checkbox {
   flex-direction: row;
@@ -723,5 +728,12 @@ function close() {
 }
 .modal-btn:hover {
   background: var(--color-surface-hover);
+}
+
+@media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
+  .modal-btn {
+    min-height: var(--lp-tap);
+    padding: 10px 20px;
+  }
 }
 </style>
