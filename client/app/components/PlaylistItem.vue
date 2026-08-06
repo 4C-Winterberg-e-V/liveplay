@@ -181,7 +181,7 @@
             highlight-color="var(--color-warning)"
             active-text-color="black"
             :is-active="isManuallyQueued"
-            class="pl-act--hide-compact"
+            class="pl-act--hide-compact pl-act--next"
             context="Playlist"
             @click.stop="handleSetAsNext"
             :title="t('actions.setAsNext')"
@@ -1258,6 +1258,21 @@ const findItemByIndex = (index: number[]): AudioItem | GroupItem | null => {
      same risk class as Play and should not be a thumb-slip away from it. */
   .pl-act--hide-compact {
     display: none;
+  }
+
+  /* ...except set-as-next in Show Mode, which comes back into the row.
+     The chain that makes this necessary: the sheet is where set-as-next went,
+     Show Mode hides the sheet, and Show Mode also makes rows unselectable — so
+     on a phone in Show Mode there was NO way left to change what fires next.
+     That is a live-operation control, not an edit affordance, so losing it is
+     the one thing Show Mode must not do.
+     Re-crowding Play is not a concern here: Show Mode has already taken edit
+     and delete out of this row, so Play and set-as-next are the only two left,
+     at a full tap target each. */
+  .playlist-item.show-mode .pl-act--next {
+    display: flex;
+    width: var(--lp-tap);
+    height: var(--lp-tap);
   }
   /* order:-1 rather than moving the node, so desktop DOM order is untouched. */
   .item-actions :deep(.pl-act--play) {
