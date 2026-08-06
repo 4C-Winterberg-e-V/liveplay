@@ -1,11 +1,13 @@
 <template>
-  <div 
+  <div
     class="playlist-item"
-    :class="{ 
-      'is-selected': isSelected, 
+    :data-item-uuid="item.uuid"
+    :class="{
+      'is-selected': isSelected,
       'is-group': item.type === 'group',
       'is-audio': item.type === 'audio',
       'is-playing': isPlaying,
+      'show-mode': showMode,
       'drag-over-top': dragPosition === 'top',
       'drag-over-bottom': dragPosition === 'bottom',
       'drag-over-group': dragPosition === 'group',
@@ -40,10 +42,10 @@
       :class="`warning-border--${warningState}`"
     ></div>
 
-    <div 
+    <div
       class="item-content"
       @click="handleSelect"
-      :draggable="true"
+      :draggable="!showMode"
       @dragstart="handleDragStart"
       @pointerdown="onRowPointerDown"
       @pointermove="onRowPointerMove"
@@ -84,6 +86,68 @@
         <span v-else-if="isPreviewing" class="status-pill preview">{{ t('status.previewing') }}</span>
         <span v-else-if="isQueuedNext" class="status-pill up-next">{{ t('status.upNext') }}</span>
 
+        <!-- Behavior indicators (for audio items) -->
+        <div v-if="item.type === 'audio'" class="behavior-indicators">
+          <!-- Start behavior -->
+          <span
+            v-if="item.startBehavior?.action === 'play-next'"
+            class="material-symbols-rounded behavior-icon"
+            :title="t('behaviors.startPlayNext')"
+          >skip_next</span>
+          <span
+            v-else-if="item.startBehavior?.action === 'play-item'"
+            class="material-symbols-rounded behavior-icon"
+            :title="t('behaviors.startPlayItem')"
+          >arrow_forward</span>
+          <span
+            v-else-if="item.startBehavior?.action === 'play-index'"
+            class="material-symbols-rounded behavior-icon"
+            :title="t('behaviors.startPlayIndex')"
+          >arrow_forward</span>
+
+          <!-- Ducking behavior -->
+          <span
+            v-if="item.duckingBehavior?.mode === 'duck-others'"
+            class="material-symbols-rounded behavior-icon"
+            :title="t('behaviors.duckingOthers')"
+          >volume_down</span>
+
+          <!-- Start Next segue marker -->
+          <span
+            v-if="item.startNextEnabled && (item.startNextTime ?? 0) > 0"
+            class="material-symbols-rounded behavior-icon behavior-icon-segue"
+            :title="t('behaviors.startNextMarker', { time: formatMarkerTime(item.startNextTime ?? 0) })"
+          >flag</span>
+
+          <!-- End behavior -->
+          <span
+            v-if="item.endBehavior?.action === 'next'"
+            class="material-symbols-rounded behavior-icon"
+            :title="t('behaviors.endPlayNext')"
+          >skip_next</span>
+          <span
+            v-else-if="item.endBehavior?.action === 'goto-item'"
+            class="material-symbols-rounded behavior-icon"
+            :title="t('behaviors.endGotoItem')"
+          >arrow_forward</span>
+          <span
+            v-else-if="item.endBehavior?.action === 'goto-index'"
+            class="material-symbols-rounded behavior-icon"
+            :title="t('behaviors.endGotoIndex')"
+          >arrow_forward</span>
+          <span
+            v-else-if="item.endBehavior?.action === 'loop'"
+            class="material-symbols-rounded behavior-icon"
+            :title="t('behaviors.endLoop')"
+          >replay</span>
+        </div>
+        
+        <span v-if="item.type === 'audio'" class="item-duration">{{ durationDisplay }}</span>
+
+        <!-- In Show Mode the live-playback actions (play/stop, set-as-next)
+             and preview remain — preview is useful pre-show too; edit and
+             delete are edit affordances and stay hidden so the row is a big,
+             safe touch target. -->
         <div class="item-actions">
           <!-- Class-only additions: no DOM reordering in this component. On a
                phone Play becomes a wide labelled landmark via `order: -1`, and
@@ -117,13 +181,14 @@
             highlight-color="var(--color-warning)"
             active-text-color="black"
             :is-active="isManuallyQueued"
-            class="pl-act--hide-compact"
+            class="pl-act--hide-compact pl-act--next"
             context="Playlist"
             @click.stop="handleSetAsNext"
             :title="t('actions.setAsNext')"
             :aria-label="t('actions.setAsNext')"
           />
           <ActionButton
+            v-if="!showMode"
             icon="settings"
             highlight-color="var(--color-accent)"
             class="pl-act--edit"
@@ -133,6 +198,7 @@
             :aria-label="t('actions.edit')"
           />
           <ActionButton
+            v-if="!showMode"
             icon="delete"
             highlight-color="var(--color-danger)"
             class="pl-act--hide-compact"
@@ -142,57 +208,6 @@
             :aria-label="t('actions.delete')"
           />
         </div>
-        
-        <!-- Behavior indicators (for audio items) -->
-        <div v-if="item.type === 'audio'" class="behavior-indicators">
-          <!-- Start behavior -->
-          <span
-            v-if="item.startBehavior?.action === 'play-next'"
-            class="material-symbols-rounded behavior-icon"
-            :title="t('behaviors.startPlayNext')"
-          >skip_next</span>
-          <span
-            v-else-if="item.startBehavior?.action === 'play-item'"
-            class="material-symbols-rounded behavior-icon"
-            :title="t('behaviors.startPlayItem')"
-          >arrow_forward</span>
-          <span
-            v-else-if="item.startBehavior?.action === 'play-index'"
-            class="material-symbols-rounded behavior-icon"
-            :title="t('behaviors.startPlayIndex')"
-          >arrow_forward</span>
-
-          <!-- Ducking behavior -->
-          <span
-            v-if="item.duckingBehavior?.mode === 'duck-others'"
-            class="material-symbols-rounded behavior-icon"
-            :title="t('behaviors.duckingOthers')"
-          >volume_down</span>
-
-          <!-- End behavior -->
-          <span
-            v-if="item.endBehavior?.action === 'next'"
-            class="material-symbols-rounded behavior-icon"
-            :title="t('behaviors.endPlayNext')"
-          >skip_next</span>
-          <span
-            v-else-if="item.endBehavior?.action === 'goto-item'"
-            class="material-symbols-rounded behavior-icon"
-            :title="t('behaviors.endGotoItem')"
-          >arrow_forward</span>
-          <span
-            v-else-if="item.endBehavior?.action === 'goto-index'"
-            class="material-symbols-rounded behavior-icon"
-            :title="t('behaviors.endGotoIndex')"
-          >arrow_forward</span>
-          <span
-            v-else-if="item.endBehavior?.action === 'loop'"
-            class="material-symbols-rounded behavior-icon"
-            :title="t('behaviors.endLoop')"
-          >replay</span>
-        </div>
-        
-        <span v-if="item.type === 'audio'" class="item-duration">{{ durationDisplay }}</span>
       </div>
       
       
@@ -222,7 +237,27 @@ const props = defineProps<{
   depth: number;
 }>();
 
-const { selectedItem, selectedItems, toggleItemSelection, openItemProperties, removeItem, requestDeleteFromButton, findItemByUuid, currentProject, waveformUpdateKey, triggerWaveformUpdate } = useProject();
+const {
+  selectedItem,
+  selectedItems,
+  toggleItemSelection,
+  openItemProperties,
+  removeItem,
+  requestDeleteFromButton,
+  findItemByUuid,
+  currentProject,
+  waveformUpdateKey,
+  triggerWaveformUpdate,
+  formatItemIndex,
+} = useProject();
+
+// mm:ss position of the Start Next marker, for the badge tooltip.
+const formatMarkerTime = (seconds: number): string => {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
 // Gates the long-press gesture. Deliberately isCoarse and not isCompact: a
 // narrow mouse-driven window must keep click-to-select semantics.
 const { isCoarse } = useCompactLayout();
@@ -260,8 +295,23 @@ function onRowPointerUp() {
 const { levels: outputTargetLevels } = useOutputTarget();
 const { playCue, stopCue, activeCues, activeGroups, triggerGroup, nextItemOverrideUuid, autoNextItemUuid, setNextItem } = useAudioEngine();
 const { t } = useLocalization();
+const { uiMode } = useUiMode();
 
-const isExpanded = ref(props.item.type === 'group' ? props.item.isExpanded : false);
+// Show Mode strips edit affordances (preview/edit/delete + drag) and scales the
+// row up for touch, while keeping waveform, colour, duration, behaviour flags
+// and warnings identical to edit mode.
+const showMode = computed(() => uiMode.value === 'playback');
+
+const { isRevealed, forgetReveal } = usePlaylistReveal();
+
+// A group is open either because the operator left it open (persisted on the
+// item) or because the playlist is temporarily holding it open to expose an
+// off-screen selection. Derived rather than a local ref: the reveal is driven
+// from outside this component, and a ref seeded from the prop at mount would
+// never see it.
+const isExpanded = computed(() =>
+  props.item.type === 'group' && (props.item.isExpanded || isRevealed(props.item.uuid)),
+);
 const waveformCanvas = ref<HTMLCanvasElement | null>(null);
 const dragPosition = ref<'top' | 'bottom' | 'group' | null>(null);
 
@@ -277,7 +327,7 @@ const isQueuedNext = computed(() => {
 const isGroupPlaying = computed(() => props.item.type === 'group' && activeGroups.value.has(props.item.uuid));
 
 const indexDisplay = computed(() => {
-  return props.item.index.join(',');
+  return formatItemIndex(props.item.index);
 });
 
 // True when the item's effective loudness is significantly above the
@@ -561,6 +611,10 @@ const progressStyle = computed(() => {
 });
 
 const handleSelect = (event: MouseEvent) => {
+  // Rows are not selectable in Show Mode — it's a playback surface, not an
+  // editing list, and selection drives edit-only affordances (properties
+  // panel, delete) that are already hidden here.
+  if (showMode.value) return;
   toggleItemSelection(props.item.uuid, event.ctrlKey || event.metaKey, event.shiftKey);
 };
 
@@ -620,10 +674,12 @@ const handleDelete = () => {
 };
 
 const toggleExpand = () => {
-  if (props.item.type === 'group') {
-    isExpanded.value = !isExpanded.value;
-    props.item.isExpanded = isExpanded.value;
-  }
+  if (props.item.type !== 'group') return;
+  const open = isExpanded.value;
+  // Collapsing by hand also drops any temporary reveal — otherwise a group
+  // still holding the selection would spring straight back open.
+  if (open) forgetReveal(props.item.uuid);
+  props.item.isExpanded = !open;
 };
 
 const handleDragStart = (e: DragEvent) => {
@@ -671,9 +727,11 @@ const handleDragLeave = () => {
 const handleDrop = (e: DragEvent) => {
   e.preventDefault();
   e.stopPropagation();
-  
+
   dragPosition.value = null;
-  
+
+  // Rows are read-only in Show Mode — no reordering or import drops.
+  if (showMode.value) return;
   if (!e.dataTransfer || !currentProject.value) return;
 
   // A cart slot dragged onto the playlist → promote it to an independent
@@ -1009,11 +1067,16 @@ const findItemByIndex = (index: number[]): AudioItem | GroupItem | null => {
 }
 
 .item-duration {
-  font-size: 12px;
   font-size: 1.5em;
   color: var(--color-text-secondary);
-  margin-left: var(--spacing-xs);
+  margin: 0 var(--spacing-sm);
   white-space: nowrap;
+  /* Fixed-width, right-aligned column so the leading "-" shown during the
+     playing countdown widens the text without shoving the flags around, and
+     so the duration lines up vertically from row to row. */
+  min-width: 3.5em;
+  text-align: right;
+  flex-shrink: 0;
 }
 
 .behavior-indicators {
@@ -1021,11 +1084,18 @@ const findItemByIndex = (index: number[]): AudioItem | GroupItem | null => {
   gap: 2px;
   align-items: center;
   margin-inline-start: auto;
-  
+  flex-shrink: 0;
+
+
   .behavior-icon {
     font-size: 14px;
     color: var(--color-text-secondary);
     opacity: 0.7;
+  }
+
+  .behavior-icon-segue {
+    color: rgb(22, 163, 74);
+    opacity: 0.9;
   }
 }
 
@@ -1189,6 +1259,21 @@ const findItemByIndex = (index: number[]): AudioItem | GroupItem | null => {
   .pl-act--hide-compact {
     display: none;
   }
+
+  /* ...except set-as-next in Show Mode, which comes back into the row.
+     The chain that makes this necessary: the sheet is where set-as-next went,
+     Show Mode hides the sheet, and Show Mode also makes rows unselectable — so
+     on a phone in Show Mode there was NO way left to change what fires next.
+     That is a live-operation control, not an edit affordance, so losing it is
+     the one thing Show Mode must not do.
+     Re-crowding Play is not a concern here: Show Mode has already taken edit
+     and delete out of this row, so Play and set-as-next are the only two left,
+     at a full tap target each. */
+  .playlist-item.show-mode .pl-act--next {
+    display: flex;
+    width: var(--lp-tap);
+    height: var(--lp-tap);
+  }
   /* order:-1 rather than moving the node, so desktop DOM order is untouched. */
   .item-actions :deep(.pl-act--play) {
     order: -1;
@@ -1254,6 +1339,59 @@ const findItemByIndex = (index: number[]): AudioItem | GroupItem | null => {
 @media (max-height: 559px) and (any-pointer: coarse) and (min-width: 600px) {
   .item-content {
     padding-block: 2px;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Show Mode — larger, touch-friendly rows. Same content, bigger hit  */
+/* areas: taller rows, bigger name/duration text, and chunky play/    */
+/* stop / set-next buttons. Waveform, colour tint, flags and warnings  */
+/* are untouched so the row still reads exactly like the editor.       */
+/* ------------------------------------------------------------------ */
+.playlist-item.show-mode {
+  .item-content {
+    min-height: 68px;
+    padding: var(--spacing-md) var(--spacing-lg);
+  }
+
+  .item-name {
+    font-size: 1.7em;
+  }
+
+  .item-duration {
+    font-size: 1.7em;
+  }
+
+  .status-pill {
+    font-size: 15px;
+    height: 34px;
+    padding: 2px 12px;
+  }
+
+  .behavior-icon {
+    font-size: 20px !important;
+  }
+
+  /* Enlarge the remaining action buttons (preview, play/stop, set-next) for
+     touch — double width vs. height so they're easier to hit without
+     misjudging horizontal position. :deep() reaches into the ActionButton
+     child component's root. */
+  :deep(.action-btn--playlist) {
+    width: 112px;
+    height: 56px;
+
+    .material-symbols-rounded {
+      font-size: 28px;
+    }
+  }
+
+  .item-actions {
+    gap: var(--spacing-sm);
+  }
+
+  /* Not selectable — row is a playback surface, not a list to click into. */
+  .item-content {
+    cursor: default;
   }
 }
 </style>

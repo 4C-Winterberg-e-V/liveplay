@@ -1,4 +1,4 @@
-﻿{
+{
   "_metadata": {
     "code": "es",
     "name": "Spanish",
@@ -160,7 +160,10 @@
     "multiSelectWaveform": "Varios elementos seleccionados: elija un solo elemento para mostrar su forma de onda.",
     "multiSelectOutPointDisabled": "Deshabilitado para selección múltiple (el punto de salida depende de la duración de cada elemento).",
     "noWaveformData": "No hay datos de forma de onda disponibles",
-    "ltcRequiresDevice": "Seleccione un dispositivo de salida LTC en la Configuración del proyecto para habilitar la salida de timecode."
+    "ltcRequiresDevice": "Seleccione un dispositivo de salida LTC en la Configuración del proyecto para habilitar la salida de timecode.",
+    "startNextEnable": "Iniciar siguiente en el marcador",
+    "startNextTime": "Iniciar siguiente en",
+    "startNextFadeOut": "Atenuar en el marcador"
   },
   "playback": {
     "panic": "Detener Todas las Señales",
@@ -169,7 +172,8 @@
     "stop": "Detener",
     "delete": "Eliminar",
     "edit": "Editar",
-    "masterMix": "Master"
+    "masterMix": "Master",
+    "startNextCountdown": "Tiempo hasta que empiece la siguiente pista"
   },
   "endBehavior": {
     "nothing": "Nada",
@@ -377,6 +381,13 @@
     "meterModeDbfs": "dBFS (Escala completa digital)",
     "meterModeDbtp": "dBTP (Pico verdadero)",
     "meterModeRms": "RMS",
+    "meterBallistics": "Meter Ballistics",
+    "meterBallisticsHelp": "How fast the meters rise and fall.",
+    "meterBallisticsDigitalPpm": "Digital PPM (default)",
+    "meterBallisticsPpmI": "PPM Type I (DIN)",
+    "meterBallisticsPpmII": "PPM Type II (BBC)",
+    "meterBallisticsVu": "VU (slow)",
+    "meterBallisticsInstant": "Instant (fast)",
     "disableAutoVolumeAndTrim": "Deshabilitar ajustes automáticos de volumen y recorte",
     "disableLimiter": "Desactivar el limitador brickwall",
     "disableLimiterHelp": "Desactiva el limitador brickwall, permitiendo picos por encima del techo. Se puede cambiar durante la reproducción.",
@@ -386,7 +397,22 @@
     "noneSelected": "No seleccionado",
     "save": "Guardar",
     "close": "Cerrar",
-    "preview": "Vista previa"
+    "preview": "Vista previa",
+    "transitionMode": "Modo de transición predeterminado",
+    "transitionModeHelp": "Transición aplicada a las pistas recién importadas. Cada pista puede seguir cambiando entre fundido cruzado e iniciar siguiente en sus propiedades.",
+    "transitionModeCrossfade": "Fundido cruzado al siguiente",
+    "transitionModeStartNext": "Iniciar siguiente en el marcador",
+    "autoCueNext": "Preparar automáticamente el siguiente elemento aunque no tenga comportamiento final",
+    "autoCueNextHelp": "Prepara el siguiente elemento como «A continuación» aunque el elemento en reproducción no tenga comportamiento final, para que puedas avanzar por la lista con un solo botón GO. No inicia la reproducción automáticamente.",
+    "tabAudioRouting": "Enrutamiento de audio",
+    "tabPlaybackBehaviour": "Comportamiento de reproducción",
+    "tabUserInterface": "Interfaz de usuario",
+    "stopAllFade": "Fundido de «Detener todo» (segundos)",
+    "stopAllFadeHelp": "Tiempo que tardan todas las señales en desvanecerse al pulsar «Detener todo». Ponlo a 0 para una parada instantánea.",
+    "scrollToPlaying": "Desplazar al elemento en reproducción",
+    "scrollToPlayingHelp": "Mantener automáticamente centrado en la lista el elemento que se está reproduciendo.",
+    "indexDisplayStart": "Numerar elementos de la lista desde",
+    "indexDisplayStartHelp": "Controla el número que se muestra para el primer elemento de la lista. Los índices internos y las rutas de índice de la API siguen empezando en cero."
   },
   "common": {
     "default": "predeterminado",
@@ -439,14 +465,16 @@
     "endPlayNext": "Fin: Reproducir siguiente",
     "endGotoItem": "Fin: Ir al elemento",
     "endGotoIndex": "Fin: Ir al índice",
-    "endLoop": "Fin: Bucle"
+    "endLoop": "Fin: Bucle",
+    "startNextMarker": "Inicia la siguiente pista en {time}"
   },
   "waveform": {
     "decreaseBy": "Disminuir en {seconds}s",
     "increaseBy": "Aumentar en {seconds}s",
     "playFadeTitle": "Entrada: {seconds}s",
     "stopFadeTitle": "Salida: {seconds}s",
-    "crossFadeTitle": "Fundido cruzado: {seconds}s"
+    "crossFadeTitle": "Fundido cruzado: {seconds}s",
+    "startNextTitle": "Iniciar siguiente: {time}"
   },
   "unsavedModal": {
     "title": "Cambios sin guardar",
@@ -459,12 +487,23 @@
     "title": "Conexión perdida",
     "message": "Se ha perdido la conexión con el servidor LivePlay en {url}.",
     "attempting": "Intentando reconectar…",
-    "reconnect": "Reconectar",
+    "attemptCount": "(Intentos fallidos: {count})",
+    "locked": "La reproducción y la edición están en pausa hasta que vuelva la conexión: los cambios que hiciera ahora no podrían enviarse al servidor.",
+    "pill": "Reconectando…",
+    "reconnect": "Reintentar ahora",
     "restart": "Reiniciar",
     "exit": "Salir",
-    "reconnectHint": "Reconectar vuelve a intentar con el mismo servidor.",
+    "reconnectHint": "Reintentar ahora contacta de inmediato con el mismo servidor en lugar de esperar al siguiente intento automático.",
     "restartHint": "Reiniciar reinicia solo el cliente (el servidor de audio sigue funcionando).",
     "exitHint": "Salir cierra el cliente."
+  },
+  "sessionRecovery": {
+    "title": "El servidor se ha reiniciado",
+    "message": "La conexión ha vuelto, pero el servidor ya no tiene ningún proyecto abierto: lo más probable es que se haya reiniciado. Su proyecto sigue aquí, en este equipo.",
+    "resume": "Continuar sesión",
+    "startFresh": "Empezar de cero",
+    "resumeHint": "Continuar sesión vuelve a abrir este proyecto en el servidor para que pueda seguir trabajando.",
+    "startFreshHint": "Empezar de cero lo cierra y regresa a la pantalla de bienvenida."
   },
   "audioImport": {
     "title": "Importar audio",
@@ -493,5 +532,14 @@
     "deleteAll": "Eliminar {count} elementos seleccionados",
     "deleteOnly": "Eliminar solo «{name}»",
     "cancel": "Cancelar"
+  },
+  "showMode": {
+    "toggle": "Modo Espectáculo",
+    "toggleHint": "Cambiar a una vista de reproducción simplificada y táctil para espectáculos.",
+    "exit": "Salir",
+    "exitHint": "Mantén pulsado para salir del Modo Espectáculo",
+    "noItems": "No hay elementos en este proyecto",
+    "holdToStop": "Mantén pulsado para detener",
+    "holdToStopAll": "Mantén pulsado para detener todo"
   }
 }

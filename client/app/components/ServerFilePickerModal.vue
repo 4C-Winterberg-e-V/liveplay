@@ -197,8 +197,8 @@ const breadcrumbs = computed(() => {
 
 const sortedEntries = computed(() => {
   const list = listing.value?.entries ?? [];
-  // Drives first, then directories, then files. Alpha within each group.
-  const rank: Record<string, number> = { drive: 0, dir: 1, file: 2 };
+  // Home first, then drives, directories, files. Alpha within each group.
+  const rank: Record<string, number> = { home: 0, drive: 1, dir: 2, file: 3 };
   return [...list].sort((a, b) => {
     const r = (rank[a.kind] ?? 9) - (rank[b.kind] ?? 9);
     return r !== 0 ? r : a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
@@ -220,6 +220,7 @@ const filterLabel = computed(() => filterDisplay(filter.value));
 // Helpers
 // ---------------------------------------------------------------------------
 function iconNameFor(entry: ServerFsEntry): string {
+  if (entry.kind === 'home')  return 'home';
   if (entry.kind === 'drive') return 'storage';
   if (entry.kind === 'dir')   return 'folder';
   return 'description';
@@ -292,7 +293,7 @@ function onEntryClick(entry: ServerFsEntry) {
 }
 
 function onEntryActivate(entry: ServerFsEntry) {
-  if (entry.kind === 'dir' || entry.kind === 'drive') {
+  if (entry.kind === 'dir' || entry.kind === 'drive' || entry.kind === 'home') {
     navigate(entry.full_path);
   } else if (entry.kind === 'file') {
     selected.value = entry.full_path;
@@ -433,7 +434,8 @@ watch(() => props.open, (o) => {
   &.file .icon { color: var(--color-accent); }
   .name { color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .size { color: #888; font-family: var(--font-mono); font-size: 11px; }
-  &.drive .name { font-weight: 600; }
+  &.drive .name,
+  &.home .name { font-weight: 600; }
   &.selected {
     background: var(--color-accent);
     .name, .icon, .size { color: #fff; }

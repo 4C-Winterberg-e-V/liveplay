@@ -6,6 +6,8 @@
       'has-item': hasItem,
       'is-playing': isPlaying,
       'is-selected': isSelected,
+      'is-armed': isArmed,
+      'show-mode': showMode,
       'warning-yellow': warningState === 'yellow',
       'warning-orange': warningState === 'orange',
       'warning-red': warningState === 'red',
@@ -18,17 +20,19 @@
                       @pick="onImportPick"
                       @close="showImportModal = false" />
 
-    <div v-if="!hasItem" class="empty-slot" @click="handleImport">
+    <!-- Empty slot: importing is an edit action, so in Show Mode the slot is
+         inert (just a dimmed number) rather than a "click to import" target. -->
+    <div v-if="!hasItem" class="empty-slot" :class="{ 'empty-slot--inert': showMode }" @click="showMode ? undefined : handleImport()">
       <span class="slot-number">{{ slot + 1 }}</span>
       <span v-if="keyLabel" class="key-label">{{ keyLabel }}</span>
-      <span class="slot-hint">{{ t('cart.clickToImport') }}</span>
+      <span v-if="!showMode" class="slot-hint">{{ t('cart.clickToImport') }}</span>
     </div>
-    
+
     <div
       v-else
       class="slot-content"
       :data-slot="slot + 1"
-      draggable="true"
+      :draggable="!showMode"
       @dragstart="handleDragStart"
       @dragend="handleDragEnd"
       @click="handlePadTap"
@@ -46,6 +50,14 @@
 
       <!-- Progress overlay -->
       <div v-if="isPlaying" class="cart-progress" :style="progressStyle"></div>
+
+      <!-- Armed: the pad is waiting for the confirming tap. Deliberately loud —
+           the operator has to be able to tell "armed" from "selected" at a
+           glance, in the dark, mid-show. -->
+      <div v-if="isArmed" class="pad-armed">
+        <span class="material-symbols-rounded">{{ isPlaying ? 'stop_circle' : 'play_circle' }}</span>
+        <span class="pad-armed__text">{{ t('cart.tapAgain') }}</span>
+      </div>
 
       <!-- Item info section -->
       <div class="slot-header" @click="handleSelect($event)">
@@ -77,8 +89,12 @@
       
       <!-- Bottom info bar with action buttons, behavior icons, and duration -->
       <div class="slot-footer">
-        <!-- Action buttons (always visible) -->
-        <div class="slot-actions">
+        <!-- Action buttons -->
+        <!-- Show Mode removes the play and set-as-next buttons entirely — the
+             whole slot surface triggers playback instead (see @click on
+             .slot-content) — along with the preview/edit/delete edit
+             affordances. -->
+        <div v-if="!showMode" class="slot-actions">
           <ActionButton
             v-if="item.type === 'audio'"
             :icon="'headphones'"
@@ -193,7 +209,7 @@ import type { AudioItem } from '~/types/project';
 import ActionButton from './ActionButton.vue';
 import AudioImportModal from './AudioImportModal.vue';
 import { useOutputTarget, METER_COLORS } from '~/composables/useOutputTarget';
-import { calculatePerceivedLoudness } from '~/utils/audio';
+import { calculatePerceivedLoudness, parseWaveformFileData } from '~/utils/audio';
 import { useCompactLayout } from '~/composables/useCompactLayout';
 
 const props = defineProps<{
@@ -217,6 +233,11 @@ const { t } = useLocalization();
 // device, not the window size.
 const { isCoarse } = useCompactLayout();
 const { addCartOnlyItem, updateCartOnlyItem, removeCartOnlyItem } = useCartItems();
+const { uiMode } = useUiMode();
+
+// Show Mode: hide edit affordances (import/preview/edit/delete + drag) and
+// enlarge the slot for touch. Waveform, colour, flags and warnings unchanged.
+const showMode = computed(() => uiMode.value === 'playback');
 
 const waveformCanvas = ref<HTMLCanvasElement | null>(null);
 const currentTime = ref(0);
@@ -418,6 +439,7 @@ const importFromServerPath = async (serverPath: string) => {
 
 const handleSelect = (event?: MouseEvent) => {
   if (!props.item) return;
+  if (showMode.value) return;
   // Stamp the selection as cart-owned so a global keyboard DEL clears cart
   // slots (rather than deleting the underlying playlist items).
   selectionContext.value = 'cart';
@@ -485,12 +507,54 @@ const clearPadTimer = () => {
   if (padTimer) { clearTimeout(padTimer); padTimer = null; }
 };
 
+// ---- Confirm-tap (touch only) ---------------------------------------------
+// On a phone the pad is a big target under a hand that is also holding the
+// device, so a single tap is one palm-brush away from firing a sting into the
+// PA. The first tap arms the pad, the second fires it. A mouse never goes
+// through this: a click is deliberate, and the desktop cart is operated at a
+// distance from the audience.
+//
+// Shared across slots so only ONE pad is ever armed — arming B disarms A. Slot
+// index is enough to key it; the cart grid is a fixed 16.
+const armedSlot = useState<number | null>('lp.cart.armedSlot', () => null);
+const isArmed = computed(() => armedSlot.value === props.slot);
+let disarmTimer: ReturnType<typeof setTimeout> | null = null;
+
+const clearDisarmTimer = () => {
+  if (disarmTimer) { clearTimeout(disarmTimer); disarmTimer = null; }
+};
+
+const disarm = () => {
+  clearDisarmTimer();
+  if (armedSlot.value === props.slot) armedSlot.value = null;
+};
+
+// An armed pad that stays armed is its own hazard: arm it, get distracted, brush
+// it ten minutes later and it fires with no warning. The arming expires.
+const ARM_TIMEOUT_MS = 4000;
+
 function handlePadTap() {
-  if (!isCoarse.value) return;
+  // Fires for a touch pad tap OR anywhere in Show Mode, where the whole slot
+  // surface is the trigger (this absorbed the old handleSlotClick). On a fine
+  // pointer outside Show Mode the click still means "select", not "play".
+  if (!isCoarse.value && !showMode.value) return;
   // A long press already did its job; don't also fire the cue on release.
   if (padLongPressed.value) { padLongPressed.value = false; return; }
   // A scroll is not a trigger.
   if (padMoved) { padMoved = false; return; }
+
+  // Touch: first tap arms, second fires. Stopping is armed too — an accidental
+  // stop is dead air, which is no better than an accidental start.
+  if (isCoarse.value) {
+    if (!isArmed.value) {
+      clearDisarmTimer();
+      armedSlot.value = props.slot;
+      disarmTimer = setTimeout(disarm, ARM_TIMEOUT_MS);
+      return;
+    }
+    disarm();
+  }
+
   if (isPlaying.value) handleStop(); else handlePlay();
 }
 
@@ -505,12 +569,21 @@ function onPadPointerDown(e: PointerEvent) {
   padTimer = setTimeout(() => {
     padTimer = null;
     padLongPressed.value = true;
+    disarm();   // long press is a different intent; drop any pending arming
     if (isSelected.value) handleImport();
     else handleSelect();
   }, 500);
 }
 
 function onPadPointerMove(e: PointerEvent) {
+  // Coarse only — the same gate onPadPointerDown has, and it is load-bearing.
+  // A mouse fires pointermove on plain HOVER with no button down. Since
+  // onPadPointerDown returns early on a fine pointer, padStartX/Y are never
+  // seeded and stay at 0, so `|clientX - 0| > 10` was true for every hover and
+  // set padMoved. handlePadTap then swallowed the click as "that was a scroll",
+  // and the pad only fired on a SECOND click with the mouse held still — which
+  // reads as a dead cart player in Show Mode.
+  if (!isCoarse.value) return;
   // 10px on either axis means the finger is scrolling the grid.
   if (Math.abs(e.clientX - padStartX) > 10 || Math.abs(e.clientY - padStartY) > 10) padMoved = true;
   if (!padTimer) return;
@@ -659,8 +732,9 @@ let waveformPollInterval: NodeJS.Timeout | null = null;
 
 onMounted(() => {
   // Use native DOM listeners for drag-and-drop — Vue event handlers
-  // on this component don't receive drop events (likely a Vue 3 scoped template issue)
-  if (slotRef.value) {
+  // on this component don't receive drop events (likely a Vue 3 scoped template issue).
+  // Skipped in Show Mode so cues can't be accidentally reordered/replaced mid-show.
+  if (slotRef.value && !showMode.value) {
     slotRef.value.addEventListener('dragenter', (e) => {
       e.preventDefault();
     });
@@ -698,8 +772,10 @@ onMounted(() => {
 onUnmounted(() => {
   // Without this a pad unmounted mid-press (empty-pad filter toggling, deck
   // switch) would still fire its long press and open the import dialog for a
-  // slot that is no longer on screen.
+  // slot that is no longer on screen. The arming goes for the same reason: a
+  // pad must never come back onto the screen already armed.
   clearPadTimer();
+  disarm();
   if (resizeObserver && waveformCanvas.value) {
     resizeObserver.unobserve(waveformCanvas.value);
     resizeObserver.disconnect();
@@ -737,8 +813,9 @@ const startWaveformPolling = () => {
       try {
         const result = await window.electronAPI.readFile(resolveProjectPath(audioItem.waveformPath));
         if (result.success && result.data) {
-          const waveformData = JSON.parse(result.data);
-          if (waveformData.peaks && waveformData.peaks.length > 0) {
+          // Accepts both the server's per-channel cache and legacy ffmpeg files.
+          const waveformData = parseWaveformFileData(JSON.parse(result.data));
+          if (waveformData) {
             audioItem.waveform = waveformData;
             
             // Update duration from waveform data if available
@@ -803,7 +880,10 @@ const handleDrop = async (e: DragEvent) => {
   e.preventDefault();
   e.stopPropagation();
   isDragOver.value = false;
-  
+
+  // No cart edits (reorder / import / replace) in Show Mode, even via an OS
+  // file drop — guards the case where the slot mounted in edit mode first.
+  if (showMode.value) return;
   if (!e.dataTransfer || !currentProject.value) return;
   
   // Check if it's a cart item being reordered
@@ -1231,6 +1311,46 @@ const handleDrop = async (e: DragEvent) => {
   z-index: 0;
 }
 
+/* Armed pad — waiting for the confirming tap (touch only). Covers the pad so
+   the prompt is unmissable, and pointer-events:none keeps the tap on
+   .slot-content where handlePadTap lives. */
+.pad-armed {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--color-accent) 78%, transparent);
+  color: #fff;
+  text-align: center;
+  padding: 4px;
+  animation: pad-armed-pulse 1s ease-in-out infinite;
+}
+.pad-armed .material-symbols-rounded { font-size: 34px; }
+.pad-armed__text {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+@keyframes pad-armed-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.72; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pad-armed { animation: none; }
+}
+/* A ring as well as the overlay: on a colour-tinted pad the fill alone can be
+   ambiguous, and the ring survives the pulse. */
+.cart-slot.is-armed {
+  outline: 3px solid var(--color-accent);
+  outline-offset: -3px;
+}
+
 .cart-progress {
   position: absolute;
   top: 0;
@@ -1381,6 +1501,59 @@ const handleDrop = async (e: DragEvent) => {
   .slot-info,
   .behavior-indicators {
     display: none;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Show Mode — bigger name text and chunky play/stop / set-next        */
+/* buttons for touch. Empty slots become inert (no import cursor).      */
+/* ------------------------------------------------------------------ */
+.cart-slot.show-mode {
+  &:hover {
+    /* No hover-grow in Show Mode — touch has no hover and the scale
+       nudge just makes big targets feel jittery. */
+    transform: none;
+  }
+
+  .empty-slot--inert {
+    cursor: default;
+  }
+
+  .slot-name {
+    font-size: 17px;
+  }
+
+  .slot-duration {
+    font-size: 14px;
+  }
+
+  .behavior-icon {
+    font-size: 18px !important;
+  }
+
+  :deep(.action-btn--cart) {
+    width: 46px;
+    height: 46px;
+
+    .material-symbols-rounded {
+      font-size: 24px;
+    }
+  }
+
+  .slot-actions {
+    gap: var(--spacing-sm);
+  }
+
+  /* No buttons in Show Mode — the whole slot is the play/stop trigger, and
+     it's not draggable, so drop the "move" cursor and shrink the footer
+     padding back down (no buttons to clear). */
+  .slot-content {
+    cursor: pointer;
+    padding-bottom: var(--spacing-sm);
+
+    &:active {
+      cursor: pointer;
+    }
   }
 }
 

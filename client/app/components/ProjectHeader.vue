@@ -25,6 +25,9 @@
     </div>
 
     <div ref="rightRef" class="header-right">
+      <!-- Appears the moment the socket drops; spins for as long as we retry. -->
+      <ConnectionStatusPill />
+
       <!-- Phones only: transport moves up here from the controls bar so the
            active-cue list below gets the full width (icon-only to stay slim). -->
       <TransportButtons class="header-transport" />
@@ -68,6 +71,24 @@
               <span class="material-symbols-rounded">save</span>
               <span>{{ t('project.autosave') }}</span>
               <span class="autosave-toggle__track" :class="{ 'autosave-toggle__track--on': autoSaveEnabled }">
+                <span class="autosave-toggle__thumb"></span>
+              </span>
+            </button>
+            <!-- Show Mode belongs here for the same reason autosave does: the
+                 bar-level switch is display:none on compact, so without this
+                 entry the mode upstream added would be unreachable on a phone —
+                 no way in, and worse, no way back out. -->
+            <button
+              type="button"
+              class="header-overflow__autosave"
+              role="switch"
+              :aria-checked="uiMode === 'playback'"
+              :disabled="!currentProject"
+              @click="toggleUiMode()"
+            >
+              <span class="material-symbols-rounded">slideshow</span>
+              <span>{{ t('showMode.toggle') }}</span>
+              <span class="autosave-toggle__track" :class="{ 'autosave-toggle__track--on': uiMode === 'playback' }">
                 <span class="autosave-toggle__thumb"></span>
               </span>
             </button>
@@ -120,15 +141,36 @@
         </span>
       </button>
 
-      <!-- Clock pair: wall clock + LTC timecode. On a phone the wall clock is
-           normally hidden because the system status bar already shows the time —
-           but fullscreen hides that bar too, so the app has to supply it. -->
+      <!-- Show Mode toggle: flips the whole workspace into the touch-friendly
+           playback layout (edit buttons hidden, larger touch targets) and back.
+           Persisted per-device, not in the project. -->
+      <button
+        type="button"
+        class="autosave-toggle showmode-toggle"
+        role="switch"
+        :aria-checked="uiMode === 'playback'"
+        :aria-label="t('showMode.toggle')"
+        :disabled="!currentProject"
+        :title="t('showMode.toggleHint')"
+        @click="toggleUiMode"
+      >
+        <span class="autosave-toggle__label">{{ t('showMode.toggle') }}</span>
+        <span class="autosave-toggle__track" :class="{ 'autosave-toggle__track--on': uiMode === 'playback' }">
+          <span class="autosave-toggle__thumb"></span>
+        </span>
+      </button>
+
+      <!-- Clock pair: wall clock + LTC timecode. The LTC box only appears once an
+           LTC output device is configured in Project Settings — otherwise it's
+           permanent header clutter. On a phone the wall clock is normally hidden
+           because the system status bar already shows the time — but fullscreen
+           hides that bar too, so the app has to supply it. -->
       <div class="clock-pair" :class="{ 'clock-pair--immersive': isFullscreen }">
         <div class="digital-clock clock--active">
           <span class="clock-label">{{ t('project.clock') }}</span>
           <span class="clock-value">{{ currentTime }}</span>
         </div>
-        <div class="digital-clock" :class="ltcTimecode ? 'clock--active' : 'clock--inactive'">
+        <div v-if="hasLtcDevice" class="digital-clock" :class="ltcTimecode ? 'clock--active' : 'clock--inactive'">
           <span class="clock-label">LTC</span>
           <span class="clock-value">{{ ltcTimecode ?? '--:--:--:--' }}</span>
         </div>
@@ -177,6 +219,8 @@ import type { AudioItem } from '~/types/project';
 const { currentProject, findItemByUuid, findItemByIndex, autoSaveEnabled, hasUnsavedChanges, setAutoSave } = useProject();
 const { t } = useLocalization();
 const { activeCues } = useAudioEngine();
+const { uiMode, toggleUiMode } = useUiMode();
+
 // Layout-only gate: decides whether the phone master meter is mounted and
 // whether the silence banner's placement maths is worth running at all.
 const { isCompact, isFullscreen } = useCompactLayout();
@@ -406,6 +450,12 @@ function framesToTc(totalFrames: number, fps: number): string {
   const h = Math.floor(totalSecs / 3600);
   return [h, m, s, f].map(n => String(n).padStart(2, '0')).join(':');
 }
+
+// Whether the project has an LTC output device configured at all — the LTC
+// clock box is only rendered when this is true, so it doesn't sit in the
+// (increasingly crowded) header as permanent dead weight for projects that
+// never use timecode.
+const hasLtcDevice = computed(() => !!(currentProject.value as any)?.settings?.ltcDevice);
 
 // Returns the current LTC timecode string if any active cue is outputting LTC
 // to a configured LTC device, otherwise null (→ box shown grey with dashes).

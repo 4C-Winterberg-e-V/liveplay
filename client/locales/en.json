@@ -1,4 +1,4 @@
-﻿{
+{
   "_metadata": {
     "code": "en",
     "name": "English",
@@ -96,16 +96,38 @@
     "meterModeDbfs": "dBFS (Digital Full Scale)",
     "meterModeDbtp": "dBTP (True Peak)",
     "meterModeRms": "RMS",
+    "meterBallistics": "Meter Ballistics",
+    "meterBallisticsHelp": "How fast the meters rise and fall.",
+    "meterBallisticsDigitalPpm": "Digital PPM (default)",
+    "meterBallisticsPpmI": "PPM Type I (DIN)",
+    "meterBallisticsPpmII": "PPM Type II (BBC)",
+    "meterBallisticsVu": "VU (slow)",
+    "meterBallisticsInstant": "Instant (fast)",
     "disableAutoVolumeAndTrim": "Disable automatic volume and trim adjustments",
     "disableLimiter": "Disable brickwall limiter",
     "disableLimiterHelp": "Turns off the brickwall limiter, allowing peaks above the output ceiling. Can be changed during playback.",
     "disableSilenceWarning": "Disable silence warning",
     "disableSilenceWarningHelp": "Stops the silence warning banner from appearing in the header.",
+    "transitionMode": "Default Transition Mode",
+    "transitionModeHelp": "Transition applied to newly imported tracks. Each track can still be switched between cross-fade and start-next in its properties.",
+    "transitionModeCrossfade": "Cross-fade to next",
+    "transitionModeStartNext": "Start next at marker",
+    "autoCueNext": "Automatically cue next item even without end behaviour",
+    "autoCueNextHelp": "Arms the next item as \"Up Next\" even when the playing item has no end behaviour, so you can step through the playlist with a single GO button. It does not start playback automatically.",
     "useProjectDefault": "Use project default",
     "noneSelected": "Not selected",
     "save": "Save",
     "close": "Close",
-    "preview": "Preview"
+    "preview": "Preview",
+    "tabAudioRouting": "Audio Routing",
+    "tabPlaybackBehaviour": "Playback Behaviour",
+    "tabUserInterface": "User Interface",
+    "stopAllFade": "Stop All fade-out (seconds)",
+    "stopAllFadeHelp": "How long all cues take to fade out when you press Stop All. Set to 0 for an instant stop.",
+    "scrollToPlaying": "Scroll to currently playing",
+    "scrollToPlayingHelp": "Automatically keep the currently-playing item centred in the list.",
+    "indexDisplayStart": "Number playlist items starting at",
+    "indexDisplayStartHelp": "Controls the number shown for the first playlist item. Internal indexes and API index paths remain zero-based."
   },
   "common": {
     "default": "default",
@@ -157,7 +179,8 @@
     "close": "Close",
     "detach": "Detach",
     "attach": "Attach",
-    "showEmptySlots": "Show empty slots"
+    "showEmptySlots": "Show empty slots",
+    "tapAgain": "Tap again to fire"
   },
   "behaviors": {
     "startPlayNext": "Start: Play Next",
@@ -167,14 +190,16 @@
     "endPlayNext": "End: Play Next",
     "endGotoItem": "End: Go To Item",
     "endGotoIndex": "End: Go To Index",
-    "endLoop": "End: Loop"
+    "endLoop": "End: Loop",
+    "startNextMarker": "Starts next track at {time}"
   },
   "waveform": {
     "decreaseBy": "Decrease by {seconds}s",
     "increaseBy": "Increase by {seconds}s",
     "playFadeTitle": "Play Fade: {seconds}s",
     "stopFadeTitle": "Stop Fade: {seconds}s",
-    "crossFadeTitle": "Cross Fade: {seconds}s"
+    "crossFadeTitle": "Cross Fade: {seconds}s",
+    "startNextTitle": "Start Next: {time}"
   },
   "properties": {
     "title": "Properties",
@@ -223,8 +248,11 @@
     "playFade": "Play Fade In",
     "stopFade": "Stop Fade Out",
     "pauseFade": "Pause/Resume Fade",
-    "crossFade": "Cross-fade to Next",
+    "crossFade": "Cross-fade",
     "fadeSettings": "Fade Settings",
+    "startNextEnable": "Start Next at Marker",
+    "startNextTime": "Start Next At",
+    "startNextFadeOut": "Fade Out at Marker",
     "ltcOutputTimecode": "Output LTC Timecode",
     "ltcOutputTimecodeHelp": "Send SMPTE Linear Timecode to the project's LTC device while this cue plays.",
     "ltcRequiresDevice": "Select an LTC output device in Project Settings to enable timecode output.",
@@ -245,7 +273,8 @@
     "stop": "Stop",
     "delete": "Delete",
     "edit": "Edit",
-    "masterMix": "Master"
+    "masterMix": "Master",
+    "startNextCountdown": "Time until the next track starts"
   },
   "endBehavior": {
     "nothing": "Nothing",
@@ -322,6 +351,8 @@
     "stop": "Stop",
     "pause": "Pause",
     "resume": "Resume",
+    "cueToContinue": "Cue to Continue: finish this loop, then advance",
+    "jumpCue": "Jump Cue: stop now and advance immediately",
     "edit": "Edit",
     "remove": "Remove",
     "setAsNext": "Set As Next",
@@ -344,12 +375,23 @@
     "title": "Connection lost",
     "message": "The connection to the LivePlay server at {url} has been lost.",
     "attempting": "Attempting to reconnect…",
-    "reconnect": "Reconnect",
+    "attemptCount": "(Failed attempts: {count})",
+    "locked": "Playback and editing are paused until the connection is back — changes made now could not be sent to the server.",
+    "pill": "Reconnecting…",
+    "reconnect": "Retry now",
     "restart": "Restart",
     "exit": "Exit",
-    "reconnectHint": "Reconnect tries the same server again.",
+    "reconnectHint": "Retry now contacts the same server immediately instead of waiting for the next automatic attempt.",
     "restartHint": "Restart relaunches just the client (the audio server keeps running).",
     "exitHint": "Exit quits the client."
+  },
+  "sessionRecovery": {
+    "title": "Server restarted",
+    "message": "The connection is back, but the server no longer has a project open — it was most likely restarted. Your project is still here on this computer.",
+    "resume": "Continue session",
+    "startFresh": "Start fresh",
+    "resumeHint": "Continue session reopens this project on the server so you can carry on.",
+    "startFreshHint": "Start fresh closes it and returns to the welcome screen."
   },
   "audioImport": {
     "title": "Import audio",
@@ -463,6 +505,8 @@
     "cartSlot": "Cart Slot {n}",
     "pauseResume": "Pause / Resume",
     "toggleLoop": "Toggle Loop",
+    "cueToContinue": "Cue to Continue",
+    "jumpCue": "Jump Cue",
     "stopAll": "Stop All",
     "selectUp": "Select Up",
     "selectDown": "Select Down",
@@ -595,5 +639,14 @@
     "tunnelConfigKeepToken": "Existing saved token is kept. Enter a new token to change it.",
     "tunnelConfigPath": "Config file:",
     "installHint": "Tip: on the phone, use the browser menu to install LivePlay / add it to the home screen — that hides the address bar and gives you a full screen."
+  },
+  "showMode": {
+    "toggle": "Show Mode",
+    "toggleHint": "Switch to a simplified, touch-friendly playback view for shows.",
+    "exit": "Exit",
+    "exitHint": "Hold to exit Show Mode",
+    "noItems": "No items in this project",
+    "holdToStop": "Hold to stop",
+    "holdToStopAll": "Hold to stop all"
   }
 }

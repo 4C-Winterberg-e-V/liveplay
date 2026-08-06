@@ -1,4 +1,4 @@
-﻿{
+{
   "_metadata": {
     "code": "zh",
     "name": "Chinese",
@@ -160,7 +160,10 @@
     "multiSelectWaveform": "已选择多个项目 — 请选择单个项目以显示其波形。",
     "multiSelectOutPointDisabled": "多选时禁用（出点取决于每个项目的时长）。",
     "noWaveformData": "无可用波形数据",
-    "ltcRequiresDevice": "在项目设置中选择一个 LTC 输出设备以启用时间码输出。"
+    "ltcRequiresDevice": "在项目设置中选择一个 LTC 输出设备以启用时间码输出。",
+    "startNextEnable": "在标记处开始下一个",
+    "startNextTime": "下一个开始于",
+    "startNextFadeOut": "在标记处淡出"
   },
   "playback": {
     "panic": "停止所有信号",
@@ -169,7 +172,8 @@
     "stop": "停止",
     "delete": "删除",
     "edit": "编辑",
-    "masterMix": "Master"
+    "masterMix": "Master",
+    "startNextCountdown": "距离下一曲开始的时间"
   },
   "endBehavior": {
     "nothing": "无",
@@ -377,6 +381,13 @@
     "meterModeDbfs": "dBFS（数字满幅度）",
     "meterModeDbtp": "dBTP（真峰值）",
     "meterModeRms": "RMS",
+    "meterBallistics": "Meter Ballistics",
+    "meterBallisticsHelp": "How fast the meters rise and fall.",
+    "meterBallisticsDigitalPpm": "Digital PPM (default)",
+    "meterBallisticsPpmI": "PPM Type I (DIN)",
+    "meterBallisticsPpmII": "PPM Type II (BBC)",
+    "meterBallisticsVu": "VU (slow)",
+    "meterBallisticsInstant": "Instant (fast)",
     "disableAutoVolumeAndTrim": "禁用自动音量和修剪调整",
     "disableLimiter": "禁用砖墙限制器",
     "disableLimiterHelp": "关闭砖墙限制器，允许峰值超过上限。可在播放过程中更改。",
@@ -386,7 +397,22 @@
     "noneSelected": "未选择",
     "save": "保存",
     "close": "关闭",
-    "preview": "预听"
+    "preview": "预听",
+    "transitionMode": "默认过渡模式",
+    "transitionModeHelp": "应用于新导入曲目的过渡方式。每个曲目仍可在其属性中在交叉淡化和开始下一个之间切换。",
+    "transitionModeCrossfade": "交叉淡化到下一个",
+    "transitionModeStartNext": "在标记处开始下一个",
+    "autoCueNext": "即使没有结束行为也自动预备下一项",
+    "autoCueNextHelp": "即使正在播放的项目没有结束行为，也会将下一项预备为“下一个”，这样您只需一个 GO 按钮即可逐项播放列表。它不会自动开始播放。",
+    "tabAudioRouting": "音频路由",
+    "tabPlaybackBehaviour": "播放行为",
+    "tabUserInterface": "用户界面",
+    "stopAllFade": "「停止全部」淡出（秒）",
+    "stopAllFadeHelp": "按下「停止全部」时所有提示淡出所需的时间。设为 0 可立即停止。",
+    "scrollToPlaying": "滚动到正在播放的项目",
+    "scrollToPlayingHelp": "自动将正在播放的项目保持在列表中央。",
+    "indexDisplayStart": "播放列表项目编号起始值",
+    "indexDisplayStartHelp": "控制第一个播放列表项目显示的编号。内部索引和 API 索引路径仍从零开始。"
   },
   "common": {
     "default": "默认",
@@ -439,14 +465,16 @@
     "endPlayNext": "结束：播放下一个",
     "endGotoItem": "结束：转到项目",
     "endGotoIndex": "结束：转到索引",
-    "endLoop": "结束：循环"
+    "endLoop": "结束：循环",
+    "startNextMarker": "在 {time} 开始下一曲"
   },
   "waveform": {
     "decreaseBy": "减少 {seconds} 秒",
     "increaseBy": "增加 {seconds} 秒",
     "playFadeTitle": "淡入：{seconds}秒",
     "stopFadeTitle": "淡出：{seconds}秒",
-    "crossFadeTitle": "交叉淡变：{seconds}秒"
+    "crossFadeTitle": "交叉淡变：{seconds}秒",
+    "startNextTitle": "开始下一个：{time}"
   },
   "unsavedModal": {
     "title": "未保存的更改",
@@ -459,12 +487,23 @@
     "title": "连接已断开",
     "message": "与 {url} 上的 LivePlay 服务器的连接已断开。",
     "attempting": "正在尝试重新连接…",
-    "reconnect": "重新连接",
+    "attemptCount": "（失败次数：{count}）",
+    "locked": "连接恢复前，播放和编辑已暂停——此时所做的更改无法发送到服务器。",
+    "pill": "重新连接中…",
+    "reconnect": "立即重试",
     "restart": "重新启动",
     "exit": "退出",
-    "reconnectHint": "重新连接会再次尝试同一台服务器。",
+    "reconnectHint": "“立即重试”会立刻连接同一台服务器，而不必等待下一次自动重连。",
     "restartHint": "重新启动仅重启客户端（音频服务器继续运行）。",
     "exitHint": "退出将关闭客户端。"
+  },
+  "sessionRecovery": {
+    "title": "服务器已重启",
+    "message": "连接已恢复，但服务器上不再有打开的项目——很可能是服务器重启了。您的项目仍保存在这台电脑上。",
+    "resume": "继续会话",
+    "startFresh": "重新开始",
+    "resumeHint": "“继续会话”会在服务器上重新打开该项目，以便您继续工作。",
+    "startFreshHint": "“重新开始”会关闭该项目并返回欢迎界面。"
   },
   "audioImport": {
     "title": "导入音频",
@@ -493,5 +532,14 @@
     "deleteAll": "删除选中的 {count} 个项目",
     "deleteOnly": "仅删除\"{name}\"",
     "cancel": "取消"
+  },
+  "showMode": {
+    "toggle": "演出模式",
+    "toggleHint": "切换到简化的触屏友好播放界面，适用于演出。",
+    "exit": "退出",
+    "exitHint": "长按以退出演出模式",
+    "noItems": "此项目中没有项目",
+    "holdToStop": "长按以停止",
+    "holdToStopAll": "长按以停止全部"
   }
 }

@@ -1,4 +1,4 @@
-﻿{
+{
   "_metadata": {
     "code": "ja",
     "name": "Japanese",
@@ -160,7 +160,10 @@
     "multiSelectWaveform": "複数の項目が選択されています — 波形を表示するには単一の項目を選択してください。",
     "multiSelectOutPointDisabled": "複数選択では無効です（アウトポイントは各項目の長さに依存します）。",
     "noWaveformData": "波形データがありません",
-    "ltcRequiresDevice": "タイムコード出力を有効にするには、プロジェクト設定でLTC出力デバイスを選択してください。"
+    "ltcRequiresDevice": "タイムコード出力を有効にするには、プロジェクト設定でLTC出力デバイスを選択してください。",
+    "startNextEnable": "マーカーで次を開始",
+    "startNextTime": "次を開始する位置",
+    "startNextFadeOut": "マーカーでフェードアウト"
   },
   "playback": {
     "panic": "すべての信号を停止",
@@ -169,7 +172,8 @@
     "stop": "停止",
     "delete": "削除",
     "edit": "編集",
-    "masterMix": "Master"
+    "masterMix": "Master",
+    "startNextCountdown": "次のトラックが始まるまでの時間"
   },
   "endBehavior": {
     "nothing": "何もしない",
@@ -377,6 +381,13 @@
     "meterModeDbfs": "dBFS（デジタルフルスケール）",
     "meterModeDbtp": "dBTP（トゥルーピーク）",
     "meterModeRms": "RMS",
+    "meterBallistics": "Meter Ballistics",
+    "meterBallisticsHelp": "How fast the meters rise and fall.",
+    "meterBallisticsDigitalPpm": "Digital PPM (default)",
+    "meterBallisticsPpmI": "PPM Type I (DIN)",
+    "meterBallisticsPpmII": "PPM Type II (BBC)",
+    "meterBallisticsVu": "VU (slow)",
+    "meterBallisticsInstant": "Instant (fast)",
     "disableAutoVolumeAndTrim": "自動音量・トリム調整を無効にする",
     "disableLimiter": "ブリックウォールリミッターを無効にする",
     "disableLimiterHelp": "ブリックウォールリミッターをオフにし、上限を超えるピークを許可します。再生中に変更できます。",
@@ -386,7 +397,22 @@
     "noneSelected": "未選択",
     "save": "保存",
     "close": "閉じる",
-    "preview": "プレビュー"
+    "preview": "プレビュー",
+    "transitionMode": "既定のトランジションモード",
+    "transitionModeHelp": "新しくインポートしたトラックに適用されるトランジション。各トラックはプロパティでクロスフェードと次を開始を切り替えられます。",
+    "transitionModeCrossfade": "次へクロスフェード",
+    "transitionModeStartNext": "マーカーで次を開始",
+    "autoCueNext": "終了動作がなくても次の項目を自動的に準備する",
+    "autoCueNextHelp": "再生中の項目に終了動作がなくても次の項目を「次へ」として準備し、GO ボタン一つでプレイリストを順に進められます。再生は自動的には開始されません。",
+    "tabAudioRouting": "オーディオルーティング",
+    "tabPlaybackBehaviour": "再生動作",
+    "tabUserInterface": "ユーザーインターフェース",
+    "stopAllFade": "「すべて停止」フェードアウト（秒）",
+    "stopAllFadeHelp": "「すべて停止」を押したときにすべてのキューがフェードアウトする時間。0 で即時停止します。",
+    "scrollToPlaying": "再生中の項目までスクロール",
+    "scrollToPlayingHelp": "再生中の項目をリストの中央に自動的に表示します。",
+    "indexDisplayStart": "プレイリスト項目の番号開始値",
+    "indexDisplayStartHelp": "最初のプレイリスト項目に表示する番号を制御します。内部インデックスと API のインデックスパスは引き続き 0 始まりです。"
   },
   "common": {
     "default": "デフォルト",
@@ -439,14 +465,16 @@
     "endPlayNext": "終了：次を再生",
     "endGotoItem": "終了：アイテムへ移動",
     "endGotoIndex": "終了：インデックスへ移動",
-    "endLoop": "終了：ループ"
+    "endLoop": "終了：ループ",
+    "startNextMarker": "{time} に次のトラックを開始"
   },
   "waveform": {
     "decreaseBy": "{seconds}秒減らす",
     "increaseBy": "{seconds}秒増やす",
     "playFadeTitle": "フェードイン：{seconds}秒",
     "stopFadeTitle": "フェードアウト：{seconds}秒",
-    "crossFadeTitle": "クロスフェード：{seconds}秒"
+    "crossFadeTitle": "クロスフェード：{seconds}秒",
+    "startNextTitle": "次を開始：{time}"
   },
   "unsavedModal": {
     "title": "未保存の変更",
@@ -459,12 +487,23 @@
     "title": "接続が切断されました",
     "message": "{url} のLivePlayサーバーへの接続が失われました。",
     "attempting": "再接続を試行中…",
-    "reconnect": "再接続",
+    "attemptCount": "（失敗した試行: {count}）",
+    "locked": "接続が復旧するまで再生と編集は一時停止しています。いま行った変更はサーバーに送信できません。",
+    "pill": "再接続中…",
+    "reconnect": "今すぐ再試行",
     "restart": "再起動",
     "exit": "終了",
-    "reconnectHint": "再接続は同じサーバーに再度接続を試みます。",
+    "reconnectHint": "「今すぐ再試行」は次の自動再接続を待たずに、同じサーバーへすぐに接続を試みます。",
     "restartHint": "再起動はクライアントのみを再起動します（オーディオサーバーは動作を続けます）。",
     "exitHint": "終了するとクライアントが閉じます。"
+  },
+  "sessionRecovery": {
+    "title": "サーバーが再起動しました",
+    "message": "接続は復旧しましたが、サーバーにプロジェクトが開かれていません。おそらく再起動されたためです。プロジェクトはこのコンピューター上に残っています。",
+    "resume": "セッションを続行",
+    "startFresh": "新しく始める",
+    "resumeHint": "「セッションを続行」はこのプロジェクトをサーバーで開き直し、作業を続けられるようにします。",
+    "startFreshHint": "「新しく始める」はプロジェクトを閉じ、ようこそ画面に戻ります。"
   },
   "audioImport": {
     "title": "オーディオをインポート",
@@ -493,5 +532,14 @@
     "deleteAll": "選択した{count}個のアイテムを削除",
     "deleteOnly": "\"{name}\"のみ削除",
     "cancel": "キャンセル"
+  },
+  "showMode": {
+    "toggle": "ショーモード",
+    "toggleHint": "本番向けの、タッチ操作に適したシンプルな再生画面に切り替えます。",
+    "exit": "終了",
+    "exitHint": "長押しでショーモードを終了",
+    "noItems": "このプロジェクトには項目がありません",
+    "holdToStop": "長押しで停止",
+    "holdToStopAll": "長押しですべて停止"
   }
 }

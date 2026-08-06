@@ -175,7 +175,8 @@ endif()
 if(WIN32)
     # shell32 + ole32: SHGetKnownFolderPath / CoTaskMemFree for the filesystem
     # sandbox's default media-folder roots (src/util/fs_sandbox.cpp).
-    target_link_libraries(liveplay-server PRIVATE ws2_32 mswsock dbghelp shell32 ole32)
+    # mpr (upstream): WNetGetConnection for resolving mapped network drives.
+    target_link_libraries(liveplay-server PRIVATE ws2_32 mswsock dbghelp shell32 ole32 mpr)
     # Modern Windows console: opt in to UTF-8 + VT for the banner.
     target_compile_definitions(liveplay-server PRIVATE UNICODE _UNICODE)
 endif()
@@ -187,18 +188,60 @@ target_compile_definitions(liveplay-server PRIVATE
 )
 
 # ---------------------------------------------------------------------------
+# Tests (opt-in via -DLIVEPLAY_BUILD_TESTS=ON; enabled in CI). Off by default
+# so normal release builds — including the electron-builder server build — are
+# unaffected. Run with `ctest` from the build directory.
+#
+# Two harnesses live here, kept side by side after the upstream merge:
+#   * upstream's framework-free assertion binaries (meter / mixer / waveform),
+#     each compiling its source-under-test directly;
+#   * this fork's doctest suite in tests/ (LTC, fs-sandbox, OSC, output
+#     channels), wired via tests/CMakeLists.txt at the end of this file.
+# They share the one option and one enable_testing() call below.
+# ---------------------------------------------------------------------------
+option(LIVEPLAY_BUILD_TESTS "Build the C++ unit tests (framework-free + doctest)" OFF)
+if(LIVEPLAY_BUILD_TESTS)
+    enable_testing()
+    add_executable(liveplay-meter-tests
+        tests/meter_test.cpp
+        src/audio/meter.cpp
+    )
+    target_include_directories(liveplay-meter-tests
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    add_test(NAME meter COMMAND liveplay-meter-tests)
+
+    # Mixer strip gain / fade envelope (peek vs. advance).
+    add_executable(liveplay-mixer-tests
+        tests/mixer_channel_test.cpp
+        src/audio/mixer_channel.cpp
+        src/audio/meter.cpp
+    )
+    target_include_directories(liveplay-mixer-tests
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    add_test(NAME mixer COMMAND liveplay-mixer-tests)
+
+    # Waveform downsampler (single-pass decode, per-channel traces).
+    add_executable(liveplay-waveform-tests
+        tests/waveform_test.cpp
+        src/meta/waveform.cpp
+        src/logger.cpp
+    )
+    target_include_directories(liveplay-waveform-tests
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(liveplay-waveform-tests
+        PRIVATE liveplay_miniaudio Threads::Threads
+    )
+    add_test(NAME waveform COMMAND liveplay-waveform-tests)
+
+    # This fork's doctest suite (see tests/CMakeLists.txt).
+    add_subdirectory(tests)
+endif()
+
+# ---------------------------------------------------------------------------
 # Install rules — used by CI when staging the artifact directory.
 # ---------------------------------------------------------------------------
 include(GNUInstallDirs)
 install(TARGETS liveplay-server RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-# ---------------------------------------------------------------------------
-# Unit tests (opt-in via -DLIVEPLAY_BUILD_TESTS=ON; enabled in CI). Off by
-# default so normal release builds — including the electron-builder server
-# build — are unaffected. Run with `ctest` from the build directory.
-# ---------------------------------------------------------------------------
-option(LIVEPLAY_BUILD_TESTS "Build the C++ unit tests (doctest)" OFF)
-if(LIVEPLAY_BUILD_TESTS)
-    enable_testing()
-    add_subdirectory(tests)
-endif()

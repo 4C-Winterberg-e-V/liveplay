@@ -1,8 +1,13 @@
 <template>
-  <div class="main-workspace">
+  <div class="main-workspace" :class="{ 'show-mode': uiMode === 'playback' }">
+    <!-- Show Mode reuses the full editor layout (header, transport, resizable/
+         detachable playlist⇄cart split). It is not a separate view: the child
+         components read useUiMode() and hide their edit affordances + enlarge
+         touch targets, so waveforms, colours, durations, behaviour flags and
+         warnings all render exactly as in edit mode. -->
     <ProjectHeader />
     <PlaybackControls />
-    
+
     <!-- v-show (not v-if) so CartPlayer stays mounted across view switches —
          it owns the global keyboard-hotkey listener lifecycle. On phones the
          deck class decides which of the two panels is on screen; both stay
@@ -15,7 +20,7 @@
       <div
         v-if="!cartDetached"
         class="resize-handle"
-        :class="{ 'collapsed-left': cartFullscreen, 'collapsed-right': cartClosed }"
+        :class="{ 'collapsed-left': cartFullscreen, 'collapsed-right': cartClosed, dragging: isResizing }"
         @pointerdown="startResize"
       ></div>
 
@@ -65,7 +70,11 @@
       <TransportButtons class="lp-transport-bar" />
     </div>
 
-    <PropertiesPanel v-if="propertiesPanelOpen && selectedItem" />
+    <!-- Properties panel is an edit affordance — never surfaced in Show Mode.
+         SHOW-MODE/MOBILE OVERLAP: the phone shell reaches the panel as a sheet
+         above the bottom bar; this gate is what keeps it out of Show Mode on
+         every size. Drop the uiMode clause if the shell should own it. -->
+    <PropertiesPanel v-if="uiMode !== 'playback' && propertiesPanelOpen && selectedItem" />
 
     <ProgressModal
       :visible="progressModal.visible"
@@ -123,6 +132,7 @@ const { triggerByUuid, triggerByIndex, stopCue, stopAllCues, playCue } = useAudi
 const { getCartItem, cartOnlyItems, updateCartOnlyItem } = useCartItems();
 const { t } = useLocalization();
 const server = useLiveplayServer();
+const { uiMode } = useUiMode();
 
 // Progress modal state
 const progressModal = ref({
@@ -190,12 +200,14 @@ const bottomBarRef = ref<HTMLElement | null>(null);
 // every clientX calculation and both snap zones below are unchanged, but the
 // handle now also works under a finger or a pen.
 const startResize = (e: PointerEvent) => {
-  // Reproduces the old implicit left-button-only behaviour without rejecting
-  // touch, which reports button 0 anyway.
-  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  // Left mouse button only (touch reports button 0 anyway), and reject a second
+  // finger landing on the bar mid-drag — a concurrent drag would register a
+  // duplicate set of document listeners.
+  if (isResizing.value || !e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  const handle = e.currentTarget as HTMLElement | null;
   isResizing.value = true;
   e.preventDefault();
-  try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* not fatal */ }
+  try { handle?.setPointerCapture(e.pointerId); } catch { /* capture is best-effort */ }
 
   const handlePointerMove = (e: PointerEvent) => {
     if (!isResizing.value) return;
@@ -233,6 +245,9 @@ const startResize = (e: PointerEvent) => {
 
   const handlePointerUp = () => {
     isResizing.value = false;
+    // Release the capture we took in startResize, or the handle stays bound to
+    // that pointer and keeps resizing on the next touch anywhere.
+    try { handle?.releasePointerCapture(e.pointerId); } catch { /* already released */ }
     document.removeEventListener('pointermove', handlePointerMove);
     document.removeEventListener('pointerup', handlePointerUp);
     document.removeEventListener('pointercancel', handlePointerUp);
@@ -610,15 +625,44 @@ onUnmounted(() => {
   transition: background-color var(--transition-fast);
   position: relative;
   z-index: 10;
-  
+  flex: 0 0 auto;
+  /* Claim the gesture outright: without this the browser treats a touch-drag
+     on the bar as a pan and never delivers pointermove to us. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+
+  /* Invisible grab zone. A 5px bar is a fine mouse target but far below the
+     ~24px a finger can reliably hit, so widen the *hit* area without moving the
+     pixels the user sees. Only on touch-capable displays — on a pure mouse
+     setup the extra 20px would sit over the playlist's scrollbar for no gain,
+     and mouse dragging already works at 5px. */
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
+
+  @media (any-pointer: coarse) {
+    &::before {
+      left: -10px;
+      right: -10px;
+    }
+  }
+
   &:hover {
     background-color: var(--color-accent);
   }
-  
-  &:active {
+
+  &:active,
+  &.dragging {
     background-color: var(--color-accent);
   }
-  
+
   &.collapsed-left {
     /* When cart is fullscreen, show handle at left edge */
     position: absolute;
@@ -627,7 +671,16 @@ onUnmounted(() => {
     bottom: 0;
     width: 8px;
     background-color: transparent;
-    
+
+    /* Collapsed states float ON TOP of a panel, so the grab zone may only grow
+       inward — growing outward too would swallow taps on the panel behind it. */
+    @media (any-pointer: coarse) {
+      &::before {
+        left: 0;
+        right: -16px;
+      }
+    }
+
     &::after {
       content: '';
       position: absolute;
@@ -654,7 +707,14 @@ onUnmounted(() => {
     bottom: 0;
     width: 8px;
     background-color: transparent;
-    
+
+    @media (any-pointer: coarse) {
+      &::before {
+        left: -16px;
+        right: 0;
+      }
+    }
+
     &::after {
       content: '';
       position: absolute;

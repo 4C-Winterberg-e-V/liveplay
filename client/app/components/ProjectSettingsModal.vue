@@ -8,249 +8,360 @@
           <button class="close-x lp-close" @click="close">✕</button>
         </header>
 
+        <!-- Tab Navigation (styled to match the Properties panel) -->
+        <div class="settings-tabs">
+          <button
+            v-for="tab in tabs"
+            :key="tab.id"
+            :class="['tab-btn', { active: activeTab === tab.id }]"
+            @click="activeTab = tab.id"
+          >
+            <span class="material-symbols-rounded">{{ tab.icon }}</span>
+            <span>{{ tab.label }}</span>
+          </button>
+        </div>
+
         <div class="modal-body lp-sheet__scroll">
-          <!-- Audio device (default for cue playback) -->
-          <section class="settings-field">
-            <label class="settings-label">
-              <span class="material-symbols-rounded">speaker</span>
-              {{ t('settings.audioDevice') }}
-            </label>
-            <select
-              class="settings-select"
-              :value="audioDeviceId"
-              @change="onAudioDeviceChange"
-            >
-              <option :value="''">{{ t('settings.noneSelected') }}</option>
-              <option
-                v-for="d in devices"
-                :key="d.id"
-                :value="d.id"
+          <!-- ================= Audio Routing ================= -->
+          <template v-if="activeTab === 'audio'">
+            <!-- Audio device (default for cue playback) -->
+            <section class="settings-field">
+              <label class="settings-label">
+                <span class="material-symbols-rounded">speaker</span>
+                {{ t('settings.audioDevice') }}
+              </label>
+              <select
+                class="settings-select"
+                :value="audioDeviceId"
+                @change="onAudioDeviceChange"
               >
-                {{ d.display_name }}{{ d.is_default ? ' (' + t('common.default') + ')' : '' }}
-              </option>
-            </select>
-            <p class="settings-help">{{ t('settings.audioDeviceHelp') }}</p>
+                <option :value="''">{{ t('settings.noneSelected') }}</option>
+                <option v-for="d in devices" :key="d.id" :value="d.id">
+                  {{ d.display_name }}{{ d.is_default ? ' (' + t('common.default') + ')' : '' }}
+                </option>
+              </select>
+              <p class="settings-help">{{ t('settings.audioDeviceHelp') }}</p>
 
-            <!-- Hardware channels on that device. Only meaningful once a
-                 device is picked; multi-output interfaces (X18, X32, Dante)
-                 are the reason this exists. -->
-            <div v-if="audioDeviceId" class="settings-channels">
-              <label class="settings-channel">
-                <span>{{ t('settings.outputChannelLeft') }}</span>
-                <select
-                  class="settings-select"
-                  :value="audioChannels[0]"
-                  @change="onAudioChannelChange(0, $event)"
-                >
-                  <option v-for="c in audioChannelOptions" :key="c.value" :value="c.value">
-                    {{ c.label }}
-                  </option>
-                </select>
-              </label>
-              <label class="settings-channel">
-                <span>{{ t('settings.outputChannelRight') }}</span>
-                <select
-                  class="settings-select"
-                  :value="audioChannels[1]"
-                  @change="onAudioChannelChange(1, $event)"
-                >
-                  <option v-for="c in audioChannelOptions" :key="c.value" :value="c.value">
-                    {{ c.label }}
-                  </option>
-                </select>
-              </label>
-            </div>
-            <p v-if="audioDeviceId" class="settings-help">
-              {{ t('settings.outputChannelsHelp') }}
-            </p>
-          </section>
 
-          <!-- Preview device (used by headphones button) -->
-          <section class="settings-field">
-            <label class="settings-label">
-              <span class="material-symbols-rounded">headphones</span>
-              {{ t('settings.previewDevice') }}
-            </label>
-            <select
-              class="settings-select"
-              :value="previewDeviceId"
-              @change="onPreviewDeviceChange"
-            >
-              <option :value="''">{{ t('settings.noneSelected') }}</option>
-              <option
-                v-for="d in devices"
-                :key="d.id"
-                :value="d.id"
+              <!-- Hardware channels on that device. Only meaningful once a
+                   device is picked; multi-output interfaces (X18, X32, Dante)
+                   are the reason this exists. -->
+              <div v-if="audioDeviceId" class="settings-channels">
+                <label class="settings-channel">
+                  <span>{{ t('settings.outputChannelLeft') }}</span>
+                  <select
+                    class="settings-select"
+                    :value="audioChannels[0]"
+                    @change="onAudioChannelChange(0, $event)"
+                  >
+                    <option v-for="c in audioChannelOptions" :key="c.value" :value="c.value">
+                      {{ c.label }}
+                    </option>
+                  </select>
+                </label>
+                <label class="settings-channel">
+                  <span>{{ t('settings.outputChannelRight') }}</span>
+                  <select
+                    class="settings-select"
+                    :value="audioChannels[1]"
+                    @change="onAudioChannelChange(1, $event)"
+                  >
+                    <option v-for="c in audioChannelOptions" :key="c.value" :value="c.value">
+                      {{ c.label }}
+                    </option>
+                  </select>
+                </label>
+              </div>
+              <p v-if="audioDeviceId" class="settings-help">
+                {{ t('settings.outputChannelsHelp') }}
+              </p>
+            </section>
+
+            <!-- Preview device (used by headphones button) -->
+            <section class="settings-field">
+              <label class="settings-label">
+                <span class="material-symbols-rounded">headphones</span>
+                {{ t('settings.previewDevice') }}
+              </label>
+              <select
+                class="settings-select"
+                :value="previewDeviceId"
+                @change="onPreviewDeviceChange"
               >
-                {{ d.display_name }}{{ d.is_default ? ' (' + t('common.default') + ')' : '' }}
-              </option>
-            </select>
-            <p class="settings-help">{{ t('settings.previewDeviceHelp') }}</p>
+                <option :value="''">{{ t('settings.noneSelected') }}</option>
+                <option v-for="d in devices" :key="d.id" :value="d.id">
+                  {{ d.display_name }}{{ d.is_default ? ' (' + t('common.default') + ')' : '' }}
+                </option>
+              </select>
+              <p class="settings-help">{{ t('settings.previewDeviceHelp') }}</p>
 
-            <div v-if="previewDeviceId" class="settings-channels">
-              <label class="settings-channel">
-                <span>{{ t('settings.outputChannelLeft') }}</span>
-                <select
-                  class="settings-select"
-                  :value="previewChannels[0]"
-                  @change="onPreviewChannelChange(0, $event)"
-                >
-                  <option v-for="c in previewChannelOptions" :key="c.value" :value="c.value">
-                    {{ c.label }}
-                  </option>
-                </select>
-              </label>
-              <label class="settings-channel">
-                <span>{{ t('settings.outputChannelRight') }}</span>
-                <select
-                  class="settings-select"
-                  :value="previewChannels[1]"
-                  @change="onPreviewChannelChange(1, $event)"
-                >
-                  <option v-for="c in previewChannelOptions" :key="c.value" :value="c.value">
-                    {{ c.label }}
-                  </option>
-                </select>
-              </label>
-            </div>
-          </section>
 
-          <!-- LTC device (timecode output) -->
-          <section class="settings-field">
-            <label class="settings-label">
-              <span class="material-symbols-rounded">schedule</span>
-              {{ t('settings.ltcDevice') }}
-            </label>
-            <select
-              class="settings-select"
-              :value="ltcDeviceId"
-              @change="onLtcDeviceChange"
-            >
-              <option :value="''">{{ t('settings.noneSelected') }}</option>
-              <option
-                v-for="d in devices"
-                :key="d.id"
-                :value="d.id"
+              <div v-if="previewDeviceId" class="settings-channels">
+                <label class="settings-channel">
+                  <span>{{ t('settings.outputChannelLeft') }}</span>
+                  <select
+                    class="settings-select"
+                    :value="previewChannels[0]"
+                    @change="onPreviewChannelChange(0, $event)"
+                  >
+                    <option v-for="c in previewChannelOptions" :key="c.value" :value="c.value">
+                      {{ c.label }}
+                    </option>
+                  </select>
+                </label>
+                <label class="settings-channel">
+                  <span>{{ t('settings.outputChannelRight') }}</span>
+                  <select
+                    class="settings-select"
+                    :value="previewChannels[1]"
+                    @change="onPreviewChannelChange(1, $event)"
+                  >
+                    <option v-for="c in previewChannelOptions" :key="c.value" :value="c.value">
+                      {{ c.label }}
+                    </option>
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            <!-- LTC device (timecode output) -->
+            <section class="settings-field">
+              <label class="settings-label">
+                <span class="material-symbols-rounded">schedule</span>
+                {{ t('settings.ltcDevice') }}
+              </label>
+              <select
+                class="settings-select"
+                :value="ltcDeviceId"
+                @change="onLtcDeviceChange"
               >
-                {{ d.display_name }}{{ d.is_default ? ' (' + t('common.default') + ')' : '' }}
-              </option>
-            </select>
-            <p class="settings-help">{{ t('settings.ltcDeviceHelp') }}</p>
+                <option :value="''">{{ t('settings.noneSelected') }}</option>
+                <option v-for="d in devices" :key="d.id" :value="d.id">
+                  {{ d.display_name }}{{ d.is_default ? ' (' + t('common.default') + ')' : '' }}
+                </option>
+              </select>
+              <p class="settings-help">{{ t('settings.ltcDeviceHelp') }}</p>
 
-            <!-- Timecode is mono, so it gets a single channel rather than a
-                 pair. Left unset it stays on channels 1+2 like it always was. -->
-            <div v-if="ltcDeviceId" class="settings-channels">
-              <label class="settings-channel">
-                <span>{{ t('settings.outputChannel') }}</span>
-                <select
-                  class="settings-select"
-                  :value="ltcChannel"
-                  @change="onLtcChannelChange"
-                >
-                  <option v-for="c in ltcChannelOptions" :key="c.value" :value="c.value">
-                    {{ c.label }}
-                  </option>
-                </select>
+
+              <!-- Timecode is mono, so it gets a single channel rather than a
+                   pair. Left unset it stays on channels 1+2 like it always was. -->
+              <div v-if="ltcDeviceId" class="settings-channels">
+                <label class="settings-channel">
+                  <span>{{ t('settings.outputChannel') }}</span>
+                  <select
+                    class="settings-select"
+                    :value="ltcChannel"
+                    @change="onLtcChannelChange"
+                  >
+                    <option v-for="c in ltcChannelOptions" :key="c.value" :value="c.value">
+                      {{ c.label }}
+                    </option>
+                  </select>
+                </label>
+              </div>
+              <p v-if="ltcDeviceId" class="settings-help">
+                {{ t('settings.ltcChannelHelp') }}
+              </p>
+            </section>
+
+            <!-- Behringer X18 mixer IP (OSC control) -->
+            <section class="settings-field">
+              <label class="settings-label">
+                <span class="material-symbols-rounded">tune</span>
+                {{ t('settings.x18Ip') }}
               </label>
-            </div>
-            <p v-if="ltcDeviceId" class="settings-help">
-              {{ t('settings.ltcChannelHelp') }}
-            </p>
-          </section>
-
-          <!-- Behringer X18 mixer IP (OSC control) -->
-          <section class="settings-field">
-            <label class="settings-label">
-              <span class="material-symbols-rounded">tune</span>
-              {{ t('settings.x18Ip') }}
-            </label>
-            <input
-              class="settings-select"
-              type="text"
-              inputmode="decimal"
-              placeholder="192.168.1.50"
-              :value="x18Ip"
-              @change="onX18IpChange"
-            />
-            <p class="settings-help">{{ t('settings.x18IpHelp') }}</p>
-          </section>
-
-          <!-- Output Target (loudness platform standard) -->
-          <section class="settings-field">
-            <label class="settings-label">
-              <span class="material-symbols-rounded">tune</span>
-              {{ t('settings.outputTarget') }}
-            </label>
-            <select
-              class="settings-select"
-              :value="outputTarget"
-              @change="onOutputTargetChange"
-            >
-              <option value="ebu-r128">{{ t('settings.outputTargetEbuR128') }}</option>
-              <option value="streaming">{{ t('settings.outputTargetStreaming') }}</option>
-              <option value="radio">{{ t('settings.outputTargetRadio') }}</option>
-              <option value="netflix">{{ t('settings.outputTargetNetflix') }}</option>
-              <option value="live">{{ t('settings.outputTargetLive') }}</option>
-            </select>
-            <p class="settings-help">{{ t('settings.outputTargetHelp') }}</p>
-          </section>
-
-          <!-- Auto volume and trim -->
-          <section class="settings-field">
-            <label class="settings-label settings-label--checkbox">
               <input
-                type="checkbox"
-                :checked="disableAutoVolumeAndTrim"
-                @change="onDisableAutoVolumeAndTrimChange"
+                class="settings-select"
+                type="text"
+                inputmode="decimal"
+                placeholder="192.168.1.50"
+                :value="x18Ip"
+                @change="onX18IpChange"
               />
-              {{ t('settings.disableAutoVolumeAndTrim') }}
-            </label>
-          </section>
+              <p class="settings-help">{{ t('settings.x18IpHelp') }}</p>
+            </section>
 
-          <!-- Disable brickwall limiter -->
-          <section class="settings-field">
-            <label class="settings-label settings-label--checkbox">
+            <!-- Output Target (loudness platform standard) -->
+            <section class="settings-field">
+              <label class="settings-label">
+                <span class="material-symbols-rounded">tune</span>
+                {{ t('settings.outputTarget') }}
+              </label>
+              <select
+                class="settings-select"
+                :value="outputTarget"
+                @change="onOutputTargetChange"
+              >
+                <option value="ebu-r128">{{ t('settings.outputTargetEbuR128') }}</option>
+                <option value="streaming">{{ t('settings.outputTargetStreaming') }}</option>
+                <option value="radio">{{ t('settings.outputTargetRadio') }}</option>
+                <option value="netflix">{{ t('settings.outputTargetNetflix') }}</option>
+                <option value="live">{{ t('settings.outputTargetLive') }}</option>
+              </select>
+              <p class="settings-help">{{ t('settings.outputTargetHelp') }}</p>
+            </section>
+          </template>
+
+          <!-- ================= Playback Behaviour ================= -->
+          <template v-else-if="activeTab === 'playback'">
+            <!-- Default transition mode -->
+            <section class="settings-field">
+              <label class="settings-label">
+                <span class="material-symbols-rounded">swap_horiz</span>
+                {{ t('settings.transitionMode') }}
+              </label>
+              <select
+                class="settings-select"
+                :value="defaultTransitionMode"
+                @change="onDefaultTransitionModeChange"
+              >
+                <option value="crossfade">{{ t('settings.transitionModeCrossfade') }}</option>
+                <option value="start-next">{{ t('settings.transitionModeStartNext') }}</option>
+              </select>
+              <p class="settings-help">{{ t('settings.transitionModeHelp') }}</p>
+            </section>
+
+            <!-- Auto-cue next item without end behaviour (#28) -->
+            <section class="settings-field">
+              <label class="settings-label settings-label--checkbox">
+                <input
+                  type="checkbox"
+                  :checked="autoCueNextWithoutEndBehavior"
+                  @change="onAutoCueNextChange"
+                />
+                {{ t('settings.autoCueNext') }}
+              </label>
+              <p class="settings-help">{{ t('settings.autoCueNextHelp') }}</p>
+            </section>
+
+            <!-- Project-wide Stop All fade-out time -->
+            <section class="settings-field">
+              <label class="settings-label">
+                <span class="material-symbols-rounded">stop_circle</span>
+                {{ t('settings.stopAllFade') }}
+              </label>
               <input
-                type="checkbox"
-                :checked="disableLimiter"
-                @change="onDisableLimiterChange"
+                type="number"
+                class="settings-input"
+                min="0"
+                step="0.1"
+                :value="stopAllFadeSeconds"
+                @change="onStopAllFadeChange"
               />
-              {{ t('settings.disableLimiter') }}
-            </label>
-            <p class="settings-help">{{ t('settings.disableLimiterHelp') }}</p>
-          </section>
+              <p class="settings-help">{{ t('settings.stopAllFadeHelp') }}</p>
+            </section>
 
-          <!-- Disable silence warning -->
-          <section class="settings-field">
-            <label class="settings-label settings-label--checkbox">
+            <!-- Auto volume and trim -->
+            <section class="settings-field">
+              <label class="settings-label settings-label--checkbox">
+                <input
+                  type="checkbox"
+                  :checked="disableAutoVolumeAndTrim"
+                  @change="onDisableAutoVolumeAndTrimChange"
+                />
+                {{ t('settings.disableAutoVolumeAndTrim') }}
+              </label>
+            </section>
+
+            <!-- Disable brickwall limiter -->
+            <section class="settings-field">
+              <label class="settings-label settings-label--checkbox">
+                <input
+                  type="checkbox"
+                  :checked="disableLimiter"
+                  @change="onDisableLimiterChange"
+                />
+                {{ t('settings.disableLimiter') }}
+              </label>
+              <p class="settings-help">{{ t('settings.disableLimiterHelp') }}</p>
+            </section>
+
+            <!-- Disable silence warning -->
+            <section class="settings-field">
+              <label class="settings-label settings-label--checkbox">
+                <input
+                  type="checkbox"
+                  :checked="disableSilenceWarning"
+                  @change="onDisableSilenceWarningChange"
+                />
+                {{ t('settings.disableSilenceWarning') }}
+              </label>
+              <p class="settings-help">{{ t('settings.disableSilenceWarningHelp') }}</p>
+            </section>
+          </template>
+
+          <!-- ================= User Interface ================= -->
+          <template v-else-if="activeTab === 'ui'">
+
+            <!-- Playlist numbering -->
+            <section class="settings-field">
+              <label class="settings-label">
+                <span class="material-symbols-rounded">format_list_numbered</span>
+                {{ t('settings.indexDisplayStart') }}
+              </label>
               <input
-                type="checkbox"
-                :checked="disableSilenceWarning"
-                @change="onDisableSilenceWarningChange"
+                type="number"
+                class="settings-input"
+                min="0"
+                step="1"
+                :value="indexDisplayStart"
+                @change="onIndexDisplayStartChange"
               />
-              {{ t('settings.disableSilenceWarning') }}
-            </label>
-            <p class="settings-help">{{ t('settings.disableSilenceWarningHelp') }}</p>
-          </section>
+              <p class="settings-help">{{ t('settings.indexDisplayStartHelp') }}</p>
+            </section>
+            
+            <!-- Meter Display Mode -->
+            <section class="settings-field">
+              <label class="settings-label">
+                <span class="material-symbols-rounded">bar_chart</span>
+                {{ t('settings.meterMode') }}
+              </label>
+              <select
+                class="settings-select"
+                :value="meterMode"
+                @change="onMeterModeChange"
+              >
+                <option value="LUFS">{{ t('settings.meterModeLufs') }}</option>
+                <option value="dBFS">{{ t('settings.meterModeDbfs') }}</option>
+                <option value="dBTP">{{ t('settings.meterModeDbtp') }}</option>
+                <option value="RMS">{{ t('settings.meterModeRms') }}</option>
+              </select>
+              <p class="settings-help">{{ t('settings.meterModeHelp') }}</p>
+            </section>
 
-          <!-- Meter Display Mode -->
-          <section class="settings-field">
-            <label class="settings-label">
-              <span class="material-symbols-rounded">bar_chart</span>
-              {{ t('settings.meterMode') }}
-            </label>
-            <select
-              class="settings-select"
-              :value="meterMode"
-              @change="onMeterModeChange"
-            >
-              <option value="LUFS">{{ t('settings.meterModeLufs') }}</option>
-              <option value="dBFS">{{ t('settings.meterModeDbfs') }}</option>
-              <option value="dBTP">{{ t('settings.meterModeDbtp') }}</option>
-              <option value="RMS">{{ t('settings.meterModeRms') }}</option>
-            </select>
-            <p class="settings-help">{{ t('settings.meterModeHelp') }}</p>
-          </section>
+            <!-- Meter Ballistics -->
+            <section class="settings-field">
+              <label class="settings-label">
+                <span class="material-symbols-rounded">speed</span>
+                {{ t('settings.meterBallistics') }}
+              </label>
+              <select
+                class="settings-select"
+                :value="meterBallistics"
+                @change="onMeterBallisticsChange"
+              >
+                <option value="digital-ppm">{{ t('settings.meterBallisticsDigitalPpm') }}</option>
+                <option value="ppm-i">{{ t('settings.meterBallisticsPpmI') }}</option>
+                <option value="ppm-ii">{{ t('settings.meterBallisticsPpmII') }}</option>
+                <option value="vu">{{ t('settings.meterBallisticsVu') }}</option>
+                <option value="instant">{{ t('settings.meterBallisticsInstant') }}</option>
+              </select>
+              <p class="settings-help">{{ t('settings.meterBallisticsHelp') }}</p>
+            </section>
+
+            <!-- Keep the currently-playing item centred in the list -->
+            <section class="settings-field">
+              <label class="settings-label settings-label--checkbox">
+                <input
+                  type="checkbox"
+                  :checked="scrollToPlaying"
+                  @change="onScrollToPlayingChange"
+                />
+                {{ t('settings.scrollToPlaying') }}
+              </label>
+              <p class="settings-help">{{ t('settings.scrollToPlayingHelp') }}</p>
+            </section>
+          </template>
         </div>
 
       <footer class="modal-footer lp-sheet__bar lp-sheet__bar--bottom">
@@ -263,6 +374,7 @@
 <script setup lang="ts">
 import { useOutputChannels } from '~/composables/useOutputChannels';
 import { useOutputTarget } from '~/composables/useOutputTarget';
+import { normalizeIndexDisplayStart } from '~/utils/indexDisplay';
 
 const props = defineProps<{ open: boolean }>();
 const emit  = defineEmits<{ (e: 'close'): void }>();
@@ -272,6 +384,17 @@ const server = useLiveplayServer();
 const { currentProject } = useProject();
 
 const devices = computed(() => server.devices ?? []);
+
+// Tabs mirror the Properties panel's tab styling. Grouping:
+//  - audio    : device routing + loudness target
+//  - playback : transitions, auto-cue, stop-all fade, processing toggles
+//  - ui       : metering + list behaviour
+const activeTab = ref<'audio' | 'playback' | 'ui'>('audio');
+const tabs = computed(() => [
+  { id: 'audio'    as const, icon: 'graphic_eq', label: t('settings.tabAudioRouting') },
+  { id: 'playback' as const, icon: 'play_circle', label: t('settings.tabPlaybackBehaviour') },
+  { id: 'ui'       as const, icon: 'desktop_windows', label: t('settings.tabUserInterface') },
+]);
 
 // The settings live on the project document; we read them from there and
 // patch via the server endpoint.
@@ -307,8 +430,21 @@ const outputTarget           = computed(() => (currentProject.value as any)?.set
 const disableAutoVolumeAndTrim = computed(() => !!(currentProject.value as any)?.settings?.disableAutoVolumeAndTrim);
 const disableLimiter           = computed(() => !!(currentProject.value as any)?.settings?.disableLimiter);
 const disableSilenceWarning    = computed(() => !!(currentProject.value as any)?.settings?.disableSilenceWarning);
+const defaultTransitionMode    = computed(() => (currentProject.value as any)?.settings?.defaultTransitionMode || 'crossfade');
+const indexDisplayStart        = computed(() => normalizeIndexDisplayStart((currentProject.value as any)?.settings?.indexDisplayStart));
+// Defaults ON (undefined → true) so legacy projects and new projects both
+// arm the next item as "Up Next" for cues without an end behaviour. (#28)
+const autoCueNextWithoutEndBehavior = computed(() => (currentProject.value as any)?.settings?.autoCueNextWithoutEndBehavior !== false);
+// Project-wide Stop All fade, stored in ms (default 1000). Shown in seconds.
+const stopAllFadeSeconds = computed(() => {
+  const ms = (currentProject.value as any)?.settings?.stopAllFadeMs;
+  return ((typeof ms === 'number' ? ms : 1000) / 1000);
+});
+// UI scrolls to keep the currently-playing item centred (default OFF).
+const scrollToPlaying = computed(() => !!(currentProject.value as any)?.settings?.uiScrollToPlaying);
 const { meterMode: currentMeterMode } = useOutputTarget();
 const meterMode              = computed(() => (currentProject.value as any)?.settings?.meterMode || currentMeterMode.value);
+const meterBallistics        = computed(() => (currentProject.value as any)?.settings?.meterBallistics || 'digital-ppm');
 
 // Make sure devices are loaded when the modal opens.
 watch(() => props.open, async (v) => {
@@ -375,6 +511,10 @@ function onMeterModeChange(e: Event) {
   const v = (e.target as HTMLSelectElement).value;
   applyPatch({ meterMode: v });
 }
+function onMeterBallisticsChange(e: Event) {
+  const v = (e.target as HTMLSelectElement).value;
+  applyPatch({ meterBallistics: v });
+}
 function onDisableAutoVolumeAndTrimChange(e: Event) {
   applyPatch({ disableAutoVolumeAndTrim: (e.target as HTMLInputElement).checked });
 }
@@ -383,6 +523,26 @@ function onDisableLimiterChange(e: Event) {
 }
 function onDisableSilenceWarningChange(e: Event) {
   applyPatch({ disableSilenceWarning: (e.target as HTMLInputElement).checked });
+}
+function onDefaultTransitionModeChange(e: Event) {
+  applyPatch({ defaultTransitionMode: (e.target as HTMLSelectElement).value });
+}
+function onIndexDisplayStartChange(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const value = normalizeIndexDisplayStart(input.value);
+  input.value = String(value);
+  applyPatch({ indexDisplayStart: value });
+}
+function onAutoCueNextChange(e: Event) {
+  applyPatch({ autoCueNextWithoutEndBehavior: (e.target as HTMLInputElement).checked });
+}
+function onStopAllFadeChange(e: Event) {
+  const seconds = parseFloat((e.target as HTMLInputElement).value);
+  const ms = Number.isFinite(seconds) ? Math.max(0, Math.round(seconds * 1000)) : 1000;
+  applyPatch({ stopAllFadeMs: ms });
+}
+function onScrollToPlayingChange(e: Event) {
+  applyPatch({ uiScrollToPlaying: (e.target as HTMLInputElement).checked });
 }
 
 function close() {
@@ -405,9 +565,12 @@ function close() {
   background: var(--color-background);
   border: 1px solid var(--color-border);
   border-radius: 10px;
-  width: min(520px, 92vw);
+  width: min(560px, 92vw);
+  /* dvh, not vh: on a phone the browser chrome would otherwise push the footer
+     off-screen. overflow:hidden because with tabs the .modal-body is the
+     scroller, not the modal shell. */
   max-height: 90dvh;
-  overflow-y: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
@@ -436,11 +599,49 @@ function close() {
   color: var(--color-text-primary);
 }
 
+/* Tab Navigation — matches PropertiesPanel.vue .properties-tabs / .tab-btn */
+.settings-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  overflow-x: auto;
+}
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.tab-btn .material-symbols-rounded {
+  font-size: 18px;
+  color: inherit;
+}
+.tab-btn:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-hover);
+}
+.tab-btn.active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
 .modal-body {
   padding: 16px 20px;
   display: flex;
   flex-direction: column;
   gap: 18px;
+  overflow-y: auto;
 }
 
 .settings-field {
@@ -456,7 +657,8 @@ function close() {
   color: var(--color-text-secondary);
   font-weight: 500;
 }
-.settings-select {
+.settings-select,
+.settings-input {
   width: 100%;
   padding: 10px 12px;
   background: var(--color-surface);
@@ -466,7 +668,8 @@ function close() {
   font-size: max(14px, var(--lp-input-fs-min));
   min-height: var(--lp-input-h);
 }
-.settings-select:focus {
+.settings-select:focus,
+.settings-input:focus {
   outline: none;
   border-color: var(--color-accent);
 }

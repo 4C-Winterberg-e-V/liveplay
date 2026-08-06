@@ -89,6 +89,21 @@ LivePlay is a cue-playback application aimed at theatre, conferences, AV install
 
 At showtime, the operator triggers cues via the UI, the cart grid, configured keyboard shortcuts, MIDI controllers, or HTTP/WebSocket calls from external automation. Each cue plays through its own decoder, runs through a three-tier mixer, and lands on a brick-wall limiter before hitting the DAC.
 
+### What you can do with it
+
+- **🎵 Build a cue list** — arrange audio into a playlist with nested groups. Set a volume, trim the start and end, add fade-ins and fade-outs, and choose what happens when a track finishes: stop, play the next cue, loop, or jump to another cue.
+- **🎛 Fire off carts** — a grid of one-touch buttons for stings, SFX, walk-on music and beds. Great for touchscreens; the cart grid can even pop out into its own window.
+- **📺 Show Mode** — switch to a simplified, touch-friendly playback view for the actual performance, so operators can trigger cues without the editing clutter. Each device remembers its own preference.
+- **⏭ Smooth transitions** — automatic advance, crossfades, and radio-style "Start Next" segue markers with an on-screen countdown for seamless back-to-back playback.
+- **🔊 Sounds great, stays safe** — pick an **Output Target** for your show (Broadcast / EBU R128, Streaming, Radio, Netflix / OTT, or Live console) and LivePlay sets an appropriate loudness target, a brick-wall limiter to stop clipping, and matching meter and waveform colours automatically.
+- **📊 See your levels** — real-time metering at every stage (per-cue, per-channel and master), shown in LUFS, dBFS, true-peak or RMS.
+- **🎚 Route anywhere** — send audio to multiple outputs at once (front-of-house, monitors, comms, a record bus…) across one or more sound cards.
+- **🎬 Timecode** — send SMPTE LTC timecode from a cue to keep lighting, video or other systems in sync.
+- **📥 Bring in audio easily** — drag and drop files (or import several at once), or pull audio straight from YouTube.
+- **🎹 Trigger it your way** — click, tap, keyboard hotkeys, MIDI controllers, or automation over the network (HTTP / WebSocket).
+- **🌍 Speak your language** — available in **20+ languages**, including full right-to-left support.
+- **🖥 Run it remotely** — operate a stage-side machine wired to your sound gear from a separate show laptop over the local network, with automatic discovery so you don't have to type in IP addresses.
+
 ### Architecture in one diagram
 
 ```

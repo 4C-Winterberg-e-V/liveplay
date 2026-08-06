@@ -20,13 +20,29 @@
           >
             <span class="material-symbols-rounded">pause</span>
           </button>
-          <button 
-            v-if="cue.isPaused" 
-            class="action-btn resume-btn" 
-            @click="handleResume" 
+          <button
+            v-if="cue.isPaused"
+            class="action-btn resume-btn"
+            @click="handleResume"
             :title="t('actions.resume')"
           >
             <span class="material-symbols-rounded">play_arrow</span>
+          </button>
+          <button
+            v-if="isLooping"
+            class="action-btn continue-btn"
+            @click="handleContinue"
+            :title="t('actions.cueToContinue')"
+          >
+            <span class="material-symbols-rounded">skip_next</span>
+          </button>
+          <button
+            v-if="isLooping"
+            class="action-btn jump-cue-btn"
+            @click="handleJumpCue"
+            :title="t('actions.jumpCue')"
+          >
+            <span class="material-symbols-rounded">last_page</span>
           </button>
           <button class="action-btn stop-btn" @click="handleStop" :title="t('actions.stop')">
             <span class="material-symbols-rounded">stop</span>
@@ -37,6 +53,16 @@
       <div class="cue-progress">
         <div class="time-info">
           <span>{{ formatTime(cue.currentTime) }}</span>
+          <!-- Segue countdown: time until the Start Next marker fires -->
+          <span
+            v-if="segueCountdown !== null"
+            class="segue-countdown"
+            :class="{ 'segue-countdown--imminent': segueCountdown <= 5 }"
+            :title="t('playback.startNextCountdown')"
+          >
+            <span class="material-symbols-rounded">skip_next</span>
+            {{ segueCountdown.toFixed(1) }}s
+          </span>
           <span>-{{ formatTime(cue.duration - cue.currentTime) }}</span>
         </div>
 
@@ -53,6 +79,12 @@
         >
           <div class="progress-bar">
             <div class="progress-fill" :style="scrubPct !== null ? { width: scrubPct + '%' } : progressStyle"></div>
+            <!-- Start Next marker tick on the progress bar (upstream). -->
+            <div
+              v-if="seguePercent !== null"
+              class="segue-tick"
+              :style="{ left: `${seguePercent}%` }"
+            ></div>
             <div
               class="progress-handle"
               :style="{
@@ -101,6 +133,7 @@
 </template>
 
 <script setup lang="ts">
+import type { AudioItem } from '~/types/project';
 import LiveMeterBar from './LiveMeterBar.vue';
 import { useCompactLayout } from '~/composables/useCompactLayout';
 
@@ -123,8 +156,44 @@ const props = defineProps<{
   cue: ActiveCueState;
 }>();
 
-const { stopCue, pauseCue, resumeCue, seekCue } = useAudioEngine();
+const { stopCue, pauseCue, resumeCue, seekCue, queueLoopContinuation, jumpCue } = useAudioEngine();
 const { t } = useLocalization();
+const { findItemByUuid } = useProject();
+
+// The underlying project item — endBehavior lives here, not on the
+// server-projected ActiveCueState.
+const audioItem = computed<AudioItem | null>(() => {
+  const item = findItemByUuid(props.cue.uuid);
+  return item && item.type === 'audio' ? (item as AudioItem) : null;
+});
+
+const isLooping = computed(() => audioItem.value?.endBehavior.action === 'loop');
+
+// Start Next marker (absolute file time) from the project item, if armed.
+const startNextTime = computed<number | null>(() => {
+  const item = findItemByUuid(props.cue.uuid) as any;
+  if (!item || item.type !== 'audio') return null;
+  if (!item.startNextEnabled || !(item.startNextTime > 0)) return null;
+  return item.startNextTime as number;
+});
+
+// Seconds until the marker fires; null once passed (or when not armed).
+// currentTime is relative to the in point, the marker is absolute file time.
+const segueCountdown = computed<number | null>(() => {
+  if (startNextTime.value === null) return null;
+  const absolutePos = props.cue.currentTime + (props.cue.inPoint || 0);
+  const remaining = startNextTime.value - absolutePos;
+  return remaining > 0 ? remaining : null;
+});
+
+// Marker position on the (trimmed) progress bar, 0–100.
+const seguePercent = computed<number | null>(() => {
+  if (startNextTime.value === null || !props.cue.duration) return null;
+  const rel = (startNextTime.value - (props.cue.inPoint || 0)) / props.cue.duration;
+  if (rel <= 0 || rel >= 1) return null;
+  return rel * 100;
+});
+
 // isCompact gates layout (the inline meter). isCoarse gates the SCRUB
 // SEMANTICS, because a seek is audible on the PA — that must follow the input
 // device, never the window width.
@@ -193,6 +262,16 @@ const handlePause = () => {
 
 const handleResume = () => {
   resumeCue(props.cue.uuid);
+};
+
+const handleContinue = () => {
+  if (!audioItem.value) return;
+  queueLoopContinuation(audioItem.value, resolveLoopContinuationTarget(audioItem.value));
+};
+
+const handleJumpCue = () => {
+  if (!audioItem.value) return;
+  jumpCue(audioItem.value);
 };
 
 // ---- Seek / scrub ---------------------------------------------------------
@@ -365,7 +444,15 @@ const formatTime = (seconds: number): string => {
   &.pause-btn, &.resume-btn {
     background-color: #ff9800; /* Orange color for pause/resume */
   }
-  
+
+  &.continue-btn {
+    background-color: #16a34a; /* Green: let the loop finish, then advance */
+  }
+
+  &.jump-cue-btn {
+    background-color: #0284c7; /* Blue: cut now, advance now */
+  }
+
   &.stop-btn {
     background-color: var(--color-danger);
   }
@@ -394,6 +481,36 @@ const formatTime = (seconds: number): string => {
   justify-content: space-between;
   font-size: 12px;
   color: var(--color-text-secondary);
+}
+
+.segue-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: rgb(22, 163, 74);
+  font-weight: 600;
+
+  .material-symbols-rounded {
+    font-size: 14px;
+  }
+
+  &.segue-countdown--imminent {
+    animation: segue-pulse 1s ease-in-out infinite;
+  }
+}
+
+@keyframes segue-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.segue-tick {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: rgb(22, 163, 74);
+  pointer-events: none;
 }
 
 .progress-bar {
