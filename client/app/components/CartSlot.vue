@@ -527,6 +527,14 @@ function onPadPointerDown(e: PointerEvent) {
 }
 
 function onPadPointerMove(e: PointerEvent) {
+  // Coarse only — the same gate onPadPointerDown has, and it is load-bearing.
+  // A mouse fires pointermove on plain HOVER with no button down. Since
+  // onPadPointerDown returns early on a fine pointer, padStartX/Y are never
+  // seeded and stay at 0, so `|clientX - 0| > 10` was true for every hover and
+  // set padMoved. handlePadTap then swallowed the click as "that was a scroll",
+  // and the pad only fired on a SECOND click with the mouse held still — which
+  // reads as a dead cart player in Show Mode.
+  if (!isCoarse.value) return;
   // 10px on either axis means the finger is scrolling the grid.
   if (Math.abs(e.clientX - padStartX) > 10 || Math.abs(e.clientY - padStartY) > 10) padMoved = true;
   if (!padTimer) return;
