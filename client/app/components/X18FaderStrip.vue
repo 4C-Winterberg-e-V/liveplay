@@ -773,7 +773,10 @@ function commitEdit() {
   .x18-strip__tag { font-size: 17px; }
   .x18-strip__name--tagged .x18-strip__tag { font-size: 12px; }
   .x18-strip__label { font-size: 17px; }
-  .x18-strip__name-input { font-size: max(16px, var(--lp-input-fs-min)); }
+  .x18-strip__name-input {
+    font-size: max(16px, var(--lp-input-fs-min));
+    min-height: var(--lp-tap-sm);
+  }
   .x18-strip__value,
   .x18-strip__value-input {
     font-size: max(16px, var(--lp-input-fs-min));
@@ -781,15 +784,15 @@ function commitEdit() {
     min-width: 92px;
     padding: 6px 10px;
   }
-  .x18-strip__name-input { min-height: var(--lp-tap-sm); }
   .x18-strip__fine { font-size: 12px; top: 0; }
 }
 
 /* ---- Phone in landscape: fold the strip onto one line ------------------- */
-/* Portrait trades height for a long fader; landscape has none to trade. The
-   two wrappers become `display: contents` so name, ± buttons, track and value
-   are all direct flex children of the strip and `order` can lay them out on a
-   single 60px line — the fader still gets ~500px of travel. */
+/* Portrait trades height for a long fader; landscape has none to trade. The two
+   wrappers become `display: contents` so name, readout, ± buttons and track are
+   all direct flex children of one ~54px line — and they lay out in DOM order,
+   with no `order` anywhere, so the tab order still follows the eye. The fader
+   keeps ~700px of travel. */
 @media (max-height: 559px) and (any-pointer: coarse) and (min-width: 600px) {
   .x18-strip {
     flex-direction: row;
