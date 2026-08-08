@@ -1,68 +1,125 @@
 <template>
   <div class="x18-faders">
-    <!-- Scope, not a filter: 16 channels + 6 buses + master is 23 rows, and a
-         phone that has to scroll past two thirds of the desk to reach BUS 3 is
-         the exact failure this avoids. One tap per section, thumb-sized. -->
-    <div class="x18-faders__scopes" role="group" :aria-label="t('x18.faderSection')">
-      <button
-        v-for="s in SCOPES"
-        :key="s.id"
-        type="button"
-        class="x18-faders__scope"
-        :class="{ 'x18-faders__scope--active': scope === s.id }"
-        :aria-pressed="scope === s.id ? 'true' : 'false'"
-        @click="scope = s.id"
-      >
-        {{ t(s.label) }}
-        <span v-if="s.count > 1" class="x18-faders__scope-count">{{ s.count }}</span>
+    <div class="x18-faders__bar">
+      <!-- Whether the desk is actually answering. Everything below is only as
+           true as this line: the levels are read from the console, so "not
+           reachable" and "at 0 dB" must never look the same. -->
+      <span class="x18-faders__link" :class="{ 'x18-faders__link--up': linkUp }">
+        <span class="x18-faders__dot" aria-hidden="true"></span>
+        {{ linkUp ? t('x18.faderLinkUp') : (isConfigured ? t('x18.faderLinkWaiting') : t('x18.faderLinkNone')) }}
+      </span>
+      <button v-if="canEdit" type="button" class="x18-faders__add" @click="openEditor(null)">
+        <span class="material-symbols-rounded" aria-hidden="true">add</span>
+        {{ t('x18.faderAdd') }}
       </button>
     </div>
 
-    <div class="x18-faders__list lp-scroll-fade">
-      <!-- Above the faders, not below sixteen of them: this is the one piece of
-           UI that says the numbers are what LivePlay last sent rather than the
-           desk's actual state, and at the bottom of the scroller nobody reads it
-           before acting on a level. -->
-      <p class="x18-faders__note">{{ t('x18.faderStateNote') }}</p>
-      <X18FaderStrip
-        v-for="strip in strips"
-        :key="strip.id"
-        :strip="strip"
-        :disabled="!isConfigured"
-      />
+    <div v-if="entries.length === 0" class="x18-faders__empty">
+      <span class="material-symbols-rounded" aria-hidden="true">tune</span>
+      <p>{{ canEdit ? t('x18.faderEmpty') : t('x18.faderEmptyLocked') }}</p>
     </div>
+
+    <div v-else class="x18-faders__list lp-scroll-fade">
+      <div v-for="(entry, i) in entries" :key="entry.id" class="x18-faders__row">
+        <X18FaderStrip
+          :entry="entry"
+          :disabled="!isConfigured"
+          @edit="openEditor(entry)"
+        />
+        <!-- Order is the operator's: the two faders you touch every service
+             belong at the top, not wherever they happened to be added. -->
+        <div v-if="canEdit && entries.length > 1" class="x18-faders__order">
+          <button
+            type="button"
+            class="x18-faders__move"
+            :disabled="i === 0"
+            :aria-label="t('x18.faderMoveUp', { name: entryName(entry) })"
+            @click="moveEntry(entry.id, -1)"
+          ><span class="material-symbols-rounded" aria-hidden="true">keyboard_arrow_up</span></button>
+          <button
+            type="button"
+            class="x18-faders__move"
+            :disabled="i === entries.length - 1"
+            :aria-label="t('x18.faderMoveDown', { name: entryName(entry) })"
+            @click="moveEntry(entry.id, 1)"
+          ><span class="material-symbols-rounded" aria-hidden="true">keyboard_arrow_down</span></button>
+        </div>
+      </div>
+    </div>
+
+    <X18FaderEditor
+      v-if="editorOpen"
+      :existing="editing"
+      :siblings="entries"
+      @close="closeEditor"
+      @save="onSave"
+      @delete="onDelete"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import X18FaderStrip from './X18FaderStrip.vue';
-import {
-  X18_BUS_COUNT,
-  X18_CHANNEL_COUNT,
-  x18StripsForScope,
-  type X18FaderScope,
-} from '~/utils/x18Fader';
+import X18FaderEditor from './X18FaderEditor.vue';
+import { x18EntryTag, type X18FaderEntry } from '~/utils/x18Fader';
 
 const { t } = useLocalization();
-const { isConfigured, consoleIp, restore } = useX18Faders();
+const { uiMode } = useUiMode();
+const server = useLiveplayServer();
+const {
+  isConfigured, consoleIp, linkUp, entries,
+  addEntry, updateEntry, removeEntry, moveEntry,
+  refresh, applyValues,
+} = useX18Faders();
 
-const SCOPES: Array<{ id: X18FaderScope; label: string; count: number }> = [
-  { id: 'channels', label: 'x18.scopeChannels', count: X18_CHANNEL_COUNT },
-  { id: 'buses',    label: 'x18.scopeBuses',    count: X18_BUS_COUNT },
-  { id: 'master',   label: 'x18.scopeMaster',   count: 1 },
-];
+// Adding and reordering are edit affordances; riding the faders is not. Same
+// rule the rest of the app follows once the show has started.
+const canEdit = computed(() => uiMode.value !== 'playback');
 
-// Shared so switching away from the X18 view and back lands on the same desk
-// section instead of resetting to channel 1 mid-show.
-const scope = useState<X18FaderScope>('x18.faderScope', () => 'channels');
+const entryName = (entry: X18FaderEntry) => (entry.label ?? '').trim() || x18EntryTag(entry);
 
-const strips = computed(() => x18StripsForScope(scope.value));
+// ---- Editor ---------------------------------------------------------------
+const editorOpen = ref(false);
+const editing = ref<X18FaderEntry | null>(null);
 
-// Keyed on the IP rather than done once on mount: the operator can open this
-// panel, discover the console IP is missing, set it in Project Settings and come
-// straight back — and the cached levels for that desk have to load then, not on
-// a mount that already happened.
-watch(consoleIp, () => restore(), { immediate: true });
+const openEditor = (entry: X18FaderEntry | null) => {
+  if (!canEdit.value) return;
+  editing.value = entry;
+  editorOpen.value = true;
+};
+const closeEditor = () => { editorOpen.value = false; editing.value = null; };
+
+const onSave = (value: Omit<X18FaderEntry, 'id'>) => {
+  if (editing.value) updateEntry(editing.value.id, value);
+  else addEntry(value);
+  closeEditor();
+};
+const onDelete = () => {
+  if (editing.value) removeEntry(editing.value.id);
+  closeEditor();
+};
+
+// ---- Live console state ----------------------------------------------------
+// The server owns the socket, so it is the one the desk talks to. A joining
+// client pulls the whole picture once, then rides the doc_patch stream — the
+// same one that carries a fader another operator just moved, and the one a hand
+// on the physical console produces.
+let stopPatch: (() => void) | null = null;
+let stopReconnect: (() => void) | null = null;
+
+onMounted(() => {
+  stopPatch = server.onDocPatch((p: any) => {
+    if (p?.op === 'x18_state') applyValues(p.values);
+  });
+  // The server's cache does not survive its own restart, and a reconnect is
+  // exactly when ours is most likely to be stale.
+  stopReconnect = server.onReconnected?.(() => { void refresh(); }) ?? null;
+});
+onUnmounted(() => { stopPatch?.(); stopReconnect?.(); });
+
+// Re-read on any change of console: a different desk means different levels,
+// and "no desk" means we know nothing at all.
+watch(consoleIp, () => { void refresh(); }, { immediate: true });
 </script>
 
 <style scoped>
@@ -73,48 +130,70 @@ watch(consoleIp, () => restore(), { immediate: true });
   flex-direction: column;
 }
 
-.x18-faders__scopes {
+.x18-faders__bar {
   display: flex;
+  align-items: center;
   gap: 8px;
   padding: var(--spacing-sm) var(--spacing-md) 0;
   flex: none;
 }
 
-.x18-faders__scope {
+.x18-faders__link {
   flex: 1;
-  min-height: 40px;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
+  font-size: 12px;
   color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.x18-faders__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--color-text-secondary);
+  opacity: 0.5;
+}
+.x18-faders__link--up .x18-faders__dot { background: #24a148; opacity: 1; }
+
+.x18-faders__add {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface));
+  color: var(--color-text-primary);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   touch-action: manipulation;
 }
-.x18-faders__scope--active {
-  color: var(--color-text-primary);
-  border-color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface));
-}
-.x18-faders__scope-count {
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  font-weight: 500;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: rgba(128, 128, 128, 0.22);
-}
+.x18-faders__add .material-symbols-rounded { font-size: 20px; }
 
-/* One column on a phone, more as the window grows. A single strip stretched
-   across a 1440px desktop is a 1300px-long fader for one channel — absurd to
-   aim at, and it wastes the width that could be showing eight more channels.
-   min(340px, 100%) keeps a 320px phone from overflowing sideways. */
+.x18-faders__empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+.x18-faders__empty .material-symbols-rounded { font-size: 44px; opacity: 0.5; }
+.x18-faders__empty p { margin: 0; max-width: 32em; line-height: 1.5; }
+
+/* One column on a phone, more as the window grows: a single strip stretched
+   across a desktop is one absurdly long fader where eight more would fit. */
 .x18-faders__list {
   flex: 1;
   min-height: 0;
@@ -127,46 +206,53 @@ watch(consoleIp, () => restore(), { immediate: true });
   overscroll-behavior: contain;
 }
 
-.x18-faders__note {
-  grid-column: 1 / -1;
-  margin: 0 0 2px;
-  font-size: 11px;
-  line-height: 1.4;
+.x18-faders__row { display: flex; align-items: stretch; gap: 6px; min-width: 0; }
+.x18-faders__row > :first-child { flex: 1; min-width: 0; }
+
+.x18-faders__order { display: flex; flex-direction: column; gap: 4px; flex: none; }
+.x18-faders__move {
+  flex: 1;
+  width: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
   color: var(--color-text-secondary);
+  cursor: pointer;
+  touch-action: manipulation;
 }
+.x18-faders__move:disabled { opacity: 0.3; cursor: default; }
+.x18-faders__move .material-symbols-rounded { font-size: 18px; }
 
 @media (any-hover: hover) and (any-pointer: fine) {
-  .x18-faders__scope:hover { background: var(--color-surface-hover); }
-  .x18-faders__scope--active:hover { background: color-mix(in srgb, var(--color-accent) 24%, var(--color-surface)); }
+  .x18-faders__add:hover { background: color-mix(in srgb, var(--color-accent) 26%, var(--color-surface)); }
+  .x18-faders__move:hover:not(:disabled) { background: var(--color-surface-hover); }
 }
 
 @media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
-  .x18-faders__scopes {
-    gap: var(--spacing-sm);
+  .x18-faders__bar {
     padding: var(--spacing-sm) var(--spacing-sm) 0;
   }
-  .x18-faders__scope {
-    min-height: var(--lp-tap);
-    font-size: 15px;
-  }
+  .x18-faders__link { font-size: 13px; }
+  .x18-faders__add { min-height: var(--lp-tap); font-size: 15px; }
   .x18-faders__list {
     gap: 6px;
     padding: var(--spacing-sm);
   }
-  .x18-faders__note { font-size: 12px; }
+  .x18-faders__move { width: 36px; }
 }
 
-/* ---- Phone in landscape: height is the scarce axis ---------------------- */
-/* Two columns of two-line strips would show four channels; one column of the
-   single-line strips (see X18FaderStrip) shows five AND leaves the fader the
-   full width of the screen. */
+/* Landscape: height is the scarce axis, so one column of the single-line
+   strips rather than two columns of two-line ones. */
 @media (max-height: 559px) and (any-pointer: coarse) and (min-width: 600px) {
   .x18-faders__list {
     grid-template-columns: 1fr;
     gap: 6px;
     padding: 6px var(--spacing-sm) var(--spacing-sm);
   }
-  .x18-faders__scopes { padding: 6px var(--spacing-sm) 0; }
-  .x18-faders__scope { min-height: var(--lp-tap-sm); }
+  .x18-faders__bar { padding: 6px var(--spacing-sm) 0; }
+  .x18-faders__add { min-height: var(--lp-tap-sm); }
 }
 </style>

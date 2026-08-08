@@ -60,7 +60,7 @@ client/
 │   ├── useCartHotkeys.ts         keyboard hotkey bindings → cart triggers
 │   ├── useMidiController.ts      Web MIDI → cart triggers
 │   ├── useX18Board.ts            X18 button board — key/click triggers → OSC
-│   ├── useX18Faders.ts           X18 channel levels — rate-limited sends, strip names
+│   ├── useX18Faders.ts           X18 levels — the operator's fader list + console state
 │   ├── useStateViewer.ts         feeds the diagnostics popup window
 │   └── useLocalization.ts        20-language i18n + RTL handling
 ├── plugins/                      Nuxt plugins (client.ts: auto-connect on boot)
@@ -179,7 +179,7 @@ The component tree is intentionally flat — every SFC lives directly in [`compo
 - `WaveformTrimmer.vue` — interactive in/out trimming + normalise.
 - `RoutingMatrixPanel.vue` — the 3-tier routing matrix UI.
 - `X18View.vue` — the Behringer X18 tab, switching between the programmable button board and the level faders.
-- `X18FaderPanel.vue`, `X18FaderStrip.vue` — touch-first channel / bus / master levels. The fader law and the strip list are pure helpers in [`utils/x18Fader.ts`](utils/x18Fader.ts); state, rate limiting and strip names live in `useX18Faders`.
+- `X18FaderPanel.vue`, `X18FaderStrip.vue`, `X18FaderEditor.vue` — the operator-composed level page: bus / Main-LR outputs and per-channel sends, read from and written to the console. The fader law and the OSC address builders are pure helpers in [`utils/x18Fader.ts`](utils/x18Fader.ts) (and must match `server/include/liveplay/net/x18_addresses.hpp` exactly); the entry list, rate limiting and retries live in `useX18Faders`.
 - `LiveMeterBar.vue`, `StereoMeter.vue`, `VUMeter.vue` — meter widgets driven by `useLiveMeters`.
 - `ServerSettingsModal.vue`, `LocalServerStatus.vue`, `ConnectionLostModal.vue` — server connection management.
 - `ServerFileBrowser.vue`, `ServerFilePickerModal.vue` — `GET /api/fs/list` browser, used when the client and server live on different machines.

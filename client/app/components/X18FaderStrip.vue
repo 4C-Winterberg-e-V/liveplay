@@ -1,6 +1,8 @@
 <template>
   <!--
-    One touch-first channel level for the X18.
+    One touch-first console level: a mix's own output, or one channel inside
+    that mix. Which of those it is comes from the operator's entry, not from a
+    fixed grid — see useX18Faders.
 
     Why a horizontal fader in a vertical list instead of the console's column of
     vertical faders: on a phone in portrait a vertical fader gets ~300px of
@@ -11,49 +13,38 @@
     Interaction rules, all deliberate:
       • Drag is RELATIVE, never absolute — tapping the track does not jump the
         level. On a live desk an accidental tap must not become a level change.
-      • touch-action: pan-y, so a vertical swipe scrolls the list and only a
-        horizontal drag moves the fader.
-      • Straying off-axis while dragging makes the fader finer (see
-        dragSensitivity), the way an iOS slider does.
+      • touch-action: pan-y plus a slop gate, so a vertical swipe scrolls the
+        list and only a committed horizontal drag moves the fader.
+      • Straying off-axis while dragging makes the fader finer, as does Shift.
       • ± buttons step 0.5 dB and repeat when held — the guaranteed-precise path
         that needs no gesture at all.
       • The value chip is a text field: tap it and type a number.
   -->
-  <div class="x18-strip" :class="{ 'x18-strip--dragging': dragging, 'x18-strip--unsent': !sentFlag }">
+  <div
+    class="x18-strip"
+    :class="{
+      'x18-strip--dragging': dragging,
+      'x18-strip--unknown': !known,
+    }"
+  >
     <div class="x18-strip__head">
-      <!-- Tap the name to rename the strip. Renaming can never make a sound, so
-           unlike every audible control here it needs no confirmation and is not
-           gated to the desktop — the phone is exactly where you need to read
-           "Funke Pfarrer" instead of "CH 3". -->
       <button
-        v-if="!namingEdit"
+        v-if="canEdit"
         type="button"
-        class="x18-strip__name"
-        :class="{ 'x18-strip__name--tagged': !!customName }"
-        :disabled="!canRename"
-        :title="canRename ? t('x18.faderRename') : undefined"
-        @click="startNaming"
+        class="x18-strip__name x18-strip__name--tagged"
+        :title="t('x18.faderEditEntry')"
+        @click="emit('edit')"
       >
-        <span class="x18-strip__tag">{{ strip.short }}</span>
+        <span class="x18-strip__tag">{{ tag }}</span>
         <span v-if="customName" class="x18-strip__label">{{ customName }}</span>
       </button>
-      <input
-        v-else
-        ref="nameRef"
-        class="x18-strip__name-input"
-        type="text"
-        :maxlength="24"
-        :aria-label="t('x18.faderRename')"
-        :placeholder="strip.short"
-        v-model="nameValue"
-        @blur="commitName"
-        @keyup.enter="commitName"
-        @keyup.escape="namingEdit = false"
-      />
+      <span v-else class="x18-strip__name x18-strip__name--tagged">
+        <span class="x18-strip__tag">{{ tag }}</span>
+        <span v-if="customName" class="x18-strip__label">{{ customName }}</span>
+      </span>
 
       <!-- A title attribute needs a mouse to read, which is exactly the device
-           this feature is not built for. When a command does not land, say so in
-           words on the strip. -->
+           this is not built for. When a command does not land, say so in words. -->
       <span v-if="failedFlag" class="x18-strip__warn" role="status">
         <span class="material-symbols-rounded" aria-hidden="true">sync_problem</span>
         {{ t('x18.faderNotSent') }}
@@ -67,7 +58,8 @@
         :title="t('x18.faderSetLevel', { name: spokenName })"
         @click="startEdit"
       >
-        {{ formatX18Db(db) }}<small>dB</small>
+        <template v-if="known">{{ formatX18Db(db) }}<small>dB</small></template>
+        <template v-else>· ·</template>
       </button>
       <input
         v-else
@@ -152,17 +144,20 @@ import {
   formatX18Db,
   stepPosByDb,
   x18DbToPos,
+  x18EntryTag,
   x18PosToDb,
-  type X18Strip,
+  type X18FaderEntry,
 } from '~/utils/x18Fader';
 
 const props = defineProps<{
-  strip: X18Strip;
+  entry: X18FaderEntry;
   disabled?: boolean;
 }>();
 
+const emit = defineEmits<{ (e: 'edit'): void }>();
+
 const { t } = useLocalization();
-const { positionOf, isSent, hasFailed, setPosition, nameOf, setName } = useX18Faders();
+const { positionOf, hasFailed, setPosition, setHeld } = useX18Faders();
 
 const STEP_DB = 0.5;
 const PAGE_DB = 6;
@@ -171,24 +166,30 @@ const PAGE_DB = 6;
 // thumb a scale to be read against instead of a bare stripe.
 const TICKS = [-40, -20, -10, 0, 10].map(db => ({ db, pos: x18DbToPos(db) }));
 
-const pos = computed(() => positionOf(props.strip));
+// undefined means the console has not answered for this parameter yet — which
+// is a different thing from "it is at 0 dB", and the UI says so.
+const known = computed(() => positionOf(props.entry) !== undefined);
+const pos = computed(() => positionOf(props.entry) ?? X18_UNITY_POS);
 const db = computed(() => x18PosToDb(pos.value));
-const customName = computed(() => nameOf(props.strip));
+// The route, in the desk's own terms: "CH 3 → BUS 2".
+const tag = computed(() => x18EntryTag(props.entry));
+const customName = computed(() => (props.entry.label ?? '').trim());
 
-// Every accessible name on this strip carries whatever the operator called it.
-// The rename feature exists because "CH 3" does not say which microphone is too
-// loud — a screen reader announcing "CH 3 level" and nothing else would hand
-// back exactly the problem the naming was added to solve.
+// Every accessible name carries whatever the operator called it. A reader
+// announcing "CH 3 level" and nothing else hands back exactly the problem
+// naming these was meant to solve.
 const spokenName = computed(() =>
-  customName.value ? `${props.strip.short} ${customName.value}` : props.strip.short);
+  customName.value ? `${tag.value} ${customName.value}` : tag.value);
 
 // aria-valuetext must be a translated sentence, not a hardcoded English one —
 // it is the ONLY thing a screen reader reads out for this slider.
-const spokenLevel = computed(() => Number.isFinite(db.value)
-  ? t('x18.faderSpokenDb', { db: Math.round(db.value * 10) / 10 })
-  : t('x18.faderSpokenOff'));
-const sentFlag = computed(() => isSent(props.strip));
-const failedFlag = computed(() => hasFailed(props.strip));
+const spokenLevel = computed(() => {
+  if (!known.value) return t('x18.faderSpokenUnknown');
+  return Number.isFinite(db.value)
+    ? t('x18.faderSpokenDb', { db: Math.round(db.value * 10) / 10 })
+    : t('x18.faderSpokenDb', { db: '-inf' });
+});
+const failedFlag = computed(() => hasFailed(props.entry));
 
 const fillPct = computed(() => pos.value * 100);
 // Anything above unity is gain the operator added on top of the desk's nominal
@@ -200,7 +201,7 @@ const overStyle = computed(() => ({
 
 const apply = (next: number) => {
   if (props.disabled) return;
-  setPosition(props.strip, next);
+  setPosition(props.entry, next);
 };
 
 // ---- Drag -----------------------------------------------------------------
@@ -237,6 +238,9 @@ function onPointerDown(e: PointerEvent) {
   if (dragging.value) return;
 
   dragging.value = true;
+  // The console echoes our writes. An echo that is a few hundred milliseconds
+  // old arriving mid-drag would drag the fader backwards under the thumb.
+  setHeld(props.entry, true);
   activePointer = e.pointerId;
   lastX = e.clientX;
   startY = e.clientY;
@@ -302,6 +306,7 @@ function endDrag(e?: PointerEvent) {
     apply(posBeforeDrag);
   }
   dragging.value = false;
+  setHeld(props.entry, false);
   armed = false;
   activePointer = null;
   sensitivity.value = 1;
@@ -313,6 +318,7 @@ function endDrag(e?: PointerEvent) {
 onUnmounted(() => {
   endDrag();
   stopRepeat();
+  setHeld(props.entry, false);
 });
 
 // ---- ± buttons, with hold-to-repeat ---------------------------------------
@@ -419,31 +425,12 @@ function onWheel(e: WheelEvent) {
   step((e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 0.1 : STEP_DB));
 }
 
-// ---- Rename the strip ------------------------------------------------------
-const namingEdit = ref(false);
-const nameValue = ref('');
-const nameRef = ref<HTMLInputElement | null>(null);
-
-// Renaming is an edit affordance, and this app's rule is that those disappear
-// once the show has started — a keyboard sliding up over the channel levels is
-// the last thing anyone needs then. Riding the faders themselves stays live;
-// that IS the job in Show Mode.
+// ---- Editing ---------------------------------------------------------------
+// Tapping the name opens the entry editor rather than an inline rename: by the
+// time an operator wants to change the words, they usually want to change what
+// the fader points at, move it, or drop it — and one affordance beats four.
 const { uiMode } = useUiMode();
-const canRename = computed(() => uiMode.value !== 'playback');
-
-function startNaming() {
-  if (!canRename.value) return;
-  nameValue.value = customName.value;
-  namingEdit.value = true;
-  nextTick(() => { nameRef.value?.focus(); nameRef.value?.select(); });
-}
-
-function commitName() {
-  if (!namingEdit.value) return;
-  namingEdit.value = false;
-  if (nameValue.value.trim() === customName.value) return;   // no save, no dirty flag
-  setName(props.strip, nameValue.value);
-}
+const canEdit = computed(() => uiMode.value !== 'playback');
 
 // ---- Type an exact value ---------------------------------------------------
 const editing = ref(false);
@@ -495,6 +482,7 @@ function commitEdit() {
 }
 .x18-strip__name {
   flex: 1;
+  min-height: 0;
   min-width: 0;
   display: flex;
   align-items: baseline;
@@ -589,11 +577,11 @@ function commitEdit() {
 .x18-strip__value:disabled { cursor: default; opacity: 0.5; }
 /* An untouched strip is a guess, not a reading — say so visually rather than
    letting the number pass for the desk's actual level. */
-.x18-strip--unsent .x18-strip__value { color: var(--color-text-secondary); font-style: italic; }
-/* The number is the quiet part of "we do not know this level" — the thumb is
-   the loud one. Hollow it out so an untouched strip cannot be misread as a
-   reading off the desk at a glance. */
-.x18-strip--unsent .x18-strip__thumb {
+.x18-strip--unknown .x18-strip__value { color: var(--color-text-secondary); font-style: italic; letter-spacing: 2px; }
+/* The number is the quiet part of "the desk has not told us yet" — the thumb is
+   the loud one. Hollow it out so a fader waiting on its first answer cannot be
+   misread as a reading at a glance. */
+.x18-strip--unknown .x18-strip__thumb {
   background: var(--color-surface);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4), inset 0 0 0 3px var(--color-accent);
 }

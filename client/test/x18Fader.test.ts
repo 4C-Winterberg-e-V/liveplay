@@ -1,18 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import {
-  X18_BUS_STRIPS,
-  X18_CHANNEL_STRIPS,
-  X18_MASTER_STRIP,
   X18_UNITY_POS,
   clampPos,
   dragSensitivity,
   formatX18Db,
+  isSameX18Target,
+  isValidX18Entry,
   stepPosByDb,
+  x18ChannelMixAddress,
   x18DbToPos,
+  x18EntryAddress,
+  x18EntryTag,
+  x18MixAddress,
+  x18MixLabel,
   x18PosToDb,
   x18PosToPercent,
-  x18StripId,
-  x18StripsForScope,
+  type X18FaderEntry,
 } from '../app/utils/x18Fader';
 
 // The fader law here IS the X32/X-Air law. If these anchors ever move, a
@@ -130,32 +133,77 @@ describe('stepPosByDb', () => {
   });
 });
 
-describe('strips', () => {
-  it('covers the desk an X18/XR18 actually has', () => {
-    expect(X18_CHANNEL_STRIPS).toHaveLength(16);
-    expect(X18_BUS_STRIPS).toHaveLength(6);
-    expect(X18_MASTER_STRIP.kind).toBe('master');
-    expect(X18_MASTER_STRIP.index).toBeUndefined();
+// These addresses MUST match the server's builders in
+// server/include/liveplay/net/x18_addresses.hpp byte for byte: the server keys
+// its cache of console values by address and the client looks levels up by the
+// same key, so a mismatch is a permanently blank fader with no error anywhere.
+// server/tests/test_x18_link.cpp asserts the same literals from the other side.
+describe('x18ChannelMixAddress', () => {
+  it('matches the published X-Air addresses', () => {
+    expect(x18ChannelMixAddress(1, 'lr')).toBe('/ch/01/mix/fader');
+    expect(x18ChannelMixAddress(16, 'lr')).toBe('/ch/16/mix/fader');
+    expect(x18ChannelMixAddress(1, 1)).toBe('/ch/01/mix/01/level');
+    expect(x18ChannelMixAddress(3, 2)).toBe('/ch/03/mix/02/level');
+    expect(x18ChannelMixAddress(16, 6)).toBe('/ch/16/mix/06/level');
   });
 
-  it('uses 1-based indices, which is what the OSC address wants', () => {
-    expect(X18_CHANNEL_STRIPS[0]).toMatchObject({ kind: 'channel', index: 1, short: 'CH 1' });
-    expect(X18_CHANNEL_STRIPS[15]).toMatchObject({ kind: 'channel', index: 16, short: 'CH 16' });
-    expect(X18_BUS_STRIPS[5]).toMatchObject({ kind: 'bus', index: 6, short: 'BUS 6' });
+  it('returns empty for anything off the desk rather than clamping', () => {
+    // Clamping would send a real level to a real speaker nobody asked for.
+    for (const bad of [0, 17, -1, 1.5, NaN]) {
+      expect(x18ChannelMixAddress(bad as number, 1)).toBe('');
+    }
+    expect(x18ChannelMixAddress(1, 7)).toBe('');
+    expect(x18ChannelMixAddress(1, 0)).toBe('');
+    expect(x18ChannelMixAddress(1, 'fx' as any)).toBe('');
+  });
+});
+
+describe('x18MixAddress', () => {
+  it("uses the console's own inconsistent padding", () => {
+    expect(x18MixAddress('lr')).toBe('/lr/mix/fader');
+    expect(x18MixAddress(1)).toBe('/bus/1/mix/fader');
+    expect(x18MixAddress(6)).toBe('/bus/6/mix/fader');
   });
 
-  it('gives every strip a unique, stable state key', () => {
-    const all = [X18_MASTER_STRIP, ...X18_CHANNEL_STRIPS, ...X18_BUS_STRIPS];
-    expect(new Set(all.map(s => s.id)).size).toBe(all.length);
-    expect(x18StripId('channel', 4)).toBe('channel:4');
-    expect(x18StripId('bus', 2)).toBe('bus:2');
-    expect(x18StripId('master')).toBe('master');
+  it('rejects buses the desk does not have', () => {
+    for (const bad of [0, 7, -1, 2.5, NaN]) expect(x18MixAddress(bad as number)).toBe('');
+  });
+});
+
+describe('fader entries', () => {
+  const mix = (bus: any): X18FaderEntry => ({ id: 'a', kind: 'mix', bus });
+  const send = (channel: any, bus: any): X18FaderEntry => ({ id: 'b', kind: 'send', channel, bus });
+
+  it('resolves to the address of the thing it names', () => {
+    expect(x18EntryAddress(mix('lr'))).toBe('/lr/mix/fader');
+    expect(x18EntryAddress(mix(3))).toBe('/bus/3/mix/fader');
+    expect(x18EntryAddress(send(3, 'lr'))).toBe('/ch/03/mix/fader');
+    expect(x18EntryAddress(send(3, 2))).toBe('/ch/03/mix/02/level');
   });
 
-  it('resolves each scope to its own strips', () => {
-    expect(x18StripsForScope('channels')).toBe(X18_CHANNEL_STRIPS);
-    expect(x18StripsForScope('buses')).toBe(X18_BUS_STRIPS);
-    expect(x18StripsForScope('master')).toEqual([X18_MASTER_STRIP]);
+  it('resolves to nothing when it names nothing real', () => {
+    expect(x18EntryAddress(send(99, 1))).toBe('');
+    expect(x18EntryAddress(mix(9))).toBe('');
+    expect(x18EntryAddress({ id: 'c', kind: 'send', bus: 1 } as X18FaderEntry)).toBe('');
+    expect(isValidX18Entry(send(99, 1))).toBe(false);
+    expect(isValidX18Entry(send(1, 1))).toBe(true);
+  });
+
+  it('labels the route in the desk\'s own terms', () => {
+    expect(x18MixLabel('lr')).toBe('MAIN LR');
+    expect(x18MixLabel(4)).toBe('BUS 4');
+    expect(x18EntryTag(mix('lr'))).toBe('MAIN LR');
+    expect(x18EntryTag(mix(2))).toBe('BUS 2');
+    expect(x18EntryTag(send(3, 2))).toBe('CH 3 \u2192 BUS 2');
+    expect(x18EntryTag(send(3, 'lr'))).toBe('CH 3 \u2192 MAIN LR');
+  });
+
+  it('spots two entries driving the same console parameter', () => {
+    expect(isSameX18Target(send(3, 2), { ...send(3, 2), id: 'other' })).toBe(true);
+    expect(isSameX18Target(send(3, 2), send(3, 1))).toBe(false);
+    expect(isSameX18Target(send(3, 'lr'), mix('lr'))).toBe(false);
+    // Two entries that both name nothing are not "the same target".
+    expect(isSameX18Target(send(99, 1), send(98, 1))).toBe(false);
   });
 });
 
