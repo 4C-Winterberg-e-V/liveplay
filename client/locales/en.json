@@ -348,7 +348,7 @@
     "faderFine": "fine",
     "faderSetLevel": "Type an exact level for {name}, in dB",
     "faderSendFailed": "The last command did not reach the console.",
-    "faderStateNote": "The X18 never reports back, so these are the levels LivePlay last sent — not a reading from the desk. Untouched channels are shown greyed out at 0 dB.",
+    "faderStateNote": "Levels LivePlay last sent — the desk never reports back.",
     "faderRename": "Tap to name this strip",
     "faderSpokenDb": "{db} dB",
     "faderSpokenOff": "fader closed",

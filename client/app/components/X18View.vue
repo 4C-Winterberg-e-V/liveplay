@@ -1,6 +1,10 @@
 <template>
   <div class="x18-view">
-    <div class="x18-header">
+    <!-- On a phone this row is 60px spent repeating the name of the deck tab
+         you just pressed — which is right there at the bottom, in accent, with
+         a count. It earns its space only when it carries something else: the
+         "no console IP" warning, or the desktop board editor. -->
+    <div class="x18-header" :class="{ 'x18-header--redundant': headerIsRedundant }">
       <div class="x18-title">
         <span class="material-symbols-rounded">equalizer</span>
         <h2>{{ t('x18.title') }}</h2>
@@ -232,6 +236,10 @@ onMounted(() => {
     if (saved === 'board' || saved === 'faders') section.value = saved;
   } catch { /* private mode — the default is fine */ }
 });
+
+// Nothing in the header but the title: the bottom deck tab already says so.
+const headerIsRedundant = computed(() =>
+  x18Configured.value && !(hasElectron && section.value === 'board'));
 
 const selectSection = (next: 'board' | 'faders') => {
   section.value = next;
@@ -663,6 +671,7 @@ onUnmounted(() => {
     flex: 1 0 100%;
     order: 2;
   }
+  .x18-header--redundant { display: none; }
   .x18-sections {
     gap: var(--spacing-sm);
     padding: var(--spacing-sm) var(--spacing-sm) 0;

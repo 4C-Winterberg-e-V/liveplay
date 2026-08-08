@@ -150,7 +150,7 @@ watch(consoleIp, () => restore(), { immediate: true });
     font-size: 15px;
   }
   .x18-faders__list {
-    gap: var(--spacing-sm);
+    gap: 6px;
     padding: var(--spacing-sm);
   }
   .x18-faders__note { font-size: 12px; }

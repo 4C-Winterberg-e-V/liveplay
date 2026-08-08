@@ -767,8 +767,8 @@ function commitEdit() {
 /* ---- Phone: everything grows to the touch scale ------------------------- */
 @media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
   .x18-strip {
-    gap: 6px;
-    padding: 10px 12px 12px;
+    gap: 4px;
+    padding: 8px 12px 10px;
   }
   .x18-strip__tag { font-size: 17px; }
   .x18-strip__name--tagged .x18-strip__tag { font-size: 12px; }

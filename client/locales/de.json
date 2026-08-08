@@ -260,7 +260,7 @@
     "faderFine": "fein",
     "faderSetLevel": "Genauen Pegel für {name} in dB eingeben",
     "faderSendFailed": "Der letzte Befehl hat das Pult nicht erreicht.",
-    "faderStateNote": "Das X18 meldet nichts zurück — angezeigt wird, was LivePlay zuletzt gesendet hat, nicht der Stand am Pult. Noch nicht bewegte Kanäle stehen ausgegraut auf 0 dB.",
+    "faderStateNote": "Zuletzt von LivePlay gesendet — das Pult meldet nichts zurück.",
     "faderRename": "Tippen zum Benennen",
     "faderSpokenDb": "{db} dB",
     "faderSpokenOff": "Fader zu",
