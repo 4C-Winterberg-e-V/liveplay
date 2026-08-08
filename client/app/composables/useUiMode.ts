@@ -17,9 +17,24 @@
 // which is a different thing and is wanted.
 // =====================================================================
 
+import { LP_COMPACT } from '~/composables/useCompactLayout';
+
 export type UiMode = 'edit' | 'playback';
 
 const STORAGE_KEY = 'liveplay-ui-mode';
+
+// A phone is an operating surface, not an editing one — it gets picked up to
+// run a show, not to build one. So on a compact device the app always OPENS in
+// Show Mode, whatever this device last had. Leaving it is still one tap (the ⋯
+// menu in the header) and works for the rest of the session; the choice just
+// does not survive a reload there, which is the point.
+//
+// matchMedia rather than useCompactLayout's ref: this runs once during
+// hydration, before any component has had a chance to populate that state.
+const opensInShowMode = (): boolean => {
+  try { return window.matchMedia(LP_COMPACT).matches; }
+  catch { return false; }   // no matchMedia — treat it as a desktop
+};
 
 // Guards the one-time localStorage read so multiple components calling
 // useUiMode() don't repeatedly touch storage or clobber each other.
@@ -36,6 +51,8 @@ export const useUiMode = () => {
     } catch {
       // localStorage unavailable (e.g. private browsing) — fall back to 'edit'.
     }
+    // Overrides the stored preference on purpose; see opensInShowMode.
+    if (opensInShowMode()) uiMode.value = 'playback';
 
     // Keep separate windows (e.g. the detached cart player) in sync. Each
     // window is its own renderer with its own useState, so a mode change in
