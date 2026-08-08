@@ -1,17 +1,22 @@
 <template>
   <!--
-    Add or change one fader. A bottom sheet rather than a centred dialog: this
-    is configured on the phone, one-handed, and the controls belong under the
-    thumb rather than in the middle of the screen.
+    Add or change one fader. On a phone this is the app's shared bottom sheet
+    (.lp-sheet + friends, declared in main.scss inside the compact query), not a
+    hand-rolled one: that convention is what makes every dialog stop ABOVE the
+    bottom bar instead of hiding its own action row behind it — the bar sits at
+    z-index 1600 precisely so STOP ALL CUES stays reachable through any dialog.
+
+    Not inside <Teleport> for the same reason the other modals are not: Vue's
+    scoped styles do not reach teleported nodes.
   -->
-  <div class="x18-ed__backdrop" @click.self="emit('close')">
-    <div class="x18-ed" role="dialog" aria-modal="true" :aria-label="t('x18.faderEditEntry')">
-      <header class="x18-ed__head">
+  <div class="x18-ed__backdrop lp-sheet-backdrop" @click.self="emit('close')">
+    <div class="x18-ed lp-sheet" role="dialog" aria-modal="true" :aria-label="t('x18.faderEditEntry')">
+      <header class="x18-ed__head lp-sheet__bar lp-sheet__bar--top">
         <h3>{{ existing ? t('x18.faderEditEntry') : t('x18.faderAdd') }}</h3>
-        <button type="button" class="x18-ed__close" :aria-label="t('common.cancel')" @click="emit('close')">✕</button>
+        <button type="button" class="x18-ed__close lp-close" :aria-label="t('common.cancel')" @click="emit('close')">✕</button>
       </header>
 
-      <div class="x18-ed__body">
+      <div class="x18-ed__body lp-sheet__scroll">
         <!-- What the fader controls. Plain words, not console jargon: "the bus
              itself" vs "one channel on that bus" is the distinction that
              matters, and it is the one people ask about. -->
@@ -87,7 +92,7 @@
         <p v-if="duplicate" class="x18-ed__warn">{{ t('x18.faderDuplicate') }}</p>
       </div>
 
-      <footer class="x18-ed__foot">
+      <footer class="x18-ed__foot lp-sheet__bar lp-sheet__bar--bottom">
         <button v-if="existing" type="button" class="x18-ed__btn x18-ed__btn--danger" @click="onDelete">
           <span class="material-symbols-rounded" aria-hidden="true">delete</span>
           {{ t('common.delete') }}
@@ -330,16 +335,39 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown, true));
   .x18-ed__btn:hover:not(:disabled) { background: var(--color-surface-hover); }
 }
 
-/* Phone: a bottom sheet, because that is where the thumb is. */
+/* Phone: a bottom sheet, because that is where the thumb is.
+   The geometry is spelled out here rather than left to .lp-sheet because a
+   scoped rule (.x18-ed[data-v-…]) out-specifies the global one — the base
+   `max-height: 90vh` and `width: min(460px, 96vw)` above would otherwise win on
+   a phone and push the action row down behind the bottom bar, which is exactly
+   the bug this replaced. Values match main.scss's .lp-sheet. */
 @media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
-  .x18-ed__backdrop { align-items: flex-end; }
+  .x18-ed__backdrop { align-items: flex-end; padding: 0; padding-top: env(safe-area-inset-top); }
   .x18-ed {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: auto;
+    /* Stops above the bottom bar, so Cancel/Save land in front of it and
+       STOP ALL CUES stays reachable behind. */
+    bottom: var(--lp-bottom-h);
     width: 100%;
-    max-height: calc(100dvh - var(--lp-sheet-top));
+    max-width: none;
+    max-height: calc(100dvh - var(--lp-sheet-top) - var(--lp-bottom-h) - env(safe-area-inset-top));
     border-radius: 14px 14px 0 0;
     border-bottom: none;
-    padding-bottom: env(safe-area-inset-bottom);
+    overflow: hidden;
   }
+  /* The one part that scrolls. Without min-height:0 a flex child refuses to
+     shrink below its content and the sheet grows instead of scrolling. */
+  .x18-ed__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .x18-ed__foot { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
   .x18-ed__close { min-width: var(--lp-tap); min-height: var(--lp-tap); }
   .x18-ed__pill { min-height: var(--lp-tap); font-size: 15px; }
   .x18-ed__choice { min-height: var(--lp-tap-lg); }
