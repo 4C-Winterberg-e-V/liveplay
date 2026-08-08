@@ -146,17 +146,33 @@ export interface X18BoardButton {
 }
 
 // What a board button does on press.
-//   'fader-toggle' → alternate target's fader between levelA% and levelB%
-//   'mute-toggle'  → toggle/set mute on a channel/bus/master
-//   'mute-group'   → toggle/set a mute group (1-4)
+//   'fader-toggle'   → alternate target's fader between levelA% and levelB%
+//   'fader-relative' → move the target's fader BY deltaDb from wherever it is
+//   'mute-toggle'    → toggle/set mute on a channel/bus/master
+//   'mute-group'     → toggle/set a mute group (1-4)
 export interface X18BoardAction {
-  type: 'fader-toggle' | 'mute-toggle' | 'mute-group';
-  target?: X18FaderTarget;     // fader-toggle & mute-toggle (default 'master')
+  type: 'fader-toggle' | 'fader-relative' | 'mute-toggle' | 'mute-group';
+  target?: X18FaderTarget;     // fader/mute actions (default 'master')
   channel?: number;            // channel 1-16, or bus 1-6
   levelA?: number;             // fader-toggle: first level 0-100 (default 0)
   levelB?: number;             // fader-toggle: second level 0-100 (default 100)
+  deltaDb?: number;            // fader-relative: how far to move, in dB
   group?: number;              // mute-group: 1-4
-  mode?: 'toggle' | 'mute' | 'unmute'; // mute-toggle & mute-group (default 'toggle')
+  // mute-toggle & mute-group: 'toggle' | 'mute' | 'unmute' (default 'toggle')
+  // fader-relative:           'toggle' (move, then back) | 'step' (cumulative)
+  mode?: 'toggle' | 'mute' | 'unmute' | 'step';
+}
+
+// One fader in the X18 tab's level list. `kind: 'mix'` is a mix's own output
+// level (main LR, or a bus master); `kind: 'send'` is one channel's level
+// inside that mix — its fader in the main mix, its send level into a bus.
+// `bus` is 'lr' or 1-6. Persisted in project settings as `x18Faders`.
+export interface X18FaderEntry {
+  id: string;
+  label?: string;
+  kind: 'mix' | 'send';
+  bus: 'lr' | number;
+  channel?: number;   // 1-16, only for kind 'send'
 }
 
 // Ducking behavior
@@ -198,6 +214,19 @@ export interface ProjectSettings {
   defaultOutputDevice?: string | null;
   previewDevice?: string | null;
   ltcDevice?: string | null;
+  /** Behringer X18 console IP. Empty/absent = no console configured. */
+  x18Ip?: string;
+  /**
+   * The operator's X18 fader list — see X18FaderEntry. Each entry is one level
+   * they want on screen: a mix's own output, or one channel inside one mix.
+   *
+   * Lives in `settings` deliberately: the C++ server whitelists which project
+   * keys it hands back to clients, and `settings` is the one object it passes
+   * through verbatim. So this syncs to every connected device, and a server
+   * that predates the console-sync feature merely cannot read levels rather
+   * than silently dropping the operator's list.
+   */
+  x18Faders?: X18FaderEntry[];
   outputTarget?: string;
   outputTargetLevels?: Record<string, unknown>;
   meterMode?: string;

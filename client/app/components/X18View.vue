@@ -1,6 +1,10 @@
 <template>
   <div class="x18-view">
-    <div class="x18-header">
+    <!-- On a phone this row is 60px spent repeating the name of the deck tab
+         you just pressed — which is right there at the bottom, in accent, with
+         a count. It earns its space only when it carries something else: the
+         "no console IP" warning, or the desktop board editor. -->
+    <div class="x18-header" :class="{ 'x18-header--redundant': headerIsRedundant }">
       <div class="x18-title">
         <span class="material-symbols-rounded">equalizer</span>
         <h2>{{ t('x18.title') }}</h2>
@@ -8,9 +12,8 @@
       <!-- The warning is a direct child of the header, so hiding the (Electron
            only) editor actions can never hide "no X18 IP configured" with them. -->
       <span v-if="!x18Configured" class="x18-warn">{{ t('x18.boardRequiresIp') }}</span>
-      <div v-if="hasElectron" class="x18-header-actions">
+      <div v-if="hasElectron && section === 'board'" class="x18-header-actions">
         <button
-          v-if="hasElectron"
           type="button"
           class="x18-btn"
           :class="{ 'x18-btn--active': editMode }"
@@ -26,8 +29,44 @@
       </div>
     </div>
 
-    <div v-if="buttons.length === 0" class="x18-empty">
-      <span class="material-symbols-rounded">add_circle</span>
+    <!-- Board vs. levels. Two different jobs on the same desk — buttons are
+         pre-programmed show moves, the faders are the thing you reach for when
+         one channel is simply too loud right now. Full-width segments so the
+         switch is a thumb target, not a 24px tab.
+
+         Toggle buttons rather than role="tab": the ARIA tabs pattern owes the
+         user roving tabindex and arrow-key navigation, and a half-implemented
+         one promises behaviour that is not there. Every other switcher in this
+         app (MainWorkspace's deck tabs, ControlConfigModal) is plain buttons
+         too. -->
+    <div class="x18-sections" role="group" :aria-label="t('x18.title')">
+      <button
+        type="button"
+        class="x18-section"
+        :class="{ 'x18-section--active': section === 'board' }"
+        :aria-pressed="section === 'board' ? 'true' : 'false'"
+        @click="selectSection('board')"
+      >
+        <span class="material-symbols-rounded" aria-hidden="true">apps</span>
+        {{ t('x18.sectionBoard') }}
+        <span class="x18-section__count">{{ buttons.length }}</span>
+      </button>
+      <button
+        type="button"
+        class="x18-section"
+        :class="{ 'x18-section--active': section === 'faders' }"
+        :aria-pressed="section === 'faders' ? 'true' : 'false'"
+        @click="selectSection('faders')"
+      >
+        <span class="material-symbols-rounded" aria-hidden="true">tune</span>
+        {{ t('x18.sectionFaders') }}
+      </button>
+    </div>
+
+    <X18FaderPanel v-if="section === 'faders'" />
+
+    <div v-else-if="buttons.length === 0" class="x18-empty">
+      <span class="material-symbols-rounded" aria-hidden="true">add_circle</span>
       <p>{{ hasElectron ? t('x18.emptyDesktop') : t('x18.emptyViewer') }}</p>
     </div>
 
@@ -81,12 +120,13 @@
             <span>{{ t('x18.actionType') }}</span>
             <select :value="selectedButton.action.type" @change="onActionTypeChange">
               <option value="fader-toggle">{{ t('x18.actionFaderToggle') }}</option>
+              <option value="fader-relative">{{ t('x18.actionFaderRelative') }}</option>
               <option value="mute-toggle">{{ t('x18.actionMuteToggle') }}</option>
               <option value="mute-group">{{ t('x18.actionMuteGroup') }}</option>
             </select>
           </label>
 
-          <!-- Target (fader-toggle & mute-toggle) -->
+          <!-- Target (every fader/mute action) -->
           <template v-if="selectedButton.action.type !== 'mute-group'">
             <label class="x18-field">
               <span>{{ t('x18.target') }}</span>
@@ -121,6 +161,34 @@
             </label>
           </template>
 
+          <!-- Relative move: how far, and whether it comes back -->
+          <template v-if="selectedButton.action.type === 'fader-relative'">
+            <label class="x18-field">
+              <span>{{ t('x18.relativeDelta') }}</span>
+              <input
+                type="number"
+                min="-90"
+                max="90"
+                step="0.5"
+                v-model.number="selectedButton.action.deltaDb"
+                @change="onDeltaChange"
+              /> dB
+            </label>
+            <div class="x18-field">
+              <span>{{ t('x18.mode') }}</span>
+              <select :value="selectedButton.action.mode === 'step' ? 'step' : 'toggle'"
+                      @change="onRelativeModeChange">
+                <option value="toggle">{{ t('x18.relativeModeToggle') }}</option>
+                <option value="step">{{ t('x18.relativeModeStep') }}</option>
+              </select>
+              <p class="x18-hint">
+                {{ selectedButton.action.mode === 'step'
+                    ? t('x18.relativeModeStepHint')
+                    : t('x18.relativeModeToggleHint') }}
+              </p>
+            </div>
+          </template>
+
           <!-- Mute group number -->
           <label v-if="selectedButton.action.type === 'mute-group'" class="x18-field">
             <span>{{ t('x18.muteGroup') }}</span>
@@ -128,7 +196,10 @@
           </label>
 
           <!-- Mode (mute-toggle & mute-group) -->
-          <label v-if="selectedButton.action.type !== 'fader-toggle'" class="x18-field">
+          <label
+            v-if="selectedButton.action.type === 'mute-toggle' || selectedButton.action.type === 'mute-group'"
+            class="x18-field"
+          >
             <span>{{ t('x18.mode') }}</span>
             <select v-model="selectedButton.action.mode" @change="persist">
               <option value="toggle">{{ t('x18.modeToggle') }}</option>
@@ -168,12 +239,47 @@
 import type { X18BoardButton, CartSlotKeyBinding } from '~/types/project';
 import { PRESET_COLORS } from '~/types/project';
 import { eventToBinding, isReservedCombo, formatKeyLabel } from '~/composables/useCartHotkeys';
+import X18FaderPanel from './X18FaderPanel.vue';
+
+// Module scope: one hydration per page load, however often the view mounts.
+let sectionHydrated = false;
 
 const { t } = useLocalization();
 const { currentProject, saveProject } = useProject();
 const { buttons, isActive, triggerButton, editMode } = useX18Board();
 
 const hasElectron = import.meta.client && !!(window as any).electronAPI;
+
+// Which half of the X18 view is showing. Remembered across reloads on purpose:
+// a phone browser evicts a backgrounded tab freely, and an operator who has
+// been riding channel levels all evening should not land back on the button
+// grid every time they switch apps.
+const SECTION_KEY = 'liveplay.x18.section';
+const section = useState<'board' | 'faders'>('x18.section', () => 'board');
+
+onMounted(() => {
+  // Read once per page, the way useUiMode hydrates its own per-device
+  // preference: X18View remounts on every switch away from the tab, and
+  // re-reading storage there would clobber a choice made since.
+  if (sectionHydrated) return;
+  sectionHydrated = true;
+  try {
+    const saved = localStorage.getItem(SECTION_KEY);
+    if (saved === 'board' || saved === 'faders') section.value = saved;
+  } catch { /* private mode — the default is fine */ }
+});
+
+// Nothing in the header but the title: the bottom deck tab already says so.
+const headerIsRedundant = computed(() =>
+  x18Configured.value && !(hasElectron && section.value === 'board'));
+
+const selectSection = (next: 'board' | 'faders') => {
+  section.value = next;
+  // Edit mode suppresses live key triggering for the whole board, so leaving
+  // the board with it still on would silently kill every board hotkey.
+  if (next !== 'board' && editMode.value) { editMode.value = false; closeEditor(); }
+  try { localStorage.setItem(SECTION_KEY, next); } catch { /* not worth an error */ }
+};
 
 const x18Configured = computed(() => {
   const ip = (currentProject.value as any)?.settings?.x18Ip;
@@ -246,6 +352,10 @@ const onActionTypeChange = (e: Event) => {
   const type = (e.target as HTMLSelectElement).value as X18BoardButton['action']['type'];
   if (type === 'fader-toggle') {
     b.action = { type, target: b.action.target ?? 'master', channel: b.action.channel, levelA: 0, levelB: 100 };
+  } else if (type === 'fader-relative') {
+    // -6 dB is the move people reach for: audibly quieter, still clearly there.
+    b.action = { type, target: b.action.target ?? 'master', channel: b.action.channel,
+                 deltaDb: -6, mode: 'toggle' };
   } else if (type === 'mute-toggle') {
     b.action = { type, target: b.action.target ?? 'master', channel: b.action.channel, mode: 'toggle' };
   } else {
@@ -283,6 +393,23 @@ const onLevelChange = (field: 'levelA' | 'levelB') => {
   persist();
 };
 
+const onDeltaChange = () => {
+  const a = selectedButton.value?.action;
+  if (!a) return;
+  let v = Number(a.deltaDb);
+  if (!Number.isFinite(v)) v = -6;
+  // Half a dB is the finest step the readouts show, and ±90 spans the taper.
+  a.deltaDb = Math.min(90, Math.max(-90, Math.round(v * 2) / 2));
+  persist();
+};
+
+const onRelativeModeChange = (e: Event) => {
+  const a = selectedButton.value?.action;
+  if (!a) return;
+  a.mode = (e.target as HTMLSelectElement).value === 'step' ? 'step' : 'toggle';
+  persist();
+};
+
 const onGroupChange = () => {
   const a = selectedButton.value?.action;
   if (!a) return;
@@ -303,6 +430,13 @@ const actionSummary = (b: X18BoardButton): string => {
   const a = b.action;
   if (!a) return '';
   if (a.type === 'fader-toggle') return `${targetLabel(a)} · ${a.levelA ?? 0}% ↔ ${a.levelB ?? 100}%`;
+  if (a.type === 'fader-relative') {
+    const d = a.deltaDb ?? -6;
+    const signed = `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d)} dB`;
+    // "↩" for the one that comes back, "per press" for the one that does not —
+    // that difference matters more at a glance than the word "relative" does.
+    return `${targetLabel(a)} · ${signed} ${a.mode === 'step' ? t('x18.relativeSummaryStep') : '↩'}`;
+  }
   if (a.type === 'mute-toggle') return `${targetLabel(a)} · ${modeLabel(a.mode)}`;
   return `${t('x18.muteGroup')} ${a.group ?? 1} · ${modeLabel(a.mode)}`;
 };
@@ -414,6 +548,49 @@ onUnmounted(() => {
 .x18-btn--small { padding: 6px 10px; }
 .x18-btn--danger { color: #e53e3e; border-color: #e53e3e; }
 .x18-btn .material-symbols-rounded { font-size: 18px; }
+
+/* ---- Board / faders switch ---- */
+.x18-sections {
+  display: flex;
+  gap: 8px;
+  padding: var(--spacing-sm) var(--spacing-md) 0;
+  flex: none;
+}
+.x18-section {
+  flex: 1;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.x18-section--active {
+  color: var(--color-text-primary);
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface));
+}
+.x18-section .material-symbols-rounded { font-size: 20px; }
+.x18-section__count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.22);
+}
+@media (any-hover: hover) and (any-pointer: fine) {
+  .x18-section:hover { background: var(--color-surface-hover); }
+  .x18-section--active:hover { background: color-mix(in srgb, var(--color-accent) 24%, var(--color-surface)); }
+}
 
 .x18-empty {
   flex: 1;
@@ -536,6 +713,7 @@ onUnmounted(() => {
 }
 .x18-key-capture.capturing { border-color: var(--color-accent); color: var(--color-accent); }
 .x18-error { color: #e53e3e; font-size: 12px; margin: 0; }
+.x18-hint { color: var(--color-text-secondary); font-size: 11px; line-height: 1.4; margin: 2px 0 0; }
 
 /* ---- Phone: less chrome, readable tiles -------------------------------- */
 @media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {
@@ -554,6 +732,16 @@ onUnmounted(() => {
     flex: 1 0 100%;
     order: 2;
   }
+  .x18-header--redundant { display: none; }
+  .x18-sections {
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-sm) 0;
+  }
+  .x18-section {
+    min-height: var(--lp-tap);
+    font-size: 15px;
+  }
+  .x18-section .material-symbols-rounded { font-size: var(--lp-tap-icon); }
   .x18-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: var(--spacing-sm);
@@ -578,6 +766,17 @@ onUnmounted(() => {
   }
   .x18-btn {
     min-height: var(--lp-tap);
+  }
+}
+
+/* Landscape: the two nav rows above the faders cost a third of the screen at
+   the portrait sizes. Shrink the outer one; X18FaderPanel shrinks its own. */
+@media (max-height: 559px) and (any-pointer: coarse) and (min-width: 600px) {
+  .x18-sections {
+    padding: 6px var(--spacing-sm) 0;
+  }
+  .x18-section {
+    min-height: var(--lp-tap-sm);
   }
 }
 </style>

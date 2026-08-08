@@ -16,6 +16,7 @@
 #endif
 
 #include "liveplay/net/control_server.hpp"
+#include "liveplay/net/x18_link.hpp"
 #include "liveplay/logger.hpp"
 #include "liveplay/meta/metadata.hpp"
 #include "liveplay/meta/waveform.hpp"
@@ -382,6 +383,19 @@ bool ControlServer::start() {
         broadcast_doc_patch(patch);
     });
 
+    // The desk talks back. Someone pushing a physical fader on the console, or
+    // another client moving one in the app, both arrive here as changed OSC
+    // values — fan them out so every phone in the building shows the same
+    // levels as the mixer itself.
+    net::X18Link::instance().set_change_handler([this](const json& values) {
+        broadcast_doc_patch(json{
+            {"type",   "doc_patch"},
+            {"op",     "x18_state"},
+            {"values", values},
+        });
+    });
+    net::X18Link::instance().configure(state_.x18_console_ip());
+
     // Crow's SimpleApp::run() blocks; we shove it on a worker thread.
     impl_->app_thread = std::thread([this] {
         try {
@@ -399,6 +413,10 @@ bool ControlServer::start() {
 
 void ControlServer::stop() {
     if (!running_.exchange(false)) return;
+    // The X18 link outlives this server (it is a process singleton) and calls
+    // its change handler from its own thread. Detach before we tear anything
+    // down, or that thread ends up broadcasting through a dead `this`.
+    net::X18Link::instance().set_change_handler(nullptr);
     impl_->app.stop();
     {
         std::lock_guard lock{impl_->waveform_q_mutex};
@@ -430,8 +448,19 @@ void ControlServer::broadcast_loop() {
     // rounds every sleep up); sleep_until against an advancing deadline
     // self-corrects, so the average rate converges on meter_broadcast_hz.
     auto next_tick = clock::now() + period;
+    // The console IP lives in project settings and can change at any time (or
+    // arrive with a freshly opened project). Re-pointing the link is a no-op
+    // when nothing changed, so a slow poll here saves every settings write path
+    // from having to know about the console.
+    auto next_x18_sync = clock::now();
 
     while (running_.load(std::memory_order_acquire)) {
+        if (clock::now() >= next_x18_sync) {
+            next_x18_sync = clock::now() + std::chrono::seconds{1};
+            try { net::X18Link::instance().configure(state_.x18_console_ip()); }
+            catch (const std::exception& e) { Logger::warn("X18: re-target failed: {}", e.what()); }
+        }
+
         // Guard the entire tick: an exception escaping this thread would call
         // std::terminate() and take the whole audio process down mid-show.
         // Log-and-continue instead so a transient fault (e.g. a flaky media
@@ -2909,6 +2938,24 @@ void ControlServer::install_routes() {
             } catch (const std::exception& e) {
                 Logger::error("POST /api/x18/action threw: {}", e.what());
                 return json_err(400, e.what());
+            }
+        });
+
+    // What the console actually says. The X18 never volunteers anything, so
+    // net::X18Link asks it (and subscribes to its changes) and caches the
+    // answers; this hands a joining client the whole picture in one request,
+    // after which the x18_state doc_patch keeps it current.
+    CROW_ROUTE(app, "/api/x18/state").methods(crow::HTTPMethod::Get)
+        ([this] {
+            try {
+                // Keep the link aimed at whatever the project says right now, so
+                // a client that just set the IP does not have to wait for the
+                // broadcast tick to get a useful answer.
+                net::X18Link::instance().configure(state_.x18_console_ip());
+                return json_ok(net::X18Link::instance().snapshot());
+            } catch (const std::exception& e) {
+                Logger::error("GET /api/x18/state threw: {}", e.what());
+                return json_err(500, e.what());
             }
         });
 

@@ -833,6 +833,14 @@ function createClient() {
       body: JSON.stringify(action),
     });
   }
+  // Everything the server has heard back from the console:
+  //   { ip, connected, values: { "<osc address>": <0..1 float> } }
+  // The X18 answers queries and pushes changes to the SERVER (it has the
+  // socket), so this is how a joining client gets the whole picture; after
+  // that the x18_state doc_patch keeps it current.
+  async function x18State() {
+    return rest<any>('/api/x18/state');
+  }
   async function addCueFromPath(filePath: string, displayName?: string) {
     const cue = await rest<ServerCue>('/api/cues', {
       method: 'POST',
@@ -1217,6 +1225,7 @@ function createClient() {
 
     // x18 console
     x18Action,
+    x18State,
 
     // preview
     startPreview,

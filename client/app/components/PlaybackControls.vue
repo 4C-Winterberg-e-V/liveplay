@@ -674,23 +674,14 @@ const handlePlayNext = () => {
     white-space: nowrap;
   }
 
-  /* The master trim survives and becomes usable; its StereoMeter does not.
-     Per-cue level now comes from each card's own bar and master level from the
-     header mini-meter, so the 102px this column used to reserve goes back to
-     the cue name — but "too loud" must still have an answer other than PANIC. */
+  /* The whole output column goes on a phone — meters and master trim alike.
+     The meters were already hidden here (per-cue level comes from each card's
+     own bar, master level from the header mini-meter). The trim used to stay
+     on the argument that "too loud" needs an answer other than PANIC; the X18
+     level page is that answer now, and a live output trim sitting a thumb-slip
+     from the transport is a worse trade than the width it costs. Every pixel
+     it used to hold goes back to the cue name. */
   .output-meters {
-    flex: 0 0 auto;
-    align-self: stretch;
-    height: auto;
-    min-width: 0;
-    overflow: visible;
-    padding-left: var(--spacing-sm);
-    gap: var(--spacing-xs);
-  }
-  .output-pair {
-    gap: 0;
-  }
-  .output-pair > :first-child {
     display: none;
   }
 

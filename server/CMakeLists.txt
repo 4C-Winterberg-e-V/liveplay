@@ -140,6 +140,7 @@ add_executable(liveplay-server
     src/net/control_server.cpp
     src/net/discovery.cpp
     src/net/osc_client.cpp
+    src/net/x18_link.cpp
 
     # Shared utilities
     src/util/fs_sandbox.cpp
