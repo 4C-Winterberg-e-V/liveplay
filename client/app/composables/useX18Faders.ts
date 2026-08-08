@@ -155,7 +155,15 @@ export const useX18Faders = () => {
     }
     try {
       const state = await server.x18State();
-      values.value = {};                     // a fresh read replaces, never merges
+      // A fresh read replaces rather than merges — except for whatever a finger
+      // is on right now. A reconnect landing mid-drag must not blank the fader
+      // under the thumb.
+      const keep: Record<string, number> = {};
+      for (const address of held) {
+        const v = values.value[address];
+        if (v !== undefined) keep[address] = v;
+      }
+      values.value = keep;
       applyValues(state?.values);
       linkUp.value = Object.keys(state?.values ?? {}).length > 0;
     } catch (e) {

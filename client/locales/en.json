@@ -363,7 +363,7 @@
     "faderDuplicate": "Another fader already controls this. Both will follow each other.",
     "faderMoveUp": "Move {name} up",
     "faderMoveDown": "Move {name} down",
-    "faderLinkUp": "Live from the console",
+    "faderLinkUp": "Levels read from the console",
     "faderLinkWaiting": "Waiting for the console…",
     "faderLinkNone": "No console IP set",
     "faderSpokenUnknown": "level unknown"

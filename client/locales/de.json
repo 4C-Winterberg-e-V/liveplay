@@ -275,7 +275,7 @@
     "faderDuplicate": "Ein anderer Regler steuert das schon. Beide folgen einander.",
     "faderMoveUp": "{name} nach oben",
     "faderMoveDown": "{name} nach unten",
-    "faderLinkUp": "Live vom Pult",
+    "faderLinkUp": "Pegel vom Pult gelesen",
     "faderLinkWaiting": "Warte auf das Pult…",
     "faderLinkNone": "Keine Pult-IP eingetragen",
     "faderSpokenUnknown": "Pegel unbekannt"
