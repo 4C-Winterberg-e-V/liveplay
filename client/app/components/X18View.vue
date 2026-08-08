@@ -8,9 +8,8 @@
       <!-- The warning is a direct child of the header, so hiding the (Electron
            only) editor actions can never hide "no X18 IP configured" with them. -->
       <span v-if="!x18Configured" class="x18-warn">{{ t('x18.boardRequiresIp') }}</span>
-      <div v-if="hasElectron" class="x18-header-actions">
+      <div v-if="hasElectron && section === 'board'" class="x18-header-actions">
         <button
-          v-if="hasElectron"
           type="button"
           class="x18-btn"
           :class="{ 'x18-btn--active': editMode }"
@@ -26,12 +25,48 @@
       </div>
     </div>
 
-    <div v-if="buttons.length === 0" class="x18-empty">
-      <span class="material-symbols-rounded">add_circle</span>
+    <!-- Board vs. levels. Two different jobs on the same desk — buttons are
+         pre-programmed show moves, the faders are the thing you reach for when
+         one channel is simply too loud right now. Full-width segments so the
+         switch is a thumb target, not a 24px tab. -->
+    <div class="x18-sections" role="tablist" :aria-label="t('x18.title')">
+      <button
+        type="button"
+        role="tab"
+        class="x18-section"
+        :class="{ 'x18-section--active': section === 'board' }"
+        :aria-selected="section === 'board' ? 'true' : 'false'"
+        aria-controls="x18-section-panel"
+        @click="selectSection('board')"
+      >
+        <span class="material-symbols-rounded" aria-hidden="true">apps</span>
+        {{ t('x18.sectionBoard') }}
+        <span class="x18-section__count">{{ buttons.length }}</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="x18-section"
+        :class="{ 'x18-section--active': section === 'faders' }"
+        :aria-selected="section === 'faders' ? 'true' : 'false'"
+        aria-controls="x18-section-panel"
+        @click="selectSection('faders')"
+      >
+        <span class="material-symbols-rounded" aria-hidden="true">tune</span>
+        {{ t('x18.sectionFaders') }}
+      </button>
+    </div>
+
+    <!-- The three branches are mutually exclusive, so they can share the id the
+         tabs point at. -->
+    <X18FaderPanel v-if="section === 'faders'" id="x18-section-panel" role="tabpanel" />
+
+    <div v-else-if="buttons.length === 0" id="x18-section-panel" role="tabpanel" class="x18-empty">
+      <span class="material-symbols-rounded" aria-hidden="true">add_circle</span>
       <p>{{ hasElectron ? t('x18.emptyDesktop') : t('x18.emptyViewer') }}</p>
     </div>
 
-    <div v-else class="x18-grid lp-scroll-fade">
+    <div v-else id="x18-section-panel" role="tabpanel" class="x18-grid lp-scroll-fade">
       <button
         v-for="b in buttons"
         :key="b.id"
@@ -168,12 +203,35 @@
 import type { X18BoardButton, CartSlotKeyBinding } from '~/types/project';
 import { PRESET_COLORS } from '~/types/project';
 import { eventToBinding, isReservedCombo, formatKeyLabel } from '~/composables/useCartHotkeys';
+import X18FaderPanel from './X18FaderPanel.vue';
 
 const { t } = useLocalization();
 const { currentProject, saveProject } = useProject();
 const { buttons, isActive, triggerButton, editMode } = useX18Board();
 
 const hasElectron = import.meta.client && !!(window as any).electronAPI;
+
+// Which half of the X18 view is showing. Remembered across reloads on purpose:
+// a phone browser evicts a backgrounded tab freely, and an operator who has
+// been riding channel levels all evening should not land back on the button
+// grid every time they switch apps.
+const SECTION_KEY = 'liveplay.x18.section';
+const section = useState<'board' | 'faders'>('x18.section', () => 'board');
+
+onMounted(() => {
+  try {
+    const saved = localStorage.getItem(SECTION_KEY);
+    if (saved === 'board' || saved === 'faders') section.value = saved;
+  } catch { /* private mode — the default is fine */ }
+});
+
+const selectSection = (next: 'board' | 'faders') => {
+  section.value = next;
+  // Edit mode suppresses live key triggering for the whole board, so leaving
+  // the board with it still on would silently kill every board hotkey.
+  if (next !== 'board' && editMode.value) { editMode.value = false; closeEditor(); }
+  try { localStorage.setItem(SECTION_KEY, next); } catch { /* not worth an error */ }
+};
 
 const x18Configured = computed(() => {
   const ip = (currentProject.value as any)?.settings?.x18Ip;
@@ -415,6 +473,49 @@ onUnmounted(() => {
 .x18-btn--danger { color: #e53e3e; border-color: #e53e3e; }
 .x18-btn .material-symbols-rounded { font-size: 18px; }
 
+/* ---- Board / faders switch ---- */
+.x18-sections {
+  display: flex;
+  gap: 8px;
+  padding: var(--spacing-sm) var(--spacing-md) 0;
+  flex: none;
+}
+.x18-section {
+  flex: 1;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.x18-section--active {
+  color: var(--color-text-primary);
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface));
+}
+.x18-section .material-symbols-rounded { font-size: 20px; }
+.x18-section__count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.22);
+}
+@media (any-hover: hover) and (any-pointer: fine) {
+  .x18-section:hover { background: var(--color-surface-hover); }
+  .x18-section--active:hover { background: color-mix(in srgb, var(--color-accent) 24%, var(--color-surface)); }
+}
+
 .x18-empty {
   flex: 1;
   display: flex;
@@ -554,6 +655,15 @@ onUnmounted(() => {
     flex: 1 0 100%;
     order: 2;
   }
+  .x18-sections {
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-sm) 0;
+  }
+  .x18-section {
+    min-height: var(--lp-tap);
+    font-size: 15px;
+  }
+  .x18-section .material-symbols-rounded { font-size: var(--lp-tap-icon); }
   .x18-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: var(--spacing-sm);
@@ -578,6 +688,17 @@ onUnmounted(() => {
   }
   .x18-btn {
     min-height: var(--lp-tap);
+  }
+}
+
+/* Landscape: the two nav rows above the faders cost a third of the screen at
+   the portrait sizes. Shrink the outer one; X18FaderPanel shrinks its own. */
+@media (max-height: 559px) and (any-pointer: coarse) and (min-width: 600px) {
+  .x18-sections {
+    padding: 6px var(--spacing-sm) 0;
+  }
+  .x18-section {
+    min-height: var(--lp-tap-sm);
   }
 }
 </style>

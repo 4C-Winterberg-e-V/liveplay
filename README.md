@@ -61,6 +61,7 @@ a venue, safely.
 | **Web client** | UI only runs inside Electron | UI also builds and runs as a plain **browser app** (`BUILD_TARGET=web`), with smart server-address detection, CORS-safe requests, and graceful degradation when no Electron APIs exist |
 | **Sharing to mobile** | — | One-click **Share** in the app header: serve the UI on the **LAN** or via a bundled **Cloudflare quick-tunnel**, with QR code |
 | **Mobile UX** | Desktop layout only | **Touch-first pass**: bottom deck tabs with live counts, a permanent PLAY-NEXT / STOP-ALL bar, one-line cue rows, Pointer-Event faders & trimming, bottom-sheet dialogs, iOS safe-area / PWA support |
+| **Behringer X18 control** | — | **X18 Mixer** tab: programmable fader/mute/mute-group buttons with key bindings, plus touch-first **channel, bus and master level faders** with per-strip names, driven over OSC by the C++ server |
 | **Authentication** | None on the API | Per-session **PIN / BasicAuth gate**, stable session cookie so the WebSocket survives login, **toggleable** auth, **manually settable PIN**, and an **optional fixed tunnel URL** (Named Tunnel) per machine |
 | **Remote hosting** | — | Web client also builds as a **standalone SPA** that you can serve behind your own same-origin reverse proxy (Caddy / nginx / Traefik) with a BasicAuth gate |
 | **Server security** | API can read/write arbitrary paths | Server filesystem access is **confined to a sandbox**; file dialogs no longer open at `/` |
@@ -189,6 +190,15 @@ The mobile UI is a touch-first operating surface, not a shrunk desktop view:
 - **Touch actually works.** Faders, in/out trimming, seek scrubbing and cue
   reordering are driven by Pointer Events; seek only commits on release, so a
   stray tap cannot jump a live cue.
+- **The console is on the phone too.** The **X18 Mixer** tab has a second
+  section, **Levels**: a touch-first fader per channel (1–16), bus (1–6) and the
+  master LR. Dragging is *relative*, so tapping a fader never jumps a live
+  channel; a vertical swipe still scrolls the list; straying off the track
+  mid-drag makes the fader finer; and ± buttons step 0.5 dB and accelerate when
+  held. Levels read in dB on the console's own fader law, and tapping a channel
+  name renames it — "Funke Pfarrer" beats "CH 3" when you are looking for the
+  thing that is too loud. Names are part of the project, so they follow you to
+  every device.
 - **Dialogs are bottom sheets**, and iOS safe-area / PWA handling and the
   dead-air countdown are respected throughout.
 

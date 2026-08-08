@@ -335,7 +335,21 @@
     "conflictBoard": "Already used by button \"{label}\".",
     "boardRequiresIp": "Set the Behringer X18 IP in Project Settings.",
     "emptyDesktop": "No buttons yet. Click \"Edit\" then \"Add button\" to create one.",
-    "emptyViewer": "No X18 buttons configured. Edit them in the desktop app."
+    "emptyViewer": "No X18 buttons configured. Edit them in the desktop app.",
+    "sectionBoard": "Buttons",
+    "sectionFaders": "Levels",
+    "faderSection": "Console section",
+    "scopeChannels": "Channels",
+    "scopeBuses": "Buses",
+    "scopeMaster": "Master",
+    "faderLevel": "{name} level",
+    "faderUp": "Louder",
+    "faderDown": "Quieter",
+    "faderFine": "fine",
+    "faderSetLevel": "Type an exact level in dB",
+    "faderSendFailed": "The last command did not reach the console.",
+    "faderStateNote": "The X18 never reports back, so these are the levels LivePlay last sent — not a reading from the desk. Untouched channels are shown greyed out at 0 dB.",
+    "faderRename": "Tap to name this channel"
   },
   "duckingBehavior": {
     "stopAll": "Stop All Other Cues",

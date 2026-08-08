@@ -198,6 +198,19 @@ export interface ProjectSettings {
   defaultOutputDevice?: string | null;
   previewDevice?: string | null;
   ltcDevice?: string | null;
+  /** Behringer X18 console IP. Empty/absent = no console configured. */
+  x18Ip?: string;
+  /**
+   * Operator-facing names for the X18 strips, keyed by strip id
+   * (`channel:3`, `bus:2`, `master`). "CH 3" is what the desk prints; "Funke
+   * Pfarrer" is what the person holding the phone actually needs to read.
+   *
+   * Lives in `settings` deliberately: the C++ server whitelists which project
+   * keys it hands back to clients, and `settings` is the one object it passes
+   * through verbatim — so this syncs to every connected device and survives a
+   * save without touching the server.
+   */
+  x18StripNames?: Record<string, string>;
   outputTarget?: string;
   outputTargetLevels?: Record<string, unknown>;
   meterMode?: string;

@@ -247,7 +247,21 @@
     "conflictBoard": "Bereits von Button \"{label}\" belegt.",
     "boardRequiresIp": "Trage die Behringer-X18-IP in den Projekt-Einstellungen ein.",
     "emptyDesktop": "Noch keine Buttons. Klicke auf 'Bearbeiten' und dann 'Button hinzufügen'.",
-    "emptyViewer": "Keine X18-Buttons konfiguriert. Bearbeiten nur in der Desktop-App."
+    "emptyViewer": "Keine X18-Buttons konfiguriert. Bearbeiten nur in der Desktop-App.",
+    "sectionBoard": "Buttons",
+    "sectionFaders": "Pegel",
+    "faderSection": "Pult-Bereich",
+    "scopeChannels": "Kanäle",
+    "scopeBuses": "Busse",
+    "scopeMaster": "Master",
+    "faderLevel": "Pegel {name}",
+    "faderUp": "Lauter",
+    "faderDown": "Leiser",
+    "faderFine": "fein",
+    "faderSetLevel": "Genauen Pegel in dB eingeben",
+    "faderSendFailed": "Der letzte Befehl hat das Pult nicht erreicht.",
+    "faderStateNote": "Das X18 meldet nichts zurück — angezeigt wird, was LivePlay zuletzt gesendet hat, nicht der Stand am Pult. Noch nicht bewegte Kanäle stehen ausgegraut auf 0 dB.",
+    "faderRename": "Tippen, um den Kanal zu benennen"
   },
   "duckingBehavior": {
     "stopAll": "Alle anderen Signale stoppen",
