@@ -343,13 +343,16 @@
     "scopeBuses": "Buses",
     "scopeMaster": "Master",
     "faderLevel": "{name} level",
-    "faderUp": "Louder",
-    "faderDown": "Quieter",
+    "faderUp": "{name} louder",
+    "faderDown": "{name} quieter",
     "faderFine": "fine",
-    "faderSetLevel": "Type an exact level in dB",
+    "faderSetLevel": "Type an exact level for {name}, in dB",
     "faderSendFailed": "The last command did not reach the console.",
     "faderStateNote": "The X18 never reports back, so these are the levels LivePlay last sent — not a reading from the desk. Untouched channels are shown greyed out at 0 dB.",
-    "faderRename": "Tap to name this channel"
+    "faderRename": "Tap to name this strip",
+    "faderSpokenDb": "{db} dB",
+    "faderSpokenOff": "fader closed",
+    "faderNotSent": "not sent"
   },
   "duckingBehavior": {
     "stopAll": "Stop All Other Cues",

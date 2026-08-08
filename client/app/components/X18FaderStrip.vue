@@ -51,20 +51,20 @@
         @keyup.escape="namingEdit = false"
       />
 
-      <span
-        v-if="failedFlag"
-        class="x18-strip__warn material-symbols-rounded"
-        role="img"
-        :title="t('x18.faderSendFailed')"
-        :aria-label="t('x18.faderSendFailed')"
-      >sync_problem</span>
+      <!-- A title attribute needs a mouse to read, which is exactly the device
+           this feature is not built for. When a command does not land, say so in
+           words on the strip. -->
+      <span v-if="failedFlag" class="x18-strip__warn" role="status">
+        <span class="material-symbols-rounded" aria-hidden="true">sync_problem</span>
+        {{ t('x18.faderNotSent') }}
+      </span>
 
       <button
         v-if="!editing"
         type="button"
         class="x18-strip__value"
         :disabled="disabled"
-        :title="t('x18.faderSetLevel')"
+        :title="t('x18.faderSetLevel', { name: spokenName })"
         @click="startEdit"
       >
         {{ formatX18Db(db) }}<small>dB</small>
@@ -75,7 +75,7 @@
         class="x18-strip__value-input"
         type="text"
         inputmode="decimal"
-        :aria-label="t('x18.faderSetLevel')"
+        :aria-label="t('x18.faderSetLevel', { name: spokenName })"
         v-model="editValue"
         @blur="commitEdit"
         @keyup.enter="commitEdit"
@@ -88,7 +88,7 @@
         type="button"
         class="x18-strip__step"
         :disabled="disabled"
-        :aria-label="t('x18.faderDown')"
+        :aria-label="t('x18.faderDown', { name: spokenName })"
         @pointerdown="startRepeat($event, -STEP_DB)"
         @keydown="onStepKeydown($event, -STEP_DB)"
       >
@@ -100,11 +100,11 @@
         class="x18-strip__track"
         role="slider"
         :tabindex="disabled ? -1 : 0"
-        :aria-label="t('x18.faderLevel', { name: strip.short })"
+        :aria-label="t('x18.faderLevel', { name: spokenName })"
         aria-valuemin="0"
         aria-valuemax="100"
         :aria-valuenow="Math.round(pos * 100)"
-        :aria-valuetext="spokenX18Db(db)"
+        :aria-valuetext="spokenLevel"
         :aria-disabled="disabled ? 'true' : 'false'"
         @pointerdown="onPointerDown"
         @keydown="onKeydown"
@@ -134,7 +134,7 @@
         type="button"
         class="x18-strip__step"
         :disabled="disabled"
-        :aria-label="t('x18.faderUp')"
+        :aria-label="t('x18.faderUp', { name: spokenName })"
         @pointerdown="startRepeat($event, STEP_DB)"
         @keydown="onStepKeydown($event, STEP_DB)"
       >
@@ -150,7 +150,6 @@ import {
   clampPos,
   dragSensitivity,
   formatX18Db,
-  spokenX18Db,
   stepPosByDb,
   x18DbToPos,
   x18PosToDb,
@@ -175,6 +174,19 @@ const TICKS = [-40, -20, -10, 0, 10].map(db => ({ db, pos: x18DbToPos(db) }));
 const pos = computed(() => positionOf(props.strip));
 const db = computed(() => x18PosToDb(pos.value));
 const customName = computed(() => nameOf(props.strip));
+
+// Every accessible name on this strip carries whatever the operator called it.
+// The rename feature exists because "CH 3" does not say which microphone is too
+// loud — a screen reader announcing "CH 3 level" and nothing else would hand
+// back exactly the problem the naming was added to solve.
+const spokenName = computed(() =>
+  customName.value ? `${props.strip.short} ${customName.value}` : props.strip.short);
+
+// aria-valuetext must be a translated sentence, not a hardcoded English one —
+// it is the ONLY thing a screen reader reads out for this slider.
+const spokenLevel = computed(() => Number.isFinite(db.value)
+  ? t('x18.faderSpokenDb', { db: Math.round(db.value * 10) / 10 })
+  : t('x18.faderSpokenOff'));
 const sentFlag = computed(() => isSent(props.strip));
 const failedFlag = computed(() => hasFailed(props.strip));
 
@@ -269,7 +281,10 @@ function onPointerMove(e: PointerEvent) {
     return;
   }
 
-  sensitivity.value = dragSensitivity(e.clientY - startY);
+  // Shift is CanvasFader's fine-adjust gesture and therefore the one every
+  // existing user of this app already knows; it composes with the off-axis
+  // ramp rather than fighting it.
+  sensitivity.value = Math.min(dragSensitivity(e.clientY - startY), e.shiftKey ? 0.25 : 1);
   const dx = e.clientX - lastX;
   lastX = e.clientX;
   // Clamped as it accumulates, so dragging past an end and coming back moves
@@ -530,10 +545,17 @@ function commitEdit() {
   outline: none;
 }
 .x18-strip__warn {
-  font-size: 18px;
-  color: #e0a000;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  /* Danger, not caution: --color-warning is what the over-unity fill uses, and
+     "you are boosting" and "the desk never heard you" must not look alike. */
+  color: #e53e3e;   /* the danger red X18View's own delete/error text uses */
 }
+.x18-strip__warn .material-symbols-rounded { font-size: 16px; }
 
 .x18-strip__value,
 .x18-strip__value-input {
@@ -555,12 +577,23 @@ function commitEdit() {
   touch-action: manipulation;
   -webkit-touch-callout: none;
   user-select: none;
+  /* A signed number inside an RTL paragraph renders its sign on the wrong side
+     ("12.5−", "∞−") because U+2212 is a bidi ES character. */
+  direction: ltr;
+  unicode-bidi: isolate;
 }
-.x18-strip__value small { font-size: 10px; opacity: 0.65; margin-left: 3px; }
+.x18-strip__value small { font-size: 10px; color: var(--color-text-secondary); margin-left: 3px; }
 .x18-strip__value:disabled { cursor: default; opacity: 0.5; }
 /* An untouched strip is a guess, not a reading — say so visually rather than
    letting the number pass for the desk's actual level. */
-.x18-strip--unsent .x18-strip__value { opacity: 0.55; font-style: italic; }
+.x18-strip--unsent .x18-strip__value { color: var(--color-text-secondary); font-style: italic; }
+/* The number is the quiet part of "we do not know this level" — the thumb is
+   the loud one. Hollow it out so an untouched strip cannot be misread as a
+   reading off the desk at a glance. */
+.x18-strip--unsent .x18-strip__thumb {
+  background: var(--color-surface);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4), inset 0 0 0 3px var(--color-accent);
+}
 
 .x18-strip__value-input {
   cursor: text;
@@ -578,12 +611,18 @@ function commitEdit() {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* The app flips to dir="rtl" for ar/fa/ur. The rail is positioned with
+     physical `left` and the drag adds a physical dx, so the fader's geometry is
+     LTR by construction — and the ± buttons have to stay on the same sides as
+     the ends they move towards, or "quieter" ends up at the loud end. A level
+     fader is left-quiet/right-loud in every locale. */
+  direction: ltr;
 }
 
 .x18-strip__step {
   flex: none;
-  width: 44px;
-  height: 44px;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -603,7 +642,7 @@ function commitEdit() {
   position: relative;
   flex: 1;
   min-width: 0;
-  height: 44px;
+  height: 40px;
   display: flex;
   align-items: center;
   padding: 0 14px;              /* room for the thumb to overhang the rail */
@@ -612,11 +651,6 @@ function commitEdit() {
   /* The one line that makes the list scrollable AND the fader draggable: the
      browser keeps vertical panning, we get everything horizontal. */
   touch-action: pan-y;
-  /* The app flips to dir="rtl" for ar/fa/ur. The rail is positioned with
-     physical `left` and the drag adds a physical dx, so letting the track
-     inherit RTL would mirror the fill while the finger still moved the level
-     the other way. A level fader is left-quiet/right-loud in every locale. */
-  direction: ltr;
 }
 /* Focus is not decoration here: a focused fader is the one the arrow keys and
    the mouse wheel act on, and the wheel gate (onWheel) reads exactly this
@@ -635,7 +669,11 @@ function commitEdit() {
   width: 100%;
   height: 10px;
   border-radius: 5px;
-  background: var(--color-border);
+  /* The unfilled groove is the page background, not --color-border: the accent
+     fill against border is 1.56:1 in the dark theme, and the fill/rail boundary
+     is what tells the operator where the fader is. */
+  background: var(--color-background);
+  box-shadow: inset 0 0 0 1px var(--color-border);
   overflow: visible;
 }
 .x18-strip__fill,
@@ -651,7 +689,7 @@ function commitEdit() {
   transition: width 0.08s linear;
 }
 .x18-strip__over {
-  background: #e0a000;
+  background: var(--color-warning);
   transition: width 0.08s linear, left 0.08s linear;
 }
 .x18-strip--dragging .x18-strip__fill,
@@ -683,9 +721,9 @@ function commitEdit() {
 .x18-strip__thumb {
   position: absolute;
   top: 50%;
-  width: 26px;
-  height: 26px;
-  margin: -13px 0 0 -13px;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
   border-radius: 50%;
   background: var(--color-accent);
   border: 2px solid var(--color-surface);
@@ -705,6 +743,19 @@ function commitEdit() {
   pointer-events: none;
 }
 
+/* Sizes follow the INPUT DEVICE, not the window: a 1366px iPad in landscape
+   matches no arm of the compact query but is still a finger. */
+@media (any-pointer: coarse) {
+  .x18-strip__step { width: 44px; height: 44px; }
+  .x18-strip__step .material-symbols-rounded { font-size: 24px; }
+  .x18-strip__track { height: 56px; padding: 0 16px; }
+  .x18-strip__rail { height: 12px; border-radius: 6px; }
+  .x18-strip__thumb { width: 30px; height: 30px; margin: -15px 0 0 -15px; }
+  .x18-strip__name { min-height: 40px; align-items: center; }
+  .x18-strip__value,
+  .x18-strip__value-input { min-height: 40px; }
+}
+
 @media (any-hover: hover) and (any-pointer: fine) {
   .x18-strip__step:hover:not(:disabled) { background: var(--color-surface-hover); }
   .x18-strip__value:hover:not(:disabled) { background: rgba(128, 128, 128, 0.28); }
@@ -716,17 +767,10 @@ function commitEdit() {
     gap: 6px;
     padding: 10px 12px 12px;
   }
-  .x18-strip__name {
-    min-height: var(--lp-tap-sm);
-    align-items: center;
-  }
   .x18-strip__tag { font-size: 17px; }
   .x18-strip__name--tagged .x18-strip__tag { font-size: 12px; }
   .x18-strip__label { font-size: 17px; }
-  .x18-strip__name-input {
-    min-height: var(--lp-tap-sm);
-    font-size: max(16px, var(--lp-input-fs-min));
-  }
+  .x18-strip__name-input { font-size: max(16px, var(--lp-input-fs-min)); }
   .x18-strip__value,
   .x18-strip__value-input {
     font-size: max(16px, var(--lp-input-fs-min));
@@ -734,18 +778,7 @@ function commitEdit() {
     min-width: 92px;
     padding: 6px 10px;
   }
-  .x18-strip__step {
-    width: var(--lp-tap);
-    height: var(--lp-tap);
-  }
-  .x18-strip__step .material-symbols-rounded { font-size: var(--lp-tap-icon); }
-  .x18-strip__track { height: var(--lp-tap-lg); padding: 0 16px; }
-  .x18-strip__rail { height: 12px; border-radius: 6px; }
-  .x18-strip__thumb {
-    width: 30px;
-    height: 30px;
-    margin: -15px 0 0 -15px;
-  }
+  .x18-strip__name-input { min-height: var(--lp-tap-sm); }
   .x18-strip__fine { font-size: 12px; top: 0; }
 }
 
@@ -764,18 +797,15 @@ function commitEdit() {
   .x18-strip__head,
   .x18-strip__row { display: contents; }
   .x18-strip__name,
-  .x18-strip__name-input { order: 1; flex: 0 0 118px; min-height: 0; }
+  .x18-strip__name-input { flex: 0 0 118px; min-height: 0; }
   .x18-strip__name { flex-direction: column; align-items: flex-start; gap: 0; padding: 0; }
   .x18-strip__tag { font-size: 15px; }
   .x18-strip__name--tagged .x18-strip__tag { font-size: 10px; line-height: 1.1; }
   .x18-strip__label { font-size: 14px; line-height: 1.2; }
-  .x18-strip__row > .x18-strip__step:first-child { order: 2; }
-  .x18-strip__track { order: 3; flex: 1; height: var(--lp-tap); }
-  .x18-strip__row > .x18-strip__step:last-child { order: 4; }
-  .x18-strip__warn { order: 5; }
   .x18-strip__value,
-  .x18-strip__value-input { order: 6; flex: 0 0 auto; min-width: 84px; }
-  .x18-strip__step { width: var(--lp-tap-sm); height: var(--lp-tap-sm); }
+  .x18-strip__value-input { flex: 0 0 auto; min-width: 84px; }
+  .x18-strip__track { flex: 1; height: 44px; }
+  .x18-strip__step { width: 40px; height: 40px; }
   .x18-strip__fine { top: auto; bottom: -1px; right: 2px; }
 }
 

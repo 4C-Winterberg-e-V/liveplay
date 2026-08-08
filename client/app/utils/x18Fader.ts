@@ -9,12 +9,12 @@
 /** Fader position of unity gain (0 dB) on an X-Air desk. */
 export const X18_UNITY_POS = 0.75;
 /** Position range the console accepts. 0 is "fader all the way down" (−∞). */
-export const X18_MIN_POS = 0;
-export const X18_MAX_POS = 1;
+const X18_MIN_POS = 0;
+const X18_MAX_POS = 1;
 /** Top of the X-Air fader law. */
-export const X18_MAX_DB = 10;
+const X18_MAX_DB = 10;
 /** Lowest dB the law resolves. Below this the console is off (−∞). */
-export const X18_MIN_DB = -90;
+const X18_MIN_DB = -90;
 
 export const X18_CHANNEL_COUNT = 16;
 export const X18_BUS_COUNT = 6;
@@ -63,13 +63,6 @@ export const formatX18Db = (db: number): string => {
   if (Object.is(rounded, -0) || rounded === 0) return '0.0';
   const body = Math.abs(rounded).toFixed(1);
   return (rounded > 0 ? '+' : '−') + body;
-};
-
-/** Same value, but ASCII — for aria-valuetext, where a screen reader wins. */
-export const spokenX18Db = (db: number): string => {
-  if (!Number.isFinite(db)) return db > 0 ? 'infinity dB' : 'minus infinity dB';
-  const rounded = Math.round(db * 10) / 10;
-  return `${Object.is(rounded, -0) ? 0 : rounded} dB`;
 };
 
 /**

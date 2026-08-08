@@ -7,7 +7,6 @@ import {
   clampPos,
   dragSensitivity,
   formatX18Db,
-  spokenX18Db,
   stepPosByDb,
   x18DbToPos,
   x18PosToDb,
@@ -105,14 +104,6 @@ describe('formatX18Db', () => {
 
   it('never prints "-0.0"', () => {
     expect(formatX18Db(-0.04)).toBe('0.0');
-  });
-});
-
-describe('spokenX18Db', () => {
-  it('stays ASCII so a screen reader says something sensible', () => {
-    expect(spokenX18Db(-12.5)).toBe('-12.5 dB');
-    expect(spokenX18Db(0)).toBe('0 dB');
-    expect(spokenX18Db(-Infinity)).toBe('minus infinity dB');
   });
 });
 

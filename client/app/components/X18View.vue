@@ -28,15 +28,19 @@
     <!-- Board vs. levels. Two different jobs on the same desk — buttons are
          pre-programmed show moves, the faders are the thing you reach for when
          one channel is simply too loud right now. Full-width segments so the
-         switch is a thumb target, not a 24px tab. -->
-    <div class="x18-sections" role="tablist" :aria-label="t('x18.title')">
+         switch is a thumb target, not a 24px tab.
+
+         Toggle buttons rather than role="tab": the ARIA tabs pattern owes the
+         user roving tabindex and arrow-key navigation, and a half-implemented
+         one promises behaviour that is not there. Every other switcher in this
+         app (MainWorkspace's deck tabs, ControlConfigModal) is plain buttons
+         too. -->
+    <div class="x18-sections" role="group" :aria-label="t('x18.title')">
       <button
         type="button"
-        role="tab"
         class="x18-section"
         :class="{ 'x18-section--active': section === 'board' }"
-        :aria-selected="section === 'board' ? 'true' : 'false'"
-        aria-controls="x18-section-panel"
+        :aria-pressed="section === 'board' ? 'true' : 'false'"
         @click="selectSection('board')"
       >
         <span class="material-symbols-rounded" aria-hidden="true">apps</span>
@@ -45,11 +49,9 @@
       </button>
       <button
         type="button"
-        role="tab"
         class="x18-section"
         :class="{ 'x18-section--active': section === 'faders' }"
-        :aria-selected="section === 'faders' ? 'true' : 'false'"
-        aria-controls="x18-section-panel"
+        :aria-pressed="section === 'faders' ? 'true' : 'false'"
         @click="selectSection('faders')"
       >
         <span class="material-symbols-rounded" aria-hidden="true">tune</span>
@@ -57,16 +59,14 @@
       </button>
     </div>
 
-    <!-- The three branches are mutually exclusive, so they can share the id the
-         tabs point at. -->
-    <X18FaderPanel v-if="section === 'faders'" id="x18-section-panel" role="tabpanel" />
+    <X18FaderPanel v-if="section === 'faders'" />
 
-    <div v-else-if="buttons.length === 0" id="x18-section-panel" role="tabpanel" class="x18-empty">
+    <div v-else-if="buttons.length === 0" class="x18-empty">
       <span class="material-symbols-rounded" aria-hidden="true">add_circle</span>
       <p>{{ hasElectron ? t('x18.emptyDesktop') : t('x18.emptyViewer') }}</p>
     </div>
 
-    <div v-else id="x18-section-panel" role="tabpanel" class="x18-grid lp-scroll-fade">
+    <div v-else class="x18-grid lp-scroll-fade">
       <button
         v-for="b in buttons"
         :key="b.id"
@@ -205,6 +205,9 @@ import { PRESET_COLORS } from '~/types/project';
 import { eventToBinding, isReservedCombo, formatKeyLabel } from '~/composables/useCartHotkeys';
 import X18FaderPanel from './X18FaderPanel.vue';
 
+// Module scope: one hydration per page load, however often the view mounts.
+let sectionHydrated = false;
+
 const { t } = useLocalization();
 const { currentProject, saveProject } = useProject();
 const { buttons, isActive, triggerButton, editMode } = useX18Board();
@@ -219,6 +222,11 @@ const SECTION_KEY = 'liveplay.x18.section';
 const section = useState<'board' | 'faders'>('x18.section', () => 'board');
 
 onMounted(() => {
+  // Read once per page, the way useUiMode hydrates its own per-device
+  // preference: X18View remounts on every switch away from the tab, and
+  // re-reading storage there would clobber a choice made since.
+  if (sectionHydrated) return;
+  sectionHydrated = true;
   try {
     const saved = localStorage.getItem(SECTION_KEY);
     if (saved === 'board' || saved === 'faders') section.value = saved;

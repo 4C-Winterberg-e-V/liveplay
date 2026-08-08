@@ -255,13 +255,16 @@
     "scopeBuses": "Busse",
     "scopeMaster": "Master",
     "faderLevel": "Pegel {name}",
-    "faderUp": "Lauter",
-    "faderDown": "Leiser",
+    "faderUp": "{name} lauter",
+    "faderDown": "{name} leiser",
     "faderFine": "fein",
-    "faderSetLevel": "Genauen Pegel in dB eingeben",
+    "faderSetLevel": "Genauen Pegel für {name} in dB eingeben",
     "faderSendFailed": "Der letzte Befehl hat das Pult nicht erreicht.",
     "faderStateNote": "Das X18 meldet nichts zurück — angezeigt wird, was LivePlay zuletzt gesendet hat, nicht der Stand am Pult. Noch nicht bewegte Kanäle stehen ausgegraut auf 0 dB.",
-    "faderRename": "Tippen, um den Kanal zu benennen"
+    "faderRename": "Tippen zum Benennen",
+    "faderSpokenDb": "{db} dB",
+    "faderSpokenOff": "Fader zu",
+    "faderNotSent": "nicht gesendet"
   },
   "duckingBehavior": {
     "stopAll": "Alle anderen Signale stoppen",

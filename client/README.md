@@ -59,12 +59,14 @@ client/
 │   ├── useCartItems.ts           cart-grid state
 │   ├── useCartHotkeys.ts         keyboard hotkey bindings → cart triggers
 │   ├── useMidiController.ts      Web MIDI → cart triggers
+│   ├── useX18Board.ts            X18 button board — key/click triggers → OSC
+│   ├── useX18Faders.ts           X18 channel levels — rate-limited sends, strip names
 │   ├── useStateViewer.ts         feeds the diagnostics popup window
 │   └── useLocalization.ts        20-language i18n + RTL handling
 ├── plugins/                      Nuxt plugins (client.ts: auto-connect on boot)
 ├── locales/                      JSON locale files (21 files — en + 20 translations)
 ├── types/                        TypeScript DTOs (server.ts, project.ts, global.d.ts)
-├── utils/                        Pure helpers (audio.ts: dB/RMS math, indexDisplay.ts: playlist index formatting)
+├── utils/                        Pure helpers (audio.ts: dB/RMS math, indexDisplay.ts: playlist index formatting, x18Fader.ts: X-Air fader law)
 ├── public/                       Static assets — screenshots, fonts, icons
 ├── assets/                       Bundled styles (main.scss, variables.scss)
 ├── scripts/                      Workspace-local utilities (locale sync, etc.)
@@ -176,6 +178,8 @@ The component tree is intentionally flat — every SFC lives directly in [`compo
 - `WaveformCanvas.vue` — canvas-rendered waveform fetched from `GET /api/waveform/<cueId>`.
 - `WaveformTrimmer.vue` — interactive in/out trimming + normalise.
 - `RoutingMatrixPanel.vue` — the 3-tier routing matrix UI.
+- `X18View.vue` — the Behringer X18 tab, switching between the programmable button board and the level faders.
+- `X18FaderPanel.vue`, `X18FaderStrip.vue` — touch-first channel / bus / master levels. The fader law and the strip list are pure helpers in [`utils/x18Fader.ts`](utils/x18Fader.ts); state, rate limiting and strip names live in `useX18Faders`.
 - `LiveMeterBar.vue`, `StereoMeter.vue`, `VUMeter.vue` — meter widgets driven by `useLiveMeters`.
 - `ServerSettingsModal.vue`, `LocalServerStatus.vue`, `ConnectionLostModal.vue` — server connection management.
 - `ServerFileBrowser.vue`, `ServerFilePickerModal.vue` — `GET /api/fs/list` browser, used when the client and server live on different machines.

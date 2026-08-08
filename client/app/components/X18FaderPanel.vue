@@ -3,16 +3,14 @@
     <!-- Scope, not a filter: 16 channels + 6 buses + master is 23 rows, and a
          phone that has to scroll past two thirds of the desk to reach BUS 3 is
          the exact failure this avoids. One tap per section, thumb-sized. -->
-    <div class="x18-faders__scopes" role="tablist" :aria-label="t('x18.faderSection')">
+    <div class="x18-faders__scopes" role="group" :aria-label="t('x18.faderSection')">
       <button
         v-for="s in SCOPES"
         :key="s.id"
         type="button"
-        role="tab"
         class="x18-faders__scope"
         :class="{ 'x18-faders__scope--active': scope === s.id }"
-        :aria-selected="scope === s.id ? 'true' : 'false'"
-        aria-controls="x18-fader-list"
+        :aria-pressed="scope === s.id ? 'true' : 'false'"
         @click="scope = s.id"
       >
         {{ t(s.label) }}
@@ -20,14 +18,18 @@
       </button>
     </div>
 
-    <div id="x18-fader-list" role="tabpanel" class="x18-faders__list lp-scroll-fade">
+    <div class="x18-faders__list lp-scroll-fade">
+      <!-- Above the faders, not below sixteen of them: this is the one piece of
+           UI that says the numbers are what LivePlay last sent rather than the
+           desk's actual state, and at the bottom of the scroller nobody reads it
+           before acting on a level. -->
+      <p class="x18-faders__note">{{ t('x18.faderStateNote') }}</p>
       <X18FaderStrip
         v-for="strip in strips"
         :key="strip.id"
         :strip="strip"
         :disabled="!isConfigured"
       />
-      <p class="x18-faders__note">{{ t('x18.faderStateNote') }}</p>
     </div>
   </div>
 </template>
@@ -127,7 +129,7 @@ watch(consoleIp, () => restore(), { immediate: true });
 
 .x18-faders__note {
   grid-column: 1 / -1;
-  margin: 4px 0 0;
+  margin: 0 0 2px;
   font-size: 11px;
   line-height: 1.4;
   color: var(--color-text-secondary);
