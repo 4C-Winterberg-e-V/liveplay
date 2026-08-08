@@ -325,9 +325,12 @@ function startRepeat(e: PointerEvent, deltaDb: number) {
   if (props.disabled) return;
   if (e.pointerType === 'mouse' && e.button !== 0) return;
   e.preventDefault();               // no synthetic click, no focus ring flash
+  // Tear down any previous press BEFORE claiming this one: stopRepeat() clears
+  // repeatBtn, so assigning it first left repeatDrift looking at null and the
+  // slide-off check silently dead.
+  stopRepeat();
   repeatBtn = e.currentTarget as HTMLElement | null;
   try { repeatBtn?.setPointerCapture(e.pointerId); } catch { /* best-effort */ }
-  stopRepeat();
   repeatCount = 0;
   posBeforeRepeat = pos.value;
   step(deltaDb);
