@@ -146,17 +146,21 @@ export interface X18BoardButton {
 }
 
 // What a board button does on press.
-//   'fader-toggle' → alternate target's fader between levelA% and levelB%
-//   'mute-toggle'  → toggle/set mute on a channel/bus/master
-//   'mute-group'   → toggle/set a mute group (1-4)
+//   'fader-toggle'   → alternate target's fader between levelA% and levelB%
+//   'fader-relative' → move the target's fader BY deltaDb from wherever it is
+//   'mute-toggle'    → toggle/set mute on a channel/bus/master
+//   'mute-group'     → toggle/set a mute group (1-4)
 export interface X18BoardAction {
-  type: 'fader-toggle' | 'mute-toggle' | 'mute-group';
-  target?: X18FaderTarget;     // fader-toggle & mute-toggle (default 'master')
+  type: 'fader-toggle' | 'fader-relative' | 'mute-toggle' | 'mute-group';
+  target?: X18FaderTarget;     // fader/mute actions (default 'master')
   channel?: number;            // channel 1-16, or bus 1-6
   levelA?: number;             // fader-toggle: first level 0-100 (default 0)
   levelB?: number;             // fader-toggle: second level 0-100 (default 100)
+  deltaDb?: number;            // fader-relative: how far to move, in dB
   group?: number;              // mute-group: 1-4
-  mode?: 'toggle' | 'mute' | 'unmute'; // mute-toggle & mute-group (default 'toggle')
+  // mute-toggle & mute-group: 'toggle' | 'mute' | 'unmute' (default 'toggle')
+  // fader-relative:           'toggle' (move, then back) | 'step' (cumulative)
+  mode?: 'toggle' | 'mute' | 'unmute' | 'step';
 }
 
 // One fader in the X18 tab's level list. `kind: 'mix'` is a mix's own output

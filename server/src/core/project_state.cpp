@@ -5,6 +5,7 @@
 #include "liveplay/logger.hpp"
 #include "liveplay/meta/metadata.hpp"
 #include "liveplay/net/osc_client.hpp"
+#include "liveplay/net/x18_fader_law.hpp"
 #include "liveplay/net/x18_link.hpp"
 #include "liveplay/util/unicode_path.hpp"
 
@@ -4823,6 +4824,38 @@ void x18_dispatch_command(const std::string& ip, const json& cmd) {
         if (addr.empty()) return;
         const float pct = std::clamp(cmd.value("level", 0.0f), 0.0f, 100.0f);
         link.send_float(addr, pct / 100.0f);
+        return;
+    }
+    // Move a fader BY an amount rather than TO a value. Only possible at all
+    // because the link reads the desk: "six down" needs to know where six down
+    // is from. Computed here, not in a client, for two reasons — the server has
+    // the freshest value, and the restore point below has to be shared, since
+    // the two presses of a toggle can come from different phones and must
+    // survive one of them reloading.
+    //
+    //   mode "step"   : every press shifts by deltaDb, cumulatively.
+    //   mode "toggle" : first press shifts by deltaDb and remembers where it
+    //                   was; the next press puts it back exactly there.
+    if (kind == "fader-relative") {
+        const std::string addr = x18_strip_address(cmd, "/mix/fader");
+        if (addr.empty()) return;
+        const float delta = cmd.value("deltaDb", 0.0f);
+        const std::string mode = cmd.value("mode", std::string{"toggle"});
+
+        if (mode == "toggle") {
+            const float back = link.take_restore_point(addr);
+            if (std::isfinite(back)) { link.send_float(addr, back); return; }
+        }
+        const float current = link.value_of(addr);
+        if (!std::isfinite(current)) {
+            // The desk has not answered for this parameter yet. Guessing a
+            // starting point would move a live fader by an unknown amount, so
+            // do nothing and let the caller report it.
+            Logger::warn("X18: no level known for {} yet — relative move skipped", addr);
+            return;
+        }
+        if (mode == "toggle") link.set_restore_point(addr, current);
+        link.send_float(addr, net::x18_shift_pos_by_db(current, delta));
         return;
     }
     // Default: fader. Kept for the per-cue x18Actions and the board buttons,

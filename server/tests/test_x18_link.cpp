@@ -11,9 +11,12 @@
 
 #include "liveplay/net/osc_client.hpp"
 #include "liveplay/net/x18_addresses.hpp"
+#include "liveplay/net/x18_fader_law.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -206,4 +209,71 @@ TEST_CASE("osc_for_each_message passes a plain message straight through") {
         CHECK(m.f == doctest::Approx(1.0f));
     });
     CHECK(calls == 1);
+}
+
+// ---------------------------------------------------------------------------
+// The fader taper. A relative move is stated in dB and sent as a position, so
+// this curve is what decides how far "six down" actually travels — and it is
+// nowhere near linear. Mirrors client/app/utils/x18Fader.ts; both sides assert
+// these same anchors.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("x18 fader taper hits the published anchor points") {
+    CHECK(x18_pos_to_db(1.0f)          == doctest::Approx(10.0f));
+    CHECK(x18_pos_to_db(kX18UnityPos)  == doctest::Approx(0.0f));
+    CHECK(x18_pos_to_db(0.5f)          == doctest::Approx(-10.0f));
+    CHECK(x18_pos_to_db(0.25f)         == doctest::Approx(-30.0f));
+    CHECK(x18_pos_to_db(0.0625f)       == doctest::Approx(-60.0f));
+    CHECK(x18_pos_to_db(0.0f)          == -std::numeric_limits<float>::infinity());
+}
+
+TEST_CASE("x18 fader taper is continuous and invertible") {
+    for (float edge : {0.5f, 0.25f, 0.0625f}) {
+        CHECK(std::fabs(x18_pos_to_db(edge - 1e-6f) - x18_pos_to_db(edge + 1e-6f)) < 1e-3f);
+    }
+    for (int i = 1; i <= 200; ++i) {
+        const float pos = static_cast<float>(i) / 200.0f;
+        CHECK(x18_db_to_pos(x18_pos_to_db(pos)) == doctest::Approx(pos).epsilon(1e-4));
+    }
+}
+
+TEST_CASE("x18_shift_pos_by_db moves by dB, not by fader travel") {
+    // Six down from unity is 0 -> -6 dB, wherever that lands on the taper.
+    const float six_down = x18_shift_pos_by_db(kX18UnityPos, -6.0f);
+    CHECK(x18_pos_to_db(six_down) == doctest::Approx(-6.0f));
+
+    // The same six dB from a much lower start is a different distance along
+    // the fader — which is the entire reason this is not simple subtraction.
+    const float from_low = x18_db_to_pos(-40.0f);
+    CHECK(x18_pos_to_db(x18_shift_pos_by_db(from_low, -6.0f)) == doctest::Approx(-46.0f));
+    CHECK(std::fabs(kX18UnityPos - six_down) != doctest::Approx(std::fabs(from_low - x18_shift_pos_by_db(from_low, -6.0f))));
+}
+
+TEST_CASE("x18_shift_pos_by_db saturates at both ends instead of wrapping") {
+    CHECK(x18_shift_pos_by_db(1.0f, 20.0f) == doctest::Approx(1.0f));
+    // Far enough down closes the fader outright, as the desk does.
+    CHECK(x18_shift_pos_by_db(0.5f, -200.0f) == doctest::Approx(0.0f));
+    CHECK(x18_shift_pos_by_db(0.0f, -6.0f) == doctest::Approx(0.0f));
+    // ...but a closed fader can still be opened: it starts from the bottom of
+    // the taper rather than from -infinity, which would be a permanent no-op.
+    CHECK(x18_shift_pos_by_db(0.0f, 6.0f) > 0.0f);
+    CHECK(x18_pos_to_db(x18_shift_pos_by_db(0.0f, 6.0f)) == doctest::Approx(-84.0f));
+}
+
+TEST_CASE("x18_shift_pos_by_db round-trips: down then up returns to the start") {
+    // This is what makes a relative STEP button usable in both directions, and
+    // why a toggle's restore point is about exactness rather than possibility.
+    for (float start : {0.9f, kX18UnityPos, 0.5f, 0.3f, 0.1f}) {
+        const float down = x18_shift_pos_by_db(start, -6.0f);
+        CHECK(x18_shift_pos_by_db(down, 6.0f) == doctest::Approx(start).epsilon(1e-4));
+    }
+}
+
+TEST_CASE("x18 fader taper survives nonsense input") {
+    CHECK(x18_clamp_pos(std::numeric_limits<float>::quiet_NaN()) == doctest::Approx(0.0f));
+    CHECK(x18_pos_to_db(2.0f) == doctest::Approx(10.0f));
+    CHECK(x18_db_to_pos(std::numeric_limits<float>::quiet_NaN()) == doctest::Approx(0.0f));
+    CHECK(x18_db_to_pos(-std::numeric_limits<float>::infinity()) == doctest::Approx(0.0f));
+    // A non-finite delta must leave the fader exactly where it is.
+    CHECK(x18_shift_pos_by_db(0.6f, std::numeric_limits<float>::quiet_NaN()) == doctest::Approx(0.6f));
 }

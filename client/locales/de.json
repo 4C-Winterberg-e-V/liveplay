@@ -278,7 +278,14 @@
     "faderLinkUp": "Pegel vom Pult gelesen",
     "faderLinkWaiting": "Warte auf das Pult…",
     "faderLinkNone": "Keine Pult-IP eingetragen",
-    "faderSpokenUnknown": "Pegel unbekannt"
+    "faderSpokenUnknown": "Pegel unbekannt",
+    "actionFaderRelative": "Fader (um einen Wert ändern)",
+    "relativeDelta": "Ändern um",
+    "relativeModeToggle": "Ändern, dann zurück",
+    "relativeModeStep": "Pro Druck ein Schritt",
+    "relativeModeToggleHint": "Der erste Druck ändert den Fader um diesen Wert — ausgehend davon, wo er gerade steht. Der nächste Druck stellt ihn exakt wieder her, auch wenn er von einem anderen Gerät kommt.",
+    "relativeModeStepHint": "Jeder Druck ändert den Fader erneut um diesen Wert. Kein automatischer Rückweg — dafür einen zweiten Button mit dem umgekehrten Wert anlegen.",
+    "relativeSummaryStep": "pro Druck"
   },
   "duckingBehavior": {
     "stopAll": "Alle anderen Signale stoppen",

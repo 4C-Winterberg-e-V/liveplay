@@ -366,7 +366,14 @@
     "faderLinkUp": "Levels read from the console",
     "faderLinkWaiting": "Waiting for the console…",
     "faderLinkNone": "No console IP set",
-    "faderSpokenUnknown": "level unknown"
+    "faderSpokenUnknown": "level unknown",
+    "actionFaderRelative": "Fader (move by an amount)",
+    "relativeDelta": "Change by",
+    "relativeModeToggle": "Move, then back",
+    "relativeModeStep": "Step each press",
+    "relativeModeToggleHint": "First press moves the fader by this much from wherever it is. The next press puts it back exactly where it was — even if that press comes from another device.",
+    "relativeModeStepHint": "Every press moves the fader by this much again. No automatic way back; pair it with a second button using the opposite value.",
+    "relativeSummaryStep": "per press"
   },
   "duckingBehavior": {
     "stopAll": "Stop All Other Cues",

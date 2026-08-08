@@ -64,6 +64,19 @@ public:
     bool send_float(const std::string& address, float value);
     bool send_int(const std::string& address, std::int32_t value);
 
+    // The desk's current value for one address, or NaN when it has not answered
+    // for that parameter yet. NaN rather than a default: a relative move needs
+    // to know it is working from a real reading, not from a guess.
+    float value_of(const std::string& address) const;
+
+    // Where a relative TOGGLE should put a fader back. Set on the way down,
+    // taken (and cleared) on the way up. Lives here rather than in a client
+    // because the two presses can come from different phones, and because a
+    // page reload must not strand a channel at its ducked level.
+    void set_restore_point(const std::string& address, float pos);
+    // Returns NaN when there is nothing to go back to.
+    float take_restore_point(const std::string& address);
+
     // { connected, ip, values: { "<address>": <float> } } — everything the desk
     // has told us. Absent addresses simply have not been answered yet.
     nlohmann::json snapshot() const;
@@ -100,6 +113,7 @@ private:
 
     std::unordered_map<std::string, float> values_;
     std::unordered_map<std::string, float> pending_changes_;
+    std::unordered_map<std::string, float> restore_points_;
     std::function<void(const nlohmann::json&)> on_change_;
 
     // Index of the next address in the refresh sweep, so a full pass is spread

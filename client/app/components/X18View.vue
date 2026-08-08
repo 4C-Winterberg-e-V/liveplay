@@ -120,12 +120,13 @@
             <span>{{ t('x18.actionType') }}</span>
             <select :value="selectedButton.action.type" @change="onActionTypeChange">
               <option value="fader-toggle">{{ t('x18.actionFaderToggle') }}</option>
+              <option value="fader-relative">{{ t('x18.actionFaderRelative') }}</option>
               <option value="mute-toggle">{{ t('x18.actionMuteToggle') }}</option>
               <option value="mute-group">{{ t('x18.actionMuteGroup') }}</option>
             </select>
           </label>
 
-          <!-- Target (fader-toggle & mute-toggle) -->
+          <!-- Target (every fader/mute action) -->
           <template v-if="selectedButton.action.type !== 'mute-group'">
             <label class="x18-field">
               <span>{{ t('x18.target') }}</span>
@@ -160,6 +161,34 @@
             </label>
           </template>
 
+          <!-- Relative move: how far, and whether it comes back -->
+          <template v-if="selectedButton.action.type === 'fader-relative'">
+            <label class="x18-field">
+              <span>{{ t('x18.relativeDelta') }}</span>
+              <input
+                type="number"
+                min="-90"
+                max="90"
+                step="0.5"
+                v-model.number="selectedButton.action.deltaDb"
+                @change="onDeltaChange"
+              /> dB
+            </label>
+            <div class="x18-field">
+              <span>{{ t('x18.mode') }}</span>
+              <select :value="selectedButton.action.mode === 'step' ? 'step' : 'toggle'"
+                      @change="onRelativeModeChange">
+                <option value="toggle">{{ t('x18.relativeModeToggle') }}</option>
+                <option value="step">{{ t('x18.relativeModeStep') }}</option>
+              </select>
+              <p class="x18-hint">
+                {{ selectedButton.action.mode === 'step'
+                    ? t('x18.relativeModeStepHint')
+                    : t('x18.relativeModeToggleHint') }}
+              </p>
+            </div>
+          </template>
+
           <!-- Mute group number -->
           <label v-if="selectedButton.action.type === 'mute-group'" class="x18-field">
             <span>{{ t('x18.muteGroup') }}</span>
@@ -167,7 +196,10 @@
           </label>
 
           <!-- Mode (mute-toggle & mute-group) -->
-          <label v-if="selectedButton.action.type !== 'fader-toggle'" class="x18-field">
+          <label
+            v-if="selectedButton.action.type === 'mute-toggle' || selectedButton.action.type === 'mute-group'"
+            class="x18-field"
+          >
             <span>{{ t('x18.mode') }}</span>
             <select v-model="selectedButton.action.mode" @change="persist">
               <option value="toggle">{{ t('x18.modeToggle') }}</option>
@@ -320,6 +352,10 @@ const onActionTypeChange = (e: Event) => {
   const type = (e.target as HTMLSelectElement).value as X18BoardButton['action']['type'];
   if (type === 'fader-toggle') {
     b.action = { type, target: b.action.target ?? 'master', channel: b.action.channel, levelA: 0, levelB: 100 };
+  } else if (type === 'fader-relative') {
+    // -6 dB is the move people reach for: audibly quieter, still clearly there.
+    b.action = { type, target: b.action.target ?? 'master', channel: b.action.channel,
+                 deltaDb: -6, mode: 'toggle' };
   } else if (type === 'mute-toggle') {
     b.action = { type, target: b.action.target ?? 'master', channel: b.action.channel, mode: 'toggle' };
   } else {
@@ -357,6 +393,23 @@ const onLevelChange = (field: 'levelA' | 'levelB') => {
   persist();
 };
 
+const onDeltaChange = () => {
+  const a = selectedButton.value?.action;
+  if (!a) return;
+  let v = Number(a.deltaDb);
+  if (!Number.isFinite(v)) v = -6;
+  // Half a dB is the finest step the readouts show, and ±90 spans the taper.
+  a.deltaDb = Math.min(90, Math.max(-90, Math.round(v * 2) / 2));
+  persist();
+};
+
+const onRelativeModeChange = (e: Event) => {
+  const a = selectedButton.value?.action;
+  if (!a) return;
+  a.mode = (e.target as HTMLSelectElement).value === 'step' ? 'step' : 'toggle';
+  persist();
+};
+
 const onGroupChange = () => {
   const a = selectedButton.value?.action;
   if (!a) return;
@@ -377,6 +430,13 @@ const actionSummary = (b: X18BoardButton): string => {
   const a = b.action;
   if (!a) return '';
   if (a.type === 'fader-toggle') return `${targetLabel(a)} · ${a.levelA ?? 0}% ↔ ${a.levelB ?? 100}%`;
+  if (a.type === 'fader-relative') {
+    const d = a.deltaDb ?? -6;
+    const signed = `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d)} dB`;
+    // "↩" for the one that comes back, "per press" for the one that does not —
+    // that difference matters more at a glance than the word "relative" does.
+    return `${targetLabel(a)} · ${signed} ${a.mode === 'step' ? t('x18.relativeSummaryStep') : '↩'}`;
+  }
   if (a.type === 'mute-toggle') return `${targetLabel(a)} · ${modeLabel(a.mode)}`;
   return `${t('x18.muteGroup')} ${a.group ?? 1} · ${modeLabel(a.mode)}`;
 };
@@ -653,6 +713,7 @@ onUnmounted(() => {
 }
 .x18-key-capture.capturing { border-color: var(--color-accent); color: var(--color-accent); }
 .x18-error { color: #e53e3e; font-size: 12px; margin: 0; }
+.x18-hint { color: var(--color-text-secondary); font-size: 11px; line-height: 1.4; margin: 2px 0 0; }
 
 /* ---- Phone: less chrome, readable tiles -------------------------------- */
 @media (max-width: 767px), (max-width: 1024px) and (any-pointer: coarse), (max-height: 559px) and (any-pointer: coarse) {

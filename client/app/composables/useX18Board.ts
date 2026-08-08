@@ -1,4 +1,4 @@
-import type { X18BoardButton } from '~/types/project';
+import type { X18BoardAction, X18BoardButton } from '~/types/project';
 
 // Shared logic for the X18 control board: the button list (lives on the
 // project), an ephemeral per-button toggle state, and the trigger that turns a
@@ -30,7 +30,10 @@ export const useX18Board = () => {
 
   // Resolve the muted value for a mute / mute-group button given its mode and
   // update the toggle state so the UI and the next press stay consistent.
-  const resolveMute = (id: string, mode?: 'toggle' | 'mute' | 'unmute'): boolean => {
+  // `mode` is shared with fader-relative, where it can also be 'step'. A mute
+  // has no such thing, so anything that is not an explicit mute/unmute is a
+  // toggle — which is also what an absent mode has always meant.
+  const resolveMute = (id: string, mode?: X18BoardAction['mode']): boolean => {
     let muted: boolean;
     if (mode === 'mute') muted = true;
     else if (mode === 'unmute') muted = false;
@@ -55,6 +58,23 @@ export const useX18Board = () => {
           kind: 'fader', target: a.target ?? 'master', channel: a.channel, level,
         });
         toggleState.value = { ...toggleState.value, [button.id]: toB };
+      } else if (a.type === 'fader-relative') {
+        // The whole move is computed on the SERVER: it has the freshest reading
+        // of the desk, and for 'toggle' it owns the restore point — which has
+        // to outlive this client, because the two presses can come from two
+        // different phones and a reload must not strand a ducked channel.
+        await server.x18Action({
+          kind: 'fader-relative',
+          target: a.target ?? 'master',
+          channel: a.channel,
+          deltaDb: a.deltaDb ?? -6,
+          mode: a.mode === 'step' ? 'step' : 'toggle',
+        });
+        // Cosmetic only for 'toggle' — the authoritative back-and-forth is the
+        // server's restore point, this just lights the tile.
+        if (a.mode !== 'step') {
+          toggleState.value = { ...toggleState.value, [button.id]: !toggleState.value[button.id] };
+        }
       } else if (a.type === 'mute-toggle') {
         const muted = resolveMute(button.id, a.mode);
         await server.x18Action({

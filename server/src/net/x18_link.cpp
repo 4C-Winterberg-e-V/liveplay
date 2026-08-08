@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 
 #if defined(_WIN32)
 #  ifndef WIN32_LEAN_AND_MEAN
@@ -93,6 +94,9 @@ void X18Link::configure(const std::string& ip) {
         // console's levels while talking to another — worse than showing none.
         values_.clear();
         pending_changes_.clear();
+        // A restore point is a position on the OLD desk. Carrying it over would
+        // put a channel of the new one somewhere nobody chose.
+        restore_points_.clear();
         sweep_pos_ = 0;
         resweep_ = true;
         Logger::info("X18: link now targeting '{}'", ip.empty() ? "(none)" : ip);
@@ -108,6 +112,26 @@ std::string X18Link::console_ip() const {
 void X18Link::set_change_handler(std::function<void(const nlohmann::json&)> fn) {
     std::lock_guard lock{mutex_};
     on_change_ = std::move(fn);
+}
+
+float X18Link::value_of(const std::string& address) const {
+    std::lock_guard lock{mutex_};
+    auto it = values_.find(address);
+    return it == values_.end() ? std::numeric_limits<float>::quiet_NaN() : it->second;
+}
+
+void X18Link::set_restore_point(const std::string& address, float pos) {
+    std::lock_guard lock{mutex_};
+    restore_points_[address] = pos;
+}
+
+float X18Link::take_restore_point(const std::string& address) {
+    std::lock_guard lock{mutex_};
+    auto it = restore_points_.find(address);
+    if (it == restore_points_.end()) return std::numeric_limits<float>::quiet_NaN();
+    const float pos = it->second;
+    restore_points_.erase(it);
+    return pos;
 }
 
 nlohmann::json X18Link::snapshot() const {
