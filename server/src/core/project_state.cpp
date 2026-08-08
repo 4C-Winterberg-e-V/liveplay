@@ -5,6 +5,7 @@
 #include "liveplay/logger.hpp"
 #include "liveplay/meta/metadata.hpp"
 #include "liveplay/net/osc_client.hpp"
+#include "liveplay/net/x18_link.hpp"
 #include "liveplay/util/unicode_path.hpp"
 
 #include <algorithm>
@@ -4743,8 +4744,6 @@ void ProjectState::set_external_action_handler(std::function<void(const json&)> 
 //   * faders are float 0.0..1.0
 // ---------------------------------------------------------------------------
 namespace {
-constexpr std::uint16_t kX18OscPort = 10024;
-
 // Build the strip base address ("/lr", "/ch/NN", "/bus/N") for the command's
 // target, then append `suffix`. Returns empty when the channel/bus index is
 // out of range so the caller can skip an invalid command.
@@ -4765,34 +4764,83 @@ std::string x18_strip_address(const json& cmd, const char* suffix) {
     return std::string{"/lr"} + suffix;  // master / LR
 }
 
+// Which mix a "send" / "mix" command means. Accepts `"lr"` or a bus number
+// 1-6; anything else is rejected rather than silently aimed at the main mix,
+// because "the wrong bus" is a real sound on a real speaker.
+int x18_parse_mix(const json& cmd) {
+    if (!cmd.contains("bus")) return net::kX18MainMix;
+    const auto& b = cmd["bus"];
+    if (b.is_string()) return b.get<std::string>() == "lr" ? net::kX18MainMix : -1;
+    if (b.is_number_integer()) {
+        const int n = b.get<int>();
+        return (n >= 1 && n <= net::kX18Buses) ? n : -1;
+    }
+    return -1;
+}
+
 void x18_dispatch_command(const std::string& ip, const json& cmd) {
     if (ip.empty() || !cmd.is_object()) return;
     const std::string kind = cmd.value("kind", std::string{"fader"});
+
+    // Every command goes out on the shared link rather than a throwaway socket:
+    // the console replies to the SOURCE port, so a one-shot socket per message
+    // would leave every answer — including the echo of this very command —
+    // arriving at a port nobody is listening on. configure() is a no-op when
+    // the IP has not changed.
+    auto& link = net::X18Link::instance();
+    link.configure(ip);
 
     if (kind == "mute-group") {
         const int g = cmd.value("group", 0);
         if (g < 1 || g > 4) return;
         const bool muted = cmd.value("muted", false);
-        net::osc_send_int(ip, kX18OscPort,
-                          std::string{"/config/mute/"} + std::to_string(g),
-                          muted ? 1 : 0);
+        link.send_int(std::string{"/config/mute/"} + std::to_string(g), muted ? 1 : 0);
         return;
     }
     if (kind == "mute") {
         const std::string addr = x18_strip_address(cmd, "/mix/on");
         if (addr.empty()) return;
         const bool muted = cmd.value("muted", false);
-        net::osc_send_int(ip, kX18OscPort, addr, muted ? 0 : 1);
+        link.send_int(addr, muted ? 0 : 1);
         return;
     }
-    // Default: fader.
+    // A channel's level inside one mix: its fader in the main mix, or its send
+    // into a bus. This is the "how loud is channel 3 in the monitor" control.
+    if (kind == "send") {
+        const int mix = x18_parse_mix(cmd);
+        if (mix < 0) return;
+        const std::string addr = net::x18_channel_mix_address(cmd.value("channel", 0), mix);
+        if (addr.empty()) return;
+        const float pct = std::clamp(cmd.value("level", 0.0f), 0.0f, 100.0f);
+        link.send_float(addr, pct / 100.0f);
+        return;
+    }
+    // A mix's own output level: main LR, or a bus master.
+    if (kind == "mix") {
+        const int mix = x18_parse_mix(cmd);
+        if (mix < 0) return;
+        const std::string addr = net::x18_mix_master_address(mix);
+        if (addr.empty()) return;
+        const float pct = std::clamp(cmd.value("level", 0.0f), 0.0f, 100.0f);
+        link.send_float(addr, pct / 100.0f);
+        return;
+    }
+    // Default: fader. Kept for the per-cue x18Actions and the board buttons,
+    // which address master/channel/bus by "target" rather than by mix.
     const std::string addr = x18_strip_address(cmd, "/mix/fader");
     if (addr.empty()) return;
     float pct = cmd.value("level", 0.0f);
     pct = std::clamp(pct, 0.0f, 100.0f);
-    net::osc_send_float(ip, kX18OscPort, addr, pct / 100.0f);
+    link.send_float(addr, pct / 100.0f);
 }
 } // namespace
+
+// Public read of the configured console IP. The control server keeps the
+// shared X18 link pointed at whatever the project currently says, so a settings
+// change re-targets the desk without every write path having to know.
+std::string ProjectState::x18_console_ip() {
+    return x18_ip_locked_snapshot();
+}
 
 // Snapshot the console IP from settings under the lock; the network I/O runs
 // without mutex_ held.

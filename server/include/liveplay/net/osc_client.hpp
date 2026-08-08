@@ -70,6 +70,129 @@ inline std::vector<char> osc_build_int(const std::string& address, std::int32_t 
     return pkt;
 }
 
+// Build a bare OSC message with NO arguments (type tag ","). On X-Air consoles
+// this is how you ASK for a parameter: send its address with no argument and
+// the desk replies with the current value to your source port. `/xremote` with
+// no arguments is the same shape and subscribes to every change for ~10s.
+inline std::vector<char> osc_build_query(const std::string& address) {
+    std::vector<char> pkt;
+    detail::osc_append_string(pkt, address);
+    detail::osc_append_string(pkt, ",");
+    return pkt;
+}
+
+// ---------------------------------------------------------------------------
+// Decoding. Header-only for the same reason as the builders: the byte layout
+// is the part that is easy to get wrong and worth unit-testing without a
+// socket (server/tests/test_osc_client.cpp).
+// ---------------------------------------------------------------------------
+
+// One decoded OSC message. `type` is the first argument's tag ('f', 'i' or 's')
+// or '\0' when the message carried none — which is what a query looks like.
+struct OscMessage {
+    std::string  address;
+    char         type = '\0';
+    float        f = 0.0f;
+    std::int32_t i = 0;
+    std::string  s;
+};
+
+namespace detail {
+
+// Read a NUL-terminated, 4-byte-padded OSC string starting at `pos`. Advances
+// `pos` past the padding. Returns false if the string is unterminated.
+inline bool osc_read_string(const char* data, std::size_t len,
+                            std::size_t& pos, std::string& out) {
+    const std::size_t start = pos;
+    while (pos < len && data[pos] != '\0') ++pos;
+    if (pos >= len) return false;                 // no terminator in the buffer
+    out.assign(data + start, pos - start);
+    pos = start + ((pos - start) / 4 + 1) * 4;    // skip NUL(s) + padding
+    return pos <= len;
+}
+
+inline bool osc_read_be32(const char* data, std::size_t len,
+                          std::size_t& pos, std::uint32_t& out) {
+    if (pos + 4 > len) return false;
+    out = (static_cast<std::uint32_t>(static_cast<unsigned char>(data[pos    ])) << 24)
+        | (static_cast<std::uint32_t>(static_cast<unsigned char>(data[pos + 1])) << 16)
+        | (static_cast<std::uint32_t>(static_cast<unsigned char>(data[pos + 2])) << 8)
+        |  static_cast<std::uint32_t>(static_cast<unsigned char>(data[pos + 3]));
+    pos += 4;
+    return true;
+}
+
+} // namespace detail
+
+// Decode a single OSC message. Only the FIRST argument is returned: every
+// X-Air parameter we care about is a scalar, and decoding the rest would be
+// unused code that still has to be right.
+//
+// Returns false for anything that is not a well-formed message — including
+// bundles, which the caller unpacks (see osc_for_each_message).
+inline bool osc_parse_message(const char* data, std::size_t len, OscMessage& out) {
+    if (data == nullptr || len < 4 || data[0] != '/') return false;
+    std::size_t pos = 0;
+    out = OscMessage{};
+    if (!detail::osc_read_string(data, len, pos, out.address)) return false;
+    if (out.address.empty() || out.address[0] != '/') return false;
+
+    std::string tags;
+    if (pos >= len) return true;                       // address only: still valid
+    if (!detail::osc_read_string(data, len, pos, tags)) return false;
+    if (tags.empty() || tags[0] != ',') return false;
+    if (tags.size() < 2) return true;                  // "," — a query, no args
+
+    switch (tags[1]) {
+        case 'f': {
+            std::uint32_t raw = 0;
+            if (!detail::osc_read_be32(data, len, pos, raw)) return false;
+            std::memcpy(&out.f, &raw, sizeof(out.f));
+            out.type = 'f';
+            return true;
+        }
+        case 'i': {
+            std::uint32_t raw = 0;
+            if (!detail::osc_read_be32(data, len, pos, raw)) return false;
+            out.i = static_cast<std::int32_t>(raw);
+            out.type = 'i';
+            return true;
+        }
+        case 's': {
+            if (!detail::osc_read_string(data, len, pos, out.s)) return false;
+            out.type = 's';
+            return true;
+        }
+        default:
+            // A tag we do not decode (blob, timetag, …). The address is still
+            // useful to the caller, so report success with type '\0'.
+            return true;
+    }
+}
+
+// Walk a received datagram, calling `fn` for every message in it. A datagram is
+// either one message or an OSC bundle ("#bundle" + timetag + length-prefixed
+// elements, which may nest). Malformed input stops the walk rather than
+// throwing — this runs on data from the network.
+template <typename Fn>
+inline void osc_for_each_message(const char* data, std::size_t len, Fn&& fn) {
+    if (data == nullptr || len < 4) return;
+    if (data[0] == '/') {
+        OscMessage m;
+        if (osc_parse_message(data, len, m)) fn(m);
+        return;
+    }
+    if (len < 16 || std::memcmp(data, "#bundle\0", 8) != 0) return;
+    std::size_t pos = 16;                              // "#bundle\0" + timetag
+    while (pos + 4 <= len) {
+        std::uint32_t size = 0;
+        if (!detail::osc_read_be32(data, len, pos, size)) return;
+        if (size == 0 || pos + size > len) return;
+        osc_for_each_message(data + pos, size, fn);
+        pos += size;
+    }
+}
+
 // Send a single OSC message carrying one 32-bit float argument to host:port
 // over UDP. `host` must be a numeric IPv4 address (e.g. "192.168.1.50") —
 // the user enters the console's IP in project settings, so no DNS resolution

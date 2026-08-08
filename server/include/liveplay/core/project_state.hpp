@@ -397,6 +397,10 @@ public:
     // configured (settings.x18Ip) so the caller can report it.
     bool fire_x18_action(const json& action);
 
+    // The console IP from settings ("" when unset). The control server polls
+    // this to keep net::X18Link aimed at the right desk.
+    std::string x18_console_ip();
+
     // ---- Introspection ---------------------------------------------------
     std::vector<CueMeta> list_cues() const;
     std::optional<CueMeta> find_cue(const audio::CueId& id) const;
