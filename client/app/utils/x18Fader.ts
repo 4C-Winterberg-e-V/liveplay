@@ -125,6 +125,32 @@ export const x18ChannelMixAddress = (channel: number, bus: X18Mix): string => {
   return `/ch/${pad2(channel)}/mix/${pad2(bus)}/level`;
 };
 
+/**
+ * Beside every level on the desk sits an on/off switch, which is what an
+ * operator calls mute. Note the sense: the console's value is 1 for AUDIBLE and
+ * 0 for MUTED — the opposite of the word. Nothing outside the two converters
+ * below should ever handle that raw value, because getting it backwards
+ * silences a live channel instead of restoring it.
+ */
+export const x18MixMuteAddress = (bus: X18Mix): string => {
+  if (bus === 'lr') return '/lr/mix/on';
+  if (!isBus(bus)) return '';
+  return `/bus/${bus}/mix/on`;
+};
+
+/** A channel's on/off in one mix: its own switch in the main mix, its send's in a bus. */
+export const x18ChannelMixMuteAddress = (channel: number, bus: X18Mix): string => {
+  if (!isChannel(channel)) return '';
+  if (bus === 'lr') return `/ch/${pad2(channel)}/mix/on`;
+  if (!isBus(bus)) return '';
+  return `/ch/${pad2(channel)}/mix/${pad2(bus)}/on`;
+};
+
+/** Console `on` value -> muted. */
+export const x18OnToMuted = (on: number): boolean => on < 0.5;
+/** muted -> the console's `on` value. */
+export const x18MutedToOn = (muted: boolean): number => (muted ? 0 : 1);
+
 // ---------------------------------------------------------------------------
 // The operator's fader list.
 //
@@ -152,6 +178,13 @@ export const x18EntryAddress = (entry: X18FaderEntry): string => {
   if (!entry) return '';
   if (entry.kind === 'mix') return x18MixAddress(entry.bus);
   return x18ChannelMixAddress(entry.channel ?? 0, entry.bus);
+};
+
+/** The on/off address that goes with that level. */
+export const x18EntryMuteAddress = (entry: X18FaderEntry): string => {
+  if (!entry) return '';
+  if (entry.kind === 'mix') return x18MixMuteAddress(entry.bus);
+  return x18ChannelMixMuteAddress(entry.channel ?? 0, entry.bus);
 };
 
 /** Short name of a mix as the desk prints it. */

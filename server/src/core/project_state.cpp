@@ -4733,11 +4733,13 @@ void ProjectState::set_external_action_handler(std::function<void(const json&)> 
 // per-cue start/stop actions and the on-demand /api/x18/action endpoint.
 //
 //   cmd.kind   : "fader" (default) | "mute" | "mute-group"
+//              | "send" | "mix" | "send-mute" | "mix-mute" | "fader-relative"
 //   cmd.target : "master" (default) | "channel" | "bus"   (fader & mute)
 //   cmd.channel: 1..16 for channel, 1..6 for bus
+//   cmd.bus    : "lr" | 1..6   (send, mix, send-mute, mix-mute)
 //   cmd.level  : 0..100 percent (fader) -> X-Air fader 0.0..1.0
 //   cmd.group  : 1..4 (mute-group)
-//   cmd.muted  : bool (mute & mute-group)
+//   cmd.muted  : bool (mute, mute-group, send-mute, mix-mute)
 //
 // X-Air value semantics (easy to get wrong):
 //   * /…/mix/on  : int 1 = channel ON / UNMUTED, 0 = MUTED
@@ -4824,6 +4826,21 @@ void x18_dispatch_command(const std::string& ip, const json& cmd) {
         if (addr.empty()) return;
         const float pct = std::clamp(cmd.value("level", 0.0f), 0.0f, 100.0f);
         link.send_float(addr, pct / 100.0f);
+        return;
+    }
+    // Mute for the level page's own two shapes. Deliberately separate from the
+    // "mute" kind above: that one addresses a strip by target ("channel 3"),
+    // which cannot say WHICH mix, and a channel's send into a monitor bus has
+    // its own switch. Same bus-rejection rule as "send"/"mix" — silencing the
+    // wrong bus is a room going quiet mid-show.
+    if (kind == "send-mute" || kind == "mix-mute") {
+        const int mix = x18_parse_mix(cmd);
+        if (mix < 0) return;
+        const std::string addr = (kind == "mix-mute")
+            ? net::x18_mix_master_on_address(mix)
+            : net::x18_channel_mix_on_address(cmd.value("channel", 0), mix);
+        if (addr.empty()) return;
+        link.send_int(addr, net::x18_muted_to_on(cmd.value("muted", false)));
         return;
     }
     // Move a fader BY an amount rather than TO a value. Only possible at all

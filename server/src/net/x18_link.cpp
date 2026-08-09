@@ -226,7 +226,13 @@ bool X18Link::send_float(const std::string& address, float value) {
 
 bool X18Link::send_int(const std::string& address, std::int32_t value) {
     if (address.empty()) return false;
-    return send_raw(osc_build_int(address, value));
+    if (!send_raw(osc_build_int(address, value))) return false;
+    // Optimistic for the same reason send_float() is — and it matters more here.
+    // A mute is a two-state control: without this the button an operator just
+    // pressed stays visually unmuted until the desk echoes, which reads as "it
+    // did not work" and invites a second press that mutes it right back.
+    note_value(address, static_cast<float>(value));
+    return true;
 }
 
 void X18Link::note_value(const std::string& address, float value) {
@@ -326,9 +332,16 @@ void X18Link::run() {
             if (n <= 0) break;                    // timeout or error: back to the top
             osc_for_each_message(buffer.data(), static_cast<std::size_t>(n),
                                  [this](const OscMessage& m) {
-                                     if (m.type == 'f') note_value(m.address, m.f);
-                                     // ints and strings are not levels; the desk
-                                     // sends plenty of both and they are not ours.
+                                     if (m.type == 'f') { note_value(m.address, m.f); return; }
+                                     // The on/off switch beside every level is an
+                                     // int, so ints cannot simply be dropped any
+                                     // more. They are filtered to the addresses we
+                                     // actually asked for, because /xremote pushes
+                                     // every int on the desk — gates, EQ enables,
+                                     // routing — and none of those are ours.
+                                     if (m.type == 'i' && x18_is_watched_address(m.address))
+                                         note_value(m.address, static_cast<float>(m.i));
+                                     // Strings (channel names, scene names) never are.
                                  });
         }
 

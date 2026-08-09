@@ -253,6 +253,8 @@
     "faderLevel": "Pegel {name}",
     "faderUp": "{name} lauter",
     "faderDown": "{name} leiser",
+    "faderMute": "{name} stummschalten",
+    "faderUnmute": "Stummschaltung von {name} aufheben",
     "faderFine": "fein",
     "faderSetLevel": "Genauen Pegel für {name} in dB eingeben",
     "faderSendFailed": "Der letzte Befehl hat das Pult nicht erreicht.",
