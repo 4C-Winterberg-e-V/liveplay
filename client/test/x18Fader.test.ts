@@ -8,11 +8,16 @@ import {
   isValidX18Entry,
   stepPosByDb,
   x18ChannelMixAddress,
+  x18ChannelMixMuteAddress,
   x18DbToPos,
   x18EntryAddress,
+  x18EntryMuteAddress,
   x18EntryTag,
   x18MixAddress,
   x18MixLabel,
+  x18MixMuteAddress,
+  x18MutedToOn,
+  x18OnToMuted,
   x18PosToDb,
   x18PosToPercent,
   type X18FaderEntry,
@@ -170,6 +175,58 @@ describe('x18MixAddress', () => {
   });
 });
 
+// Mute addresses must agree with server/include/liveplay/net/x18_addresses.hpp
+// byte for byte, exactly as the level addresses do — the server caches console
+// values under these strings and the client looks them up under the same ones.
+// tests/test_x18_link.cpp asserts the identical literals.
+describe('mute addresses', () => {
+  it('is the on/off switch beside the level, with the same padding rules', () => {
+    expect(x18MixMuteAddress('lr')).toBe('/lr/mix/on');
+    expect(x18MixMuteAddress(1)).toBe('/bus/1/mix/on');
+    expect(x18MixMuteAddress(6)).toBe('/bus/6/mix/on');
+    expect(x18ChannelMixMuteAddress(1, 'lr')).toBe('/ch/01/mix/on');
+    expect(x18ChannelMixMuteAddress(16, 'lr')).toBe('/ch/16/mix/on');
+    expect(x18ChannelMixMuteAddress(3, 2)).toBe('/ch/03/mix/02/on');
+    expect(x18ChannelMixMuteAddress(16, 6)).toBe('/ch/16/mix/06/on');
+  });
+
+  it('rejects anything the desk does not have', () => {
+    for (const bad of [0, 7, -1, 2.5, NaN]) {
+      expect(x18MixMuteAddress(bad as number)).toBe('');
+      expect(x18ChannelMixMuteAddress(1, bad as number)).toBe('');
+    }
+    for (const bad of [0, 17, -1, 1.5, NaN]) {
+      expect(x18ChannelMixMuteAddress(bad as number, 1)).toBe('');
+    }
+  });
+
+  it('never collides with the level address it sits beside', () => {
+    expect(x18ChannelMixMuteAddress(3, 2)).not.toBe(x18ChannelMixAddress(3, 2));
+    expect(x18MixMuteAddress(2)).not.toBe(x18MixAddress(2));
+  });
+});
+
+// The console's value is 1 for AUDIBLE and 0 for MUTED — the opposite of the
+// word. Inverting this by accident silences a live channel instead of restoring
+// it, so the round trip is pinned here rather than trusted to a reading.
+describe('mute value sense', () => {
+  it('reads 0 as muted and 1 as audible', () => {
+    expect(x18OnToMuted(0)).toBe(true);
+    expect(x18OnToMuted(1)).toBe(false);
+  });
+
+  it('writes muted as 0 and audible as 1', () => {
+    expect(x18MutedToOn(true)).toBe(0);
+    expect(x18MutedToOn(false)).toBe(1);
+  });
+
+  it('round-trips both ways', () => {
+    for (const muted of [true, false]) {
+      expect(x18OnToMuted(x18MutedToOn(muted))).toBe(muted);
+    }
+  });
+});
+
 describe('fader entries', () => {
   const mix = (bus: any): X18FaderEntry => ({ id: 'a', kind: 'mix', bus });
   const send = (channel: any, bus: any): X18FaderEntry => ({ id: 'b', kind: 'send', channel, bus });
@@ -187,6 +244,18 @@ describe('fader entries', () => {
     expect(x18EntryAddress({ id: 'c', kind: 'send', bus: 1 } as X18FaderEntry)).toBe('');
     expect(isValidX18Entry(send(99, 1))).toBe(false);
     expect(isValidX18Entry(send(1, 1))).toBe(true);
+  });
+
+  it('resolves to the mute switch beside that same thing', () => {
+    expect(x18EntryMuteAddress(mix('lr'))).toBe('/lr/mix/on');
+    expect(x18EntryMuteAddress(mix(3))).toBe('/bus/3/mix/on');
+    expect(x18EntryMuteAddress(send(3, 'lr'))).toBe('/ch/03/mix/on');
+    expect(x18EntryMuteAddress(send(3, 2))).toBe('/ch/03/mix/02/on');
+    // An entry that names nothing must not produce a mute address either —
+    // otherwise an invalid strip gets a working mute button pointed at a
+    // channel it was never meant to reach.
+    expect(x18EntryMuteAddress(send(99, 1))).toBe('');
+    expect(x18EntryMuteAddress(mix(9))).toBe('');
   });
 
   it('labels the route in the desk\'s own terms', () => {

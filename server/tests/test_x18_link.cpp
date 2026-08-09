@@ -54,9 +54,57 @@ TEST_CASE("x18_mix_master_address uses the console's own padding") {
     CHECK(x18_mix_master_address(-1).empty());
 }
 
+// These strings are duplicated in client/app/utils/x18Fader.ts, which keys the
+// same cache from the other side. client/test/x18Fader.test.ts asserts the
+// identical literals; a mismatch between the two is a mute button that silently
+// does nothing, with no error anywhere.
+TEST_CASE("x18 mute addresses are the on/off switch beside each level") {
+    CHECK(x18_mix_master_on_address(kX18MainMix) == "/lr/mix/on");
+    CHECK(x18_mix_master_on_address(1) == "/bus/1/mix/on");
+    CHECK(x18_mix_master_on_address(6) == "/bus/6/mix/on");
+    CHECK(x18_channel_mix_on_address(1, kX18MainMix) == "/ch/01/mix/on");
+    CHECK(x18_channel_mix_on_address(16, kX18MainMix) == "/ch/16/mix/on");
+    CHECK(x18_channel_mix_on_address(3, 2) == "/ch/03/mix/02/on");
+    CHECK(x18_channel_mix_on_address(16, 6) == "/ch/16/mix/06/on");
+}
+
+TEST_CASE("x18 mute addresses reject anything off the desk") {
+    CHECK(x18_mix_master_on_address(7).empty());
+    CHECK(x18_mix_master_on_address(-1).empty());
+    CHECK(x18_channel_mix_on_address(0, 1).empty());
+    CHECK(x18_channel_mix_on_address(17, 1).empty());
+    CHECK(x18_channel_mix_on_address(1, 7).empty());
+    CHECK(x18_channel_mix_on_address(1, -1).empty());
+}
+
+// The console's value is 1 for AUDIBLE and 0 for MUTED — the opposite of the
+// word "mute". Inverting it by accident silences a live channel instead of
+// restoring it, so the sense is pinned rather than left to a reading.
+TEST_CASE("x18 mute value sense is inverted, and round-trips") {
+    CHECK(x18_muted_to_on(true) == 0);
+    CHECK(x18_muted_to_on(false) == 1);
+    CHECK(x18_on_is_muted(0.0f));
+    CHECK_FALSE(x18_on_is_muted(1.0f));
+    CHECK(x18_on_is_muted(static_cast<float>(x18_muted_to_on(true))));
+    CHECK_FALSE(x18_on_is_muted(static_cast<float>(x18_muted_to_on(false))));
+}
+
+TEST_CASE("x18_is_watched_address accepts what we sweep and nothing else") {
+    CHECK(x18_is_watched_address("/ch/03/mix/02/level"));
+    CHECK(x18_is_watched_address("/ch/03/mix/02/on"));
+    CHECK(x18_is_watched_address("/lr/mix/on"));
+    // /xremote pushes every int the desk changes. These are not ours, and
+    // letting them into the cache is how a level lookup finds a gate setting.
+    CHECK_FALSE(x18_is_watched_address("/ch/01/gate/on"));
+    CHECK_FALSE(x18_is_watched_address("/ch/01/eq/on"));
+    CHECK_FALSE(x18_is_watched_address("/config/mute/1"));
+    CHECK_FALSE(x18_is_watched_address(""));
+}
+
 TEST_CASE("x18_watched_addresses covers every mix and channel exactly once") {
     const auto& all = x18_watched_addresses();
-    CHECK(all.size() == static_cast<std::size_t>((kX18Buses + 1) * (kX18Channels + 1)));
+    // Level and mute for each of the (buses + main) x (channels + master).
+    CHECK(all.size() == static_cast<std::size_t>((kX18Buses + 1) * (kX18Channels + 1) * 2));
 
     // No duplicates: a repeated address means a wasted query every sweep.
     auto sorted = all;
@@ -76,6 +124,21 @@ TEST_CASE("x18_watched_addresses covers every mix and channel exactly once") {
     CHECK(has("/bus/6/mix/fader"));
     CHECK(has("/ch/01/mix/fader"));
     CHECK(has("/ch/16/mix/06/level"));
+    CHECK(has("/lr/mix/on"));
+    CHECK(has("/bus/6/mix/on"));
+    CHECK(has("/ch/01/mix/on"));
+    CHECK(has("/ch/16/mix/06/on"));
+
+    // Every level has its switch, and vice versa. A strip that could be read
+    // but not muted (or muted but not read) is the failure this guards.
+    for (int bus = kX18MainMix; bus <= kX18Buses; ++bus) {
+        CHECK(has(x18_mix_master_address(bus)));
+        CHECK(has(x18_mix_master_on_address(bus)));
+        for (int ch = 1; ch <= kX18Channels; ++ch) {
+            CHECK(has(x18_channel_mix_address(ch, bus)));
+            CHECK(has(x18_channel_mix_on_address(ch, bus)));
+        }
+    }
 }
 
 TEST_CASE("osc_build_query is a bare address with an empty type tag") {

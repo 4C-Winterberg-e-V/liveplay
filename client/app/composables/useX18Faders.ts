@@ -1,6 +1,8 @@
 import {
   clampPos,
   x18EntryAddress,
+  x18EntryMuteAddress,
+  x18OnToMuted,
   x18PosToPercent,
   type X18FaderEntry,
   type X18Mix,
@@ -45,6 +47,10 @@ const sendState = new Map<string, SendState>();
 // several-hundred-millisecond-old echo arriving mid-drag would yank the fader
 // backwards under the thumb.
 const held = new Set<string>();
+// Mute addresses with a command already on the wire. Module scope for the same
+// reason as the above: two mounted strips pointing at the same parameter are
+// two components, but one console switch.
+const muteInFlight = new Set<string>();
 
 const stateFor = (address: string): SendState => {
   let s = sendState.get(address);
@@ -179,8 +185,58 @@ export const useX18Faders = () => {
   };
 
   const hasFailed = (entry: X18FaderEntry): boolean => {
-    const address = x18EntryAddress(entry);
-    return !!address && !!failed.value[address];
+    const level = x18EntryAddress(entry);
+    const mute = x18EntryMuteAddress(entry);
+    return (!!level && !!failed.value[level]) || (!!mute && !!failed.value[mute]);
+  };
+
+  /**
+   * Muted, unmuted, or undefined when the desk has not said yet. Kept distinct
+   * from `false` for the same reason the level is: a strip that has not been
+   * heard from must not be drawn as a confident "this channel is live".
+   */
+  const mutedOf = (entry: X18FaderEntry): boolean | undefined => {
+    const address = x18EntryMuteAddress(entry);
+    if (!address) return undefined;
+    const on = values.value[address];
+    return on === undefined ? undefined : x18OnToMuted(on);
+  };
+
+  /**
+   * Mute or unmute. Unlike a fader this is one discrete command, so it is not
+   * rate-limited or coalesced — it is sent once and awaited. The local value
+   * flips immediately so the button responds to the press, and goes back if the
+   * command does not land: a mute button that lies about the desk is worse than
+   * one that visibly refuses, because the operator's next move is to press it
+   * again, which would un-mute what they just muted.
+   */
+  const setMuted = async (entry: X18FaderEntry, muted: boolean): Promise<void> => {
+    const address = x18EntryMuteAddress(entry);
+    if (!address || !isConfigured.value) return;
+    if (muteInFlight.has(address)) return;      // ignore the double-tap
+    muteInFlight.add(address);
+
+    const previous = values.value[address];
+    values.value = { ...values.value, [address]: muted ? 0 : 1 };
+    try {
+      const bus: X18Mix = entry.bus;
+      await Promise.race([
+        entry.kind === 'mix'
+          ? server.x18Action({ kind: 'mix-mute', bus, muted })
+          : server.x18Action({ kind: 'send-mute', bus, channel: entry.channel, muted }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('x18 mute command timed out')), SEND_TIMEOUT_MS)),
+      ]);
+      if (failed.value[address]) failed.value = { ...failed.value, [address]: false };
+    } catch (e) {
+      console.warn('[x18Faders] mute command failed:', e);
+      const revert = { ...values.value };
+      if (previous === undefined) delete revert[address]; else revert[address] = previous;
+      values.value = revert;
+      failed.value = { ...failed.value, [address]: true };
+    } finally {
+      muteInFlight.delete(address);
+    }
   };
 
   /** While true, echoes for this entry are ignored — a finger is on it. */
@@ -272,6 +328,8 @@ export const useX18Faders = () => {
     hasFailed,
     setHeld,
     setPosition,
+    mutedOf,
+    setMuted,
     refresh,
     applyValues,
   };

@@ -25,6 +25,7 @@
     :class="{
       'x18-strip--dragging': dragging,
       'x18-strip--unknown': !known,
+      'x18-strip--muted': muted === true,
     }"
   >
     <div class="x18-strip__head">
@@ -132,6 +133,25 @@
       >
         <span class="material-symbols-rounded" aria-hidden="true">add</span>
       </button>
+
+      <!-- Set apart from the ± pair on purpose. Those two are a matched set that
+           moves the fader either way; this one is a different verb entirely, and
+           at 44px a thumb aiming for "a bit louder" must not be able to land on
+           "silent" instead. Hence the separator, the different shape, and a
+           colour the steppers never use. -->
+      <button
+        type="button"
+        class="x18-strip__mute"
+        :class="{ 'x18-strip__mute--on': muted === true, 'x18-strip__mute--unknown': muted === undefined }"
+        :disabled="disabled"
+        :aria-pressed="muted === true"
+        :aria-label="t(muted ? 'x18.faderUnmute' : 'x18.faderMute', { name: spokenName })"
+        @click="toggleMute"
+      >
+        <span class="material-symbols-rounded" aria-hidden="true">
+          {{ muted ? 'volume_off' : 'volume_up' }}
+        </span>
+      </button>
     </div>
   </div>
 </template>
@@ -157,7 +177,7 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'edit'): void }>();
 
 const { t } = useLocalization();
-const { positionOf, hasFailed, setPosition, setHeld } = useX18Faders();
+const { positionOf, hasFailed, setPosition, setHeld, mutedOf, setMuted } = useX18Faders();
 
 const STEP_DB = 0.5;
 const PAGE_DB = 6;
@@ -190,6 +210,18 @@ const spokenLevel = computed(() => {
     : t('x18.faderSpokenDb', { db: '-inf' });
 });
 const failedFlag = computed(() => hasFailed(props.entry));
+
+// undefined until the desk answers — the button then shows neither state
+// confidently, the same honesty the level readout applies.
+const muted = computed(() => mutedOf(props.entry));
+
+// An unknown mute state resolves to "mute it": the reason an operator reaches
+// for this button mid-show is to silence something, and refusing to act until
+// the desk has answered would be the one moment that costs.
+function toggleMute() {
+  if (props.disabled) return;
+  void setMuted(props.entry, muted.value !== true);
+}
 
 const fillPct = computed(() => pos.value * 100);
 // Anything above unity is gain the operator added on top of the desk's nominal
@@ -629,6 +661,47 @@ function commitEdit() {
 .x18-strip__step .material-symbols-rounded { font-size: 22px; }
 .x18-strip__step:active:not(:disabled) { background: var(--color-surface-hover); }
 
+/* Deliberately not a .x18-strip__step clone. Same tap target, different shape
+   (a pill, not a square) and a colour the steppers never take, because these
+   three buttons sit in a row and only one of them silences a live channel. */
+.x18-strip__mute {
+  flex: none;
+  width: 40px;
+  height: 34px;
+  /* The gap that says "not part of the ± pair". */
+  margin-left: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 17px;
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+}
+.x18-strip__mute .material-symbols-rounded { font-size: 20px; }
+.x18-strip__mute:disabled { opacity: 0.4; cursor: default; }
+.x18-strip__mute:active:not(:disabled) { background: var(--color-surface-hover); }
+/* Muted is a state an operator must be able to spot across a dark room without
+   reading anything, so it is filled rather than outlined. Same red as the
+   "never reached the desk" warning: both mean "this is not doing what the
+   screen otherwise implies". */
+.x18-strip__mute--on {
+  background: #e53e3e;
+  border-color: #e53e3e;
+  color: #fff;
+}
+.x18-strip__mute--on:active:not(:disabled) { background: #c53030; }
+/* The desk has not said whether this is muted. Don't draw a confident "live". */
+.x18-strip__mute--unknown { opacity: 0.5; }
+/* A muted strip's level is still true, it is just not being heard — so the fill
+   stays where it is and loses its colour rather than its position. */
+.x18-strip--muted .x18-strip__fill { background: var(--color-text-secondary); opacity: 0.5; }
+.x18-strip--muted .x18-strip__over { opacity: 0.35; }
+.x18-strip--muted .x18-strip__thumb { background: var(--color-text-secondary); }
+
 .x18-strip__track {
   position: relative;
   flex: 1;
@@ -739,6 +812,8 @@ function commitEdit() {
 @media (any-pointer: coarse) {
   .x18-strip__step { width: 44px; height: 44px; }
   .x18-strip__step .material-symbols-rounded { font-size: 24px; }
+  .x18-strip__mute { width: 50px; height: 44px; border-radius: 22px; }
+  .x18-strip__mute .material-symbols-rounded { font-size: 24px; }
   .x18-strip__track { height: 56px; padding: 0 16px; }
   .x18-strip__rail { height: 12px; border-radius: 6px; }
   .x18-strip__thumb { width: 30px; height: 30px; margin: -15px 0 0 -15px; }
@@ -750,6 +825,8 @@ function commitEdit() {
 @media (any-hover: hover) and (any-pointer: fine) {
   .x18-strip__step:hover:not(:disabled) { background: var(--color-surface-hover); }
   .x18-strip__value:hover:not(:disabled) { background: rgba(128, 128, 128, 0.28); }
+  .x18-strip__mute:hover:not(:disabled) { background: var(--color-surface-hover); }
+  .x18-strip__mute--on:hover:not(:disabled) { background: #c53030; }
 }
 
 /* ---- Phone: everything grows to the touch scale ------------------------- */
@@ -800,6 +877,7 @@ function commitEdit() {
   .x18-strip__value-input { flex: 0 0 auto; min-width: 84px; }
   .x18-strip__track { flex: 1; height: 44px; }
   .x18-strip__step { width: 40px; height: 40px; }
+  .x18-strip__mute { width: 46px; height: 40px; border-radius: 20px; margin-left: 4px; }
   .x18-strip__fine { top: auto; bottom: -1px; right: 2px; }
 }
 
