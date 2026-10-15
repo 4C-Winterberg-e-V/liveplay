@@ -29,11 +29,21 @@ an OS modal. Upstream uses it for a single item:
 `if (requestDeleteFromButton(props.item.uuid)) return; if (confirm(...)) {...}`.
 CartSlot ~L539 has the same pattern.
 
-- In `useProject.ts`, make `requestDeleteFromButton(uuid, context)` handle the
-  single-item case through the same in-app confirmation it already uses for a
-  multi-selection, and always return `true`. The fork's version is at
-  `origin/main` `client/app/composables/useProject.ts` ~L1248. Port its logic
-  onto upstream's function. Don't paste the whole file.
+- In `useProject.ts`, port the fork's single-delete mode (`origin/main`
+  `client/app/composables/useProject.ts`). Upstream's `requestDeleteFromButton`
+  only opens the dialog for a multi-selection and otherwise returns `false`.
+  - Add a module-level `let _deleteSingleOnly = false;` (fork L144).
+  - `requestDeleteFromButton(uuid, context)` (fork ~L1248-1262) always opens the
+    dialog and returns `true`. It sets `_deleteSingleOnly = !inMultiSelection`,
+    `deleteDialogCount` to 1 or the selection size, and `deleteDialogAllowOnly`
+    to `inMultiSelection`.
+  - `requestDeleteFromKeyboard` and the dialog's cancel/close paths reset
+    `_deleteSingleOnly = false` (fork L1279, L1299-1313).
+  - `deleteDialogConfirmAll` (fork ~L1288-1296): when
+    `_deleteSingleOnly && _deleteOnlyUuid`, delete exactly that item
+    (`deleteCartItems([uuid])` for cart, otherwise `removeItem(uuid)`);
+    otherwise run upstream's `deleteSelection(...)`. **This flag is what stops
+    "confirm" from deleting a selection the operator never pointed at.**
 - Remove the native `confirm(...)` fallbacks in `PlaylistItem.vue` and `CartSlot.vue`.
 - Keyboard DEL (`requestDeleteFromKeyboard`) stays unchanged.
 

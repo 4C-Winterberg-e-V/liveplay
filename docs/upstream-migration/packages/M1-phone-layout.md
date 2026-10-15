@@ -102,10 +102,16 @@ Touch controls (pointer events, one-line rows, cart pads, seek) are **M2**, not 
    behaviour**.
 4. `PropertiesPanel.vue`: on compact, render as a full-screen sheet with a
    close button (fork `84a675f` + `babaab9`). It must stop above `--lp-bottom-h`.
-5. Compact defaults: in `useUiMode.ts`, on the first client-side init where the
-   compact query matches and no stored mode exists, start in `playback` (Show
-   Mode), and set U1's follow flag to `false` if it is unset. In
-   `PlaybackControls.vue`, hide the output-trim control under the compact query.
+5. Compact defaults, matching the fork exactly (`06a2dd3`):
+   - In `useUiMode.ts`, add `opensInShowMode()`:
+     `window.matchMedia(LP_COMPACT).matches`, wrapped in try/catch so it returns
+     `false` without `matchMedia`. During hydration, **after** reading the stored
+     mode, set `uiMode.value = 'playback'` when it is true. This overrides the
+     stored preference on **every** load on a phone; leaving Show Mode lasts for
+     the session only. Copy the fork's comment, which explains why.
+   - Set U1's "follow Show Mode" flag to `false` on compact devices when it is
+     unset.
+   - In `PlaybackControls.vue`, hide the output-trim control under the compact query.
 6. Dead-air countdown: compact CSS turns it into a full-width banner. Find the
    element upstream uses (search "countdown" / "deadAir" in `ProjectHeader`
    and `PlaybackControls`).

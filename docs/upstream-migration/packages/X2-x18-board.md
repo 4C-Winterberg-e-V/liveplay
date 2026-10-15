@@ -51,7 +51,9 @@ document key `x18Board`.
    - `WorkspaceBar.vue` `PANES`: `{ id: 'x18', icon: 'tune', labelKey: 'x18.title' }`.
      Show the tile only when `x18Ip` is set, so upstream users without the
      console see no change.
-   - `canDetach('x18')`: return `false` (no own window, not needed).
+   - Detaching: nothing to do. Upstream's `canDetach()` already returns `false`
+     for every pane other than `cart`/`mixer` (`useWorkspaceLayout.ts` ~L159-164),
+     so the X18 pane gets no pop-out button.
 6. **Keyboard shortcuts:** in upstream `useCartHotkeys.ts`'s keydown handler,
    before the cart-slot lookup, add the fork's block (`git diff 3c3d27c origin/main -- client/app/composables/useCartHotkeys.ts`):
    `const x18Btn = x18Board.findButtonForEvent(e); if (x18Btn) { e.preventDefault(); e.stopPropagation(); x18Board.triggerButton(x18Btn); return; }`.
