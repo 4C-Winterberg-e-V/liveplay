@@ -93,13 +93,16 @@ v2.4.3: **re-apply the fork's intent by hand, never paste whole fork files.**
 ## Verification
 
 ```sh
-npm run build:client                         # Electron build still fine
-npm run dev:client                           # Nuxt dev on :3000
-npm run server:run -- --port 4480            # second terminal
+npm run build:client                                        # Electron build still fine
+npm run server:run -- --port 4480                           # terminal 1
+npm run dev:nuxt --workspace=client -- --host 0.0.0.0       # terminal 2: Nuxt only, reachable on the LAN
 ```
 
-- Open `http://<LAN-IP>:3000/?` from another device, or a desktop browser with
-  the address field set to `http://<LAN-IP>:4480`. Open DevTools and click
+- In a desktop browser, open `http://localhost:3000/`. The welcome flow skips
+  the Local/Remote picker; enter `http://127.0.0.1:4480` if asked. Then open
+  `http://<LAN-IP>:3000/` from a phone and enter `http://<LAN-IP>:4480` (the
+  server binds `0.0.0.0` by default). Same-origin auto-connect only applies
+  behind W2's proxy. Open DevTools and click
   through Welcome → open project → playlist, carts, mixer, Settings (every pane)
   → transport → disconnect/reconnect. **The console must show no
   `electronAPI` TypeErrors** and no raw locale keys. Fix each one with a guard.

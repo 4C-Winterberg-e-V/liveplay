@@ -157,10 +157,12 @@ H-14 is a race and cannot be tested deterministically. Say so in the PR.
 ## Verification
 
 ```sh
-# server
-cmake --preset default -S server -DLIVEPLAY_BUILD_TESTS=ON   # vs2022 on Windows
-cmake --build --preset default
-ctest --test-dir server/build --output-on-failure            # all 9 (+1) suites green
+# server (presets are read from the CWD, so run from server/)
+cd server
+cmake --preset default -DLIVEPLAY_BUILD_TESTS=ON      # Windows: --preset vs2022
+cmake --build --preset default                        # Windows: --preset vs2022
+ctest --test-dir build -C Release --output-on-failure # all suites green (+1 if you added media_limits)
+cd ..
 
 # e2e (needs an audio device)
 node server/tests/e2e/gen-signal.js /tmp/test-signal.wav
